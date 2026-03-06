@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+.venv/
+.env
+.env.*
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+chunks/
+demo-chunks/
+examples/sample-chunks/
+examples/workflows/output/
+nblm-studio/
+nblm.toml

@@ -1,0 +1,22 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Audio Overview Demo"
+
+[chunking]
+output_dir = "../output/audio/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.audio]
+enabled = true
+prompt = """
+Create a high-energy teaching podcast that explains the big ideas,
+the section flow, and why each topic matters.
+"""
+output_path = "../output/audio/studio/audio-overview.mp4"
+language = "en"
+format = "deep-dive"
+length = "long"

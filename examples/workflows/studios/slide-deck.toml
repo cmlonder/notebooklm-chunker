@@ -1,0 +1,23 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Slide Deck Demo"
+
+[chunking]
+output_dir = "../output/slide-deck/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.slide_deck]
+enabled = true
+prompt = """
+Build a presenter-friendly teaching deck with one strong takeaway
+per slide and smooth transitions between sections.
+"""
+output_path = "../output/slide-deck/studio/slide-deck.pdf"
+language = "en"
+format = "detailed"
+length = "default"
+download_format = "pdf"

@@ -1,0 +1,13 @@
+[source]
+path = "../multi-chunk-demo.pdf"
+# Optional PDF page skipping.
+# skip_ranges = ["1-8", "399-420"]
+
+[notebook]
+title = "PDF Chunking Demo"
+
+[chunking]
+output_dir = "./output/pdf/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250

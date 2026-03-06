@@ -1,0 +1,16 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Mind Map Demo"
+
+[chunking]
+output_dir = "../output/mind-map/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.mind_map]
+enabled = true
+# notebooklm-py does not expose a custom prompt for mind maps today.
+output_path = "../output/mind-map/studio/mind-map.json"

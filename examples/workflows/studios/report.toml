@@ -1,0 +1,21 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Report Demo"
+
+[chunking]
+output_dir = "../output/report/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.report]
+enabled = true
+prompt = """
+Emphasize definitions, key contrasts, and end each section
+with what the learner should remember.
+"""
+output_path = "../output/report/studio/study-guide.md"
+language = "en"
+format = "study-guide"

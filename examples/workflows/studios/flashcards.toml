@@ -1,0 +1,22 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Flashcards Demo"
+
+[chunking]
+output_dir = "../output/flashcards/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.flashcards]
+enabled = true
+prompt = """
+Convert the important terms, section goals, and memorable examples
+into tight recall cards.
+"""
+output_path = "../output/flashcards/studio/flashcards.md"
+quantity = "more"
+difficulty = "hard"
+download_format = "markdown"

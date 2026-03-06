@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notebooklm-chunker"
+version = "0.1.0"
+description = "Turn long PDFs into chunked NotebookLM workflows with Studio outputs"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["notebooklm-py>=0.3.3"]
+
+[project.optional-dependencies]
+browser = ["notebooklm-py[browser]>=0.3.3"]
+pdf = ["pymupdf>=1.24.0"]
+full = ["notebooklm-py[browser]>=0.3.3", "pymupdf>=1.24.0"]
+dev = ["notebooklm-py[browser]>=0.3.3", "pymupdf>=1.24.0", "build>=1.2.2"]
+
+[project.scripts]
+nblm = "notebooklm_chunker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["notebooklm_chunker*"]

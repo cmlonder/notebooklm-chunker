@@ -1,0 +1,11 @@
+[source]
+path = "../multi-chunk-demo.md"
+
+[notebook]
+title = "Markdown Chunking Demo"
+
+[chunking]
+output_dir = "./output/markdown/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250

@@ -1,0 +1,22 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Video Overview Demo"
+
+[chunking]
+output_dir = "../output/video/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.video]
+enabled = true
+prompt = """
+Turn this document into a visual lesson with concrete examples,
+simple transitions, and a whiteboard-teacher tone.
+"""
+output_path = "../output/video/studio/video-overview.mp4"
+language = "en"
+format = "explainer"
+style = "whiteboard"

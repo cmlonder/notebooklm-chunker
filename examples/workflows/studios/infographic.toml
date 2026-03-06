@@ -1,0 +1,22 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Infographic Demo"
+
+[chunking]
+output_dir = "../output/infographic/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.infographic]
+enabled = true
+prompt = """
+Highlight the workflow, the main moving parts, and the before-versus-after
+difference between raw PDF upload and chunked ingestion.
+"""
+output_path = "../output/infographic/studio/infographic.png"
+language = "en"
+orientation = "portrait"
+detail = "detailed"

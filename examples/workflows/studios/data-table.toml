@@ -1,0 +1,20 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Data Table Demo"
+
+[chunking]
+output_dir = "../output/data-table/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.data_table]
+enabled = true
+prompt = """
+Create a table with columns for section, core idea, why it matters,
+and the best follow-up activity for a learner.
+"""
+output_path = "../output/data-table/studio/data-table.csv"
+language = "en"

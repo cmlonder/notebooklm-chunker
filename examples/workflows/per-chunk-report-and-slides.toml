@@ -1,0 +1,72 @@
+[source]
+path = "../multi-chunk-demo.pdf"
+# Skip explicit inclusive page ranges when needed.
+# Example: skip_ranges = ["1-2", "18-20"]
+skip_ranges = []
+
+[notebook]
+title = "Section-by-Section Learning Demo"
+
+[chunking]
+output_dir = "./output/per-chunk/chunks"
+target_pages = 3.0
+min_pages = 2.5
+max_pages = 4.0
+words_per_page = 500
+
+[studios.report]
+enabled = true
+per_chunk = true
+output_dir = "./output/per-chunk/reports"
+language = "en"
+format = "study-guide"
+prompt = """
+Create a study guide for this chunk only.
+
+Required sections:
+1. Summary
+2. Key Ideas
+3. Questions and Answers
+4. Practical Takeaways
+5. What to Re-read
+
+Questions and Answers rules:
+- Write 4 to 6 questions.
+- After each question, add `Answer:` and give a short, direct explanation.
+- Focus on understanding decisions, relationships, and tradeoffs in the chunk.
+- Prefer questions that help an engineer teach the material to someone else.
+
+Writing rules:
+- Stay grounded in this chunk.
+- If helpful, briefly connect the chunk to the surrounding document.
+- Avoid fluff and repetition.
+- Make the output useful as a study artifact, not just a summary.
+"""
+
+[studios.slide_deck]
+enabled = true
+per_chunk = true
+output_dir = "./output/per-chunk/slides"
+language = "en"
+format = "detailed"
+length = "default"
+download_format = "pdf"
+prompt = """
+Create a teaching slide deck for this chunk only.
+
+Goals:
+- Explain the material clearly to an engineer who has not read the full document.
+- Preserve the order of ideas from the chunk.
+- Make the deck useful for a short study session or internal walkthrough.
+
+Slide rules:
+- Produce 6 to 10 slides.
+- Keep one strong idea per slide.
+- Use short, clear titles.
+- Prefer explanation and structure over decoration.
+
+Speaker notes:
+- Add speaker notes for every slide.
+- Use notes for clarifications, examples, tradeoffs, or follow-up questions.
+- Keep the visible slide content concise.
+"""

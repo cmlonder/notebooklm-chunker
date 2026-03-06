@@ -1,0 +1,103 @@
+[source]
+path = "../multi-chunk-demo.pdf"
+# Optional PDF page skipping.
+# skip_ranges = ["1-8", "399-420"]
+
+[notebook]
+title = "Interactive Learning Kit Demo"
+
+[chunking]
+output_dir = "./output/learning-kit/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.audio]
+enabled = true
+prompt = """
+Create a lively audio overview that connects the sections
+and ends with practical study advice.
+"""
+output_path = "./output/learning-kit/studio/audio-overview.mp4"
+language = "en"
+format = "deep-dive"
+length = "long"
+
+[studios.video]
+enabled = true
+prompt = """
+Explain the material visually, keeping the tone teacher-like
+and the narrative easy to follow.
+"""
+output_path = "./output/learning-kit/studio/video-overview.mp4"
+language = "en"
+format = "explainer"
+style = "whiteboard"
+
+[studios.report]
+enabled = true
+prompt = """
+Turn the material into a study guide with key concepts,
+review bullets, and exam-style prompts.
+"""
+output_path = "./output/learning-kit/studio/study-guide.md"
+language = "en"
+format = "study-guide"
+
+[studios.slide_deck]
+enabled = true
+prompt = """
+Create a teaching deck with one clean idea per slide
+and transitions that mirror the original structure.
+"""
+output_path = "./output/learning-kit/studio/slide-deck.pdf"
+language = "en"
+format = "detailed"
+length = "default"
+download_format = "pdf"
+
+[studios.quiz]
+enabled = true
+prompt = """
+Ask concept-check questions that test understanding
+instead of shallow recall.
+"""
+output_path = "./output/learning-kit/studio/quiz.md"
+quantity = "more"
+difficulty = "hard"
+download_format = "markdown"
+
+[studios.flashcards]
+enabled = true
+prompt = """
+Generate compact flashcards for terminology, examples,
+and section-level takeaways.
+"""
+output_path = "./output/learning-kit/studio/flashcards.md"
+quantity = "more"
+difficulty = "hard"
+download_format = "markdown"
+
+[studios.infographic]
+enabled = true
+prompt = """
+Show the end-to-end transformation from long PDF
+to chunked, interactive learning workflow.
+"""
+output_path = "./output/learning-kit/studio/infographic.png"
+language = "en"
+orientation = "portrait"
+detail = "detailed"
+
+[studios.data_table]
+enabled = true
+prompt = """
+Create a table of sections, key ideas, evidence,
+and the learner action each section supports.
+"""
+output_path = "./output/learning-kit/studio/data-table.csv"
+language = "en"
+
+[studios.mind_map]
+enabled = true
+output_path = "./output/learning-kit/studio/mind-map.json"

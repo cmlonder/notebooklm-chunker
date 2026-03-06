@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+from unittest import TestCase
+
+from notebooklm_chunker.config import load_config, resolve_config_path, write_config_template
+
+
+class ConfigTests(TestCase):
+    def test_load_config_reads_nblm_toml(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[chunking]",
+                        "min_pages = 1.5",
+                        "max_pages = 3.0",
+                        "words_per_page = 450",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.chunking.words_per_page, 450)
+        self.assertEqual(config.source_path, str(config_path.resolve()))
+
+    def test_resolve_config_path_finds_local_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "nblm.toml"
+            config_path.write_text("", encoding="utf-8")
+            nested = root / "docs" / "guides"
+            nested.mkdir(parents=True)
+
+            resolved = resolve_config_path(start_dir=nested)
+
+        self.assertEqual(resolved, config_path.resolve())
+
+    def test_write_config_template_creates_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = write_config_template(
+                Path(directory) / "nblm.toml",
+                target_pages=3.0,
+                min_pages=2.5,
+                max_pages=4.0,
+                words_per_page=500,
+            )
+            content = config_path.read_text(encoding="utf-8")
+
+        self.assertIn("NotebookLM authentication is managed", content)
+        self.assertIn("target_pages = 3.0", content)
+        self.assertIn('skip_ranges = ["1-8", "399-420", "512"]', content)
+        self.assertIn("[chunking]", content)
+
+    def test_load_config_resolves_relative_source_and_studio_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs" / "book.pdf"
+            source.parent.mkdir(parents=True)
+            source.write_text("placeholder", encoding="utf-8")
+
+            config_path = root / "configs" / "nblm.toml"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[source]",
+                        'path = "../docs/book.pdf"',
+                        'skip_ranges = ["1-8", "399-420"]',
+                        "",
+                        "[chunking]",
+                        'output_dir = "../build/chunks"',
+                        "target_pages = 3.0",
+                        "",
+                        "[studios.audio]",
+                        "enabled = true",
+                        "per_chunk = true",
+                        'output_dir = "../build/studio/audio"',
+                        'output_path = "../build/studio/audio-overview.mp4"',
+                        'format = "deep-dive"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.source.path, str(source.resolve()))
+        self.assertEqual(config.source.skip_ranges, ("1-8", "399-420"))
+        self.assertEqual(config.chunking.target_pages, 3.0)
+        self.assertEqual(config.chunking.output_dir, str((root / "build" / "chunks").resolve()))
+        self.assertTrue(config.studios.audio.enabled)
+        self.assertTrue(config.studios.audio.per_chunk)
+        self.assertEqual(
+            config.studios.audio.output_dir,
+            str((root / "build" / "studio" / "audio").resolve()),
+        )
+        self.assertEqual(
+            config.studios.audio.output_path,
+            str((root / "build" / "studio" / "audio-overview.mp4").resolve()),
+        )

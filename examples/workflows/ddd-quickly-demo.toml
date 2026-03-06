@@ -1,0 +1,79 @@
+[source]
+path = "../ddd-quickly.pdf"
+# Skip explicit inclusive page ranges when needed.
+skip_ranges = ["1-10", "99-106"]
+
+[notebook]
+title = "DDD Quickly Interactive Learning Kit"
+
+[chunking]
+output_dir = "./output/ddd-quickly/chunks"
+target_pages = 3.0
+min_pages = 2.5
+max_pages = 4.0
+words_per_page = 500
+
+[studios.report]
+enabled = true
+per_chunk = true
+output_dir = "./output/ddd-quickly/reports"
+language = "en"
+format = "study-guide"
+prompt = """
+Create a Domain-Driven Design (DDD) study guide for this chunk.
+
+Required sections:
+1. Short Summary
+2. Core Concepts
+3. Questions and Answers
+4. Practical Notes
+5. Common Misunderstandings
+
+Questions and Answers rules:
+- Write 5 to 8 questions.
+- After each question, add `Answer:` and give a short, direct, actionable explanation.
+- Prefer questions that clarify relationships between concepts instead of testing memorization.
+- When relevant, make the connections explicit between concepts such as:
+  Ubiquitous Language, Model-Driven Design, Entity, Value Object, Aggregate, Repository, Factory,
+  Domain Service, Bounded Context, Refactoring Toward Deeper Insight, and Preserving Model Integrity.
+
+Writing rules:
+- Write in English.
+- Keep important DDD terms in their standard English form.
+- Stay grounded in this chunk, but briefly connect it to the larger book when useful.
+- Avoid repetition and filler.
+- Write for professional software engineers and architects.
+"""
+
+[studios.slide_deck]
+enabled = true
+per_chunk = true
+output_dir = "./output/ddd-quickly/slides"
+language = "en"
+format = "detailed"
+length = "default"
+download_format = "pdf"
+prompt = """
+Create a teaching slide deck for this chunk.
+
+Goals:
+- Explain Domain-Driven Design to a professional engineering team that is new to DDD.
+- Show why the concepts matter, not just what they mean.
+
+Content rules:
+- Produce 6 to 10 slides.
+- Keep one strong idea per slide.
+- Use clear, instructional slide titles.
+- Simplify complex DDD ideas with short examples where helpful.
+- When concepts such as Ubiquitous Language, Entity vs Value Object, Aggregate boundaries, model integrity,
+  bounded context, or refactoring toward deeper insight appear, make their practical importance explicit.
+- Write in English and keep standard DDD terminology intact.
+
+Speaker notes:
+- For every slide, include at least one of:
+  1. A real project warning
+  2. A typical anti-pattern
+  3. A design question a team should ask
+
+The deck should make DDD feel like a practical modeling tool, not an abstract theory.
+"""

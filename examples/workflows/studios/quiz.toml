@@ -1,0 +1,22 @@
+[source]
+path = "../../multi-chunk-demo.pdf"
+
+[notebook]
+title = "Quiz Demo"
+
+[chunking]
+output_dir = "../output/quiz/chunks"
+min_pages = 0.5
+max_pages = 0.8
+words_per_page = 250
+
+[studios.quiz]
+enabled = true
+prompt = """
+Write concept-check questions that expose whether the learner
+actually understood the structure and purpose of chunking.
+"""
+output_path = "../output/quiz/studio/quiz.md"
+quantity = "more"
+difficulty = "hard"
+download_format = "markdown"

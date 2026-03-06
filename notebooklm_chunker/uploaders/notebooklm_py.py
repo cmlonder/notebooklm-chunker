@@ -101,6 +101,7 @@ class NotebookLMPyUploader:
         *,
         notebook_id: str | None = None,
         notebook_title: str | None = None,
+        max_parallel_chunks: int = 1,
         reporter: Callable[[str], None] | None = None,
     ) -> tuple[str, list[UploadResult]]:
         markdown_files = _collect_markdown_files(directory)
@@ -110,6 +111,7 @@ class NotebookLMPyUploader:
                 markdown_files,
                 notebook_id=notebook_id,
                 notebook_title=notebook_title or directory.name,
+                max_parallel_chunks=max_parallel_chunks,
                 reporter=reporter,
             )
         )
@@ -122,6 +124,7 @@ class NotebookLMPyUploader:
         notebook_title: str | None = None,
         studios: StudiosConfig | None = None,
         studio_output_dir: Path | None = None,
+        max_parallel_chunks: int = 1,
         reporter: Callable[[str], None] | None = None,
     ) -> tuple[str, list[UploadResult], list[StudioResult]]:
         markdown_files = _collect_markdown_files(directory)
@@ -133,6 +136,7 @@ class NotebookLMPyUploader:
                 notebook_title=notebook_title or directory.name,
                 studios=studios or StudiosConfig(),
                 studio_output_dir=studio_output_dir,
+                max_parallel_chunks=max_parallel_chunks,
                 reporter=reporter,
             )
         )
@@ -161,8 +165,10 @@ class NotebookLMPyUploader:
         *,
         notebook_id: str | None,
         notebook_title: str,
+        max_parallel_chunks: int,
         reporter: Callable[[str], None] | None,
     ) -> tuple[str, list[UploadResult]]:
+        max_parallel_chunks = _normalize_parallelism(max_parallel_chunks)
         client_class = _load_notebooklm_client_class()
         try:
             async with await client_class.from_storage() as client:
@@ -176,6 +182,7 @@ class NotebookLMPyUploader:
                     client,
                     resolved_notebook_id,
                     markdown_files,
+                    max_parallel_chunks=max_parallel_chunks,
                     reporter=reporter,
                 )
                 return resolved_notebook_id, uploaded
@@ -194,8 +201,10 @@ class NotebookLMPyUploader:
         notebook_title: str,
         studios: StudiosConfig,
         studio_output_dir: Path | None,
+        max_parallel_chunks: int,
         reporter: Callable[[str], None] | None,
     ) -> tuple[str, list[UploadResult], list[StudioResult]]:
+        max_parallel_chunks = _normalize_parallelism(max_parallel_chunks)
         client_class = _load_notebooklm_client_class()
         rpc_module = _load_notebooklm_rpc_module()
         try:
@@ -213,34 +222,23 @@ class NotebookLMPyUploader:
                     _emit(reporter, f"studio: {per_chunk_job_count} per-chunk job(s) will start as uploads complete")
                 if aggregate_job_count:
                     _emit(reporter, f"studio: {aggregate_job_count} notebook-level job(s) will start after uploads")
+                if max_parallel_chunks > 1 and len(markdown_files) > 1:
+                    _emit(reporter, f"runtime: processing up to {max_parallel_chunks} chunk pipeline(s) in parallel")
 
-                uploaded: list[UploadResult] = []
+                chunk_results = await _run_chunk_pipelines(
+                    client,
+                    rpc_module,
+                    notebook_id=resolved_notebook_id,
+                    markdown_files=markdown_files,
+                    per_chunk_studios=per_chunk_studios,
+                    studio_output_dir=studio_output_dir,
+                    max_parallel_chunks=max_parallel_chunks,
+                    reporter=reporter,
+                )
+                uploaded = [item for item, _ in chunk_results]
                 studio_results: list[StudioResult] = []
-                total_files = len(markdown_files)
-                for index, path in enumerate(markdown_files, start=1):
-                    uploaded_item = await _upload_markdown_file(
-                        client,
-                        resolved_notebook_id,
-                        path,
-                        index=index,
-                        total_files=total_files,
-                        reporter=reporter,
-                    )
-                    uploaded.append(uploaded_item)
-                    if uploaded_item.source_id and per_chunk_studios.enabled_items():
-                        studio_results.extend(
-                            await _run_enabled_studios(
-                                client,
-                                rpc_module,
-                                notebook_id=resolved_notebook_id,
-                                studios=per_chunk_studios,
-                                studio_output_dir=studio_output_dir,
-                                uploaded_sources=[uploaded_item],
-                                source_ids=[uploaded_item.source_id],
-                                reporter=reporter,
-                                announce_queue=False,
-                            )
-                        )
+                for _, per_chunk_results in chunk_results:
+                    studio_results.extend(per_chunk_results)
 
                 source_ids = [item.source_id for item in uploaded if item.source_id]
                 if aggregate_studios.enabled_items():
@@ -366,22 +364,95 @@ async def _upload_markdown_files(
     notebook_id: str,
     markdown_files: list[Path],
     *,
+    max_parallel_chunks: int,
     reporter: Callable[[str], None] | None,
 ) -> list[UploadResult]:
-    uploaded: list[UploadResult] = []
     total_files = len(markdown_files)
-    for index, path in enumerate(markdown_files, start=1):
-        uploaded.append(
-            await _upload_markdown_file(
-                client,
-                notebook_id,
-                path,
-                index=index,
-                total_files=total_files,
-                reporter=reporter,
-            )
+    if max_parallel_chunks > 1 and total_files > 1:
+        _emit(reporter, f"runtime: processing up to {max_parallel_chunks} chunk upload(s) in parallel")
+
+    async def upload_one(index: int, path: Path) -> UploadResult:
+        return await _upload_markdown_file(
+            client,
+            notebook_id,
+            path,
+            index=index,
+            total_files=total_files,
+            reporter=reporter,
         )
-    return uploaded
+
+    return await _gather_chunk_tasks(
+        markdown_files,
+        max_parallel_chunks=max_parallel_chunks,
+        operation=upload_one,
+    )
+
+
+async def _run_chunk_pipelines(
+    client: Any,
+    rpc_module: Any,
+    *,
+    notebook_id: str,
+    markdown_files: list[Path],
+    per_chunk_studios: StudiosConfig,
+    studio_output_dir: Path | None,
+    max_parallel_chunks: int,
+    reporter: Callable[[str], None] | None,
+) -> list[tuple[UploadResult, list[StudioResult]]]:
+    total_files = len(markdown_files)
+
+    async def process_one(index: int, path: Path) -> tuple[UploadResult, list[StudioResult]]:
+        uploaded_item = await _upload_markdown_file(
+            client,
+            notebook_id,
+            path,
+            index=index,
+            total_files=total_files,
+            reporter=reporter,
+        )
+        if not uploaded_item.source_id or not per_chunk_studios.enabled_items():
+            return uploaded_item, []
+
+        studio_results = await _run_enabled_studios(
+            client,
+            rpc_module,
+            notebook_id=notebook_id,
+            studios=per_chunk_studios,
+            studio_output_dir=studio_output_dir,
+            uploaded_sources=[uploaded_item],
+            source_ids=[uploaded_item.source_id],
+            reporter=reporter,
+            announce_queue=False,
+        )
+        return uploaded_item, studio_results
+
+    return await _gather_chunk_tasks(
+        markdown_files,
+        max_parallel_chunks=max_parallel_chunks,
+        operation=process_one,
+    )
+
+
+async def _gather_chunk_tasks(
+    markdown_files: list[Path],
+    *,
+    max_parallel_chunks: int,
+    operation: Callable[[int, Path], Any],
+) -> list[Any]:
+    if max_parallel_chunks <= 1 or len(markdown_files) <= 1:
+        results: list[Any] = []
+        for index, path in enumerate(markdown_files, start=1):
+            results.append(await operation(index, path))
+        return results
+
+    semaphore = asyncio.Semaphore(max_parallel_chunks)
+
+    async def worker(index: int, path: Path) -> Any:
+        async with semaphore:
+            return await operation(index, path)
+
+    tasks = [worker(index, path) for index, path in enumerate(markdown_files, start=1)]
+    return list(await asyncio.gather(*tasks))
 
 
 async def _upload_markdown_file(
@@ -893,6 +964,12 @@ def _read_attr(value: Any, name: str) -> str | None:
 def _emit(reporter: Callable[[str], None] | None, message: str) -> None:
     if reporter is not None:
         reporter(message)
+
+
+def _normalize_parallelism(value: int) -> int:
+    if value < 1:
+        raise UploadError("`max_parallel_chunks` must be greater than or equal to 1.")
+    return value
 
 
 def _studio_label(studio_name: str, source_file: str | None) -> str:

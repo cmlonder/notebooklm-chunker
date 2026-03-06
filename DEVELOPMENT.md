@@ -94,6 +94,7 @@ nblm studios --config ./examples/workflows/studios/report.toml --notebook-id <no
 - Full workflow examples live under `examples/workflows/`.
 - Single-Studio workflow examples live under `examples/workflows/studios/`.
 - Paths inside workflow files are resolved relative to that file.
+- Set `runtime.max_parallel_chunks = 5` if you want five chunk pipelines in flight at once.
 - Generated example outputs go under `examples/workflows/output/` and are gitignored.
 - `nblm run` uses the uploaded chunk source IDs for Studio generation, so it
   does not accidentally widen the context to unrelated sources already in the

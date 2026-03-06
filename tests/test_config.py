@@ -55,6 +55,8 @@ class ConfigTests(TestCase):
         self.assertIn("NotebookLM authentication is managed", content)
         self.assertIn("target_pages = 3.0", content)
         self.assertIn('skip_ranges = ["1-8", "399-420", "512"]', content)
+        self.assertIn("[runtime]", content)
+        self.assertIn("max_parallel_chunks = 1", content)
         self.assertIn("[chunking]", content)
 
     def test_load_config_resolves_relative_source_and_studio_paths(self) -> None:
@@ -77,6 +79,9 @@ class ConfigTests(TestCase):
                         'output_dir = "../build/chunks"',
                         "target_pages = 3.0",
                         "",
+                        "[runtime]",
+                        "max_parallel_chunks = 5",
+                        "",
                         "[studios.audio]",
                         "enabled = true",
                         "per_chunk = true",
@@ -95,6 +100,7 @@ class ConfigTests(TestCase):
         self.assertEqual(config.source.skip_ranges, ("1-8", "399-420"))
         self.assertEqual(config.chunking.target_pages, 3.0)
         self.assertEqual(config.chunking.output_dir, str((root / "build" / "chunks").resolve()))
+        self.assertEqual(config.runtime.max_parallel_chunks, 5)
         self.assertTrue(config.studios.audio.enabled)
         self.assertTrue(config.studios.audio.per_chunk)
         self.assertEqual(

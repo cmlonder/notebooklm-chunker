@@ -62,6 +62,11 @@ class ChunkingConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeConfig:
+    max_parallel_chunks: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class StudioConfig:
     enabled: bool = False
     per_chunk: bool = False
@@ -114,6 +119,7 @@ class AppConfig:
     source: SourceConfig = SourceConfig()
     notebook: NotebookConfig = NotebookConfig()
     chunking: ChunkingConfig = ChunkingConfig()
+    runtime: RuntimeConfig = RuntimeConfig()
     studios: StudiosConfig = StudiosConfig()
     config_path: str | None = None
 
@@ -142,6 +148,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
     source = _as_dict(raw.get("source"))
     notebook = _as_dict(raw.get("notebook"))
     chunking = _as_dict(raw.get("chunking"))
+    runtime = _as_dict(raw.get("runtime"))
     studios = _as_dict(raw.get("studios"))
 
     return AppConfig(
@@ -162,6 +169,12 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
             max_pages=_optional_float(chunking.get("max_pages"), "chunking.max_pages"),
             words_per_page=_optional_int(chunking.get("words_per_page"), "chunking.words_per_page"),
             output_dir=_optional_path(chunking.get("output_dir"), "chunking.output_dir", base_dir),
+        ),
+        runtime=RuntimeConfig(
+            max_parallel_chunks=_optional_positive_int(
+                runtime.get("max_parallel_chunks"),
+                "runtime.max_parallel_chunks",
+            ),
         ),
         studios=StudiosConfig(
             audio=_load_studio_config(
@@ -292,6 +305,11 @@ def write_config_template(
             f"max_pages = {max_pages}",
             "# Word heuristic used when page boundaries are unavailable or noisy.",
             f"words_per_page = {words_per_page}",
+            "",
+            "[runtime]",
+            "# How many chunk upload + per-chunk Studio pipelines may run at once.",
+            "# Keep this at 1 for fully sequential execution.",
+            "max_parallel_chunks = 1",
             "",
             "[studios.audio]",
             "enabled = false",
@@ -496,6 +514,15 @@ def _optional_int(value: Any, label: str) -> int | None:
     if isinstance(value, int):
         return value
     raise ConfigError(f"Expected int for {label}, got {type(value).__name__}")
+
+
+def _optional_positive_int(value: Any, label: str) -> int | None:
+    number = _optional_int(value, label)
+    if number is None:
+        return None
+    if number < 1:
+        raise ConfigError(f"Expected {label} to be >= 1, got {number}")
+    return number
 
 
 def _optional_page_ranges(value: Any, label: str) -> tuple[str, ...]:

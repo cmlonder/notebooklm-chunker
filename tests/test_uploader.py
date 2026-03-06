@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from pathlib import Path
 from unittest import TestCase
@@ -46,14 +47,31 @@ class _FakeNotebooksAPI:
 
 
 class _FakeSourcesAPI:
+    delay_seconds = 0.0
+    active_uploads = 0
+    max_active_uploads = 0
+
     def __init__(self, events: list[str]) -> None:
         self.calls: list[tuple[str, str, bool]] = []
         self.events = events
 
+    @classmethod
+    def reset_state(cls) -> None:
+        cls.delay_seconds = 0.0
+        cls.active_uploads = 0
+        cls.max_active_uploads = 0
+
     async def add_file(self, notebook_id: str, path: Path, wait: bool = False) -> _FakeSource:
-        self.calls.append((notebook_id, path.name, wait))
-        self.events.append(f"upload:{path.name}")
-        return _FakeSource(f"src-{path.stem}")
+        type(self).active_uploads += 1
+        type(self).max_active_uploads = max(type(self).max_active_uploads, type(self).active_uploads)
+        try:
+            if type(self).delay_seconds:
+                await asyncio.sleep(type(self).delay_seconds)
+            self.calls.append((notebook_id, path.name, wait))
+            self.events.append(f"upload:{path.name}")
+            return _FakeSource(f"src-{path.stem}")
+        finally:
+            type(self).active_uploads -= 1
 
 
 class _FakeArtifactsAPI:
@@ -243,6 +261,9 @@ class _FakeRpcModule:
 
 
 class UploaderTests(TestCase):
+    def setUp(self) -> None:
+        _FakeSourcesAPI.reset_state()
+
     def test_upload_directory_creates_notebook_and_uploads_files(self) -> None:
         uploader = NotebookLMPyUploader()
 
@@ -262,6 +283,28 @@ class UploaderTests(TestCase):
             _FakeNotebookLMClient.last_client.sources.calls,
             [("nb1", "001-test.md", True)],
         )
+
+    def test_upload_directory_respects_max_parallel_chunks(self) -> None:
+        uploader = NotebookLMPyUploader()
+        _FakeSourcesAPI.delay_seconds = 0.02
+
+        with tempfile.TemporaryDirectory() as directory:
+            chunks_dir = Path(directory)
+            for index in range(1, 5):
+                (chunks_dir / f"{index:03d}-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ):
+                _, uploads = uploader.upload_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    max_parallel_chunks=2,
+                )
+
+        self.assertEqual(len(uploads), 4)
+        self.assertEqual(_FakeSourcesAPI.max_active_uploads, 2)
 
     def test_upload_directory_prefers_manifest_and_ignores_stale_markdown(self) -> None:
         uploader = NotebookLMPyUploader()

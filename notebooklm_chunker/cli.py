@@ -60,6 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     upload_parser.add_argument("directory", nargs="?", help="Directory that contains exported Markdown chunks.")
     upload_parser.add_argument("--notebook-id", help="Existing notebook ID to upload into.")
     upload_parser.add_argument("--notebook-title", help="Notebook title to create when notebook ID is not provided.")
+    upload_parser.add_argument(
+        "--max-parallel-chunks",
+        type=int,
+        default=None,
+        help="How many chunk uploads to process at once. Defaults to `runtime.max_parallel_chunks` or 1.",
+    )
     upload_parser.set_defaults(handler=_handle_upload)
 
     studios_parser = subparsers.add_parser("studios", help="Generate enabled Studio outputs for an existing notebook.")
@@ -80,6 +86,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_prepare_arguments(run_parser)
     run_parser.add_argument("--notebook-id", help="Existing notebook ID to upload into.")
     run_parser.add_argument("--notebook-title", help="Notebook title to create when notebook ID is not provided.")
+    run_parser.add_argument(
+        "--max-parallel-chunks",
+        type=int,
+        default=None,
+        help="How many chunk upload + per-chunk Studio pipelines to process at once.",
+    )
     run_parser.set_defaults(handler=_handle_run)
     return parser
 
@@ -185,6 +197,7 @@ def _handle_upload(args: argparse.Namespace) -> int:
         directory,
         notebook_id=args.notebook_id or config.notebook.id,
         notebook_title=args.notebook_title or config.notebook.title or directory.name,
+        max_parallel_chunks=_resolve_max_parallel_chunks(args, config),
         reporter=_progress,
     )
     print(f"Notebook ID: {notebook_id}")
@@ -235,6 +248,7 @@ def _handle_run(args: argparse.Namespace) -> int:
         notebook_title=args.notebook_title or config.notebook.title or input_path.stem,
         studios=config.studios,
         studio_output_dir=_resolve_studio_output_dir(None, config=config, chunk_output_dir=output_dir),
+        max_parallel_chunks=_resolve_max_parallel_chunks(args, config),
         reporter=_progress,
     )
     print(f"Notebook ID: {notebook_id}")
@@ -321,6 +335,15 @@ def _resolve_skip_ranges(args: argparse.Namespace, config: AppConfig) -> tuple[s
     if cli_ranges is not None:
         return tuple(cli_ranges)
     return config.source.skip_ranges
+
+
+def _resolve_max_parallel_chunks(args: argparse.Namespace, config: AppConfig) -> int:
+    value = getattr(args, "max_parallel_chunks", None)
+    if value is None:
+        value = config.runtime.max_parallel_chunks or 1
+    if value < 1:
+        raise ChunkerError("`max_parallel_chunks` must be greater than or equal to 1.")
+    return value
 
 
 def _progress(message: str) -> None:

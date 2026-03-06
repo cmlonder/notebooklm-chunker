@@ -10,6 +10,10 @@ heading-aware chunks, uploading each chunk as a separate source, and then
 generating the NotebookLM Studio outputs you enable from one workflow file.
 The result is closer to an interactive learning kit than a single uploaded PDF.
 
+For long books, do not keep the workflow fully sequential by default. Start
+with `runtime.max_parallel_chunks = 5` so uploads and per-chunk Studio jobs
+move in parallel without opening too many concurrent NotebookLM tasks at once.
+
 ## Demo
 
 This repository ships with a full demo built around the freely downloadable
@@ -21,6 +25,8 @@ Demo goal:
   turn it into an interactive learning kit.
 - Generate one slide deck and one question-answer style report per chunk so the
   reader can study DDD chapter by chapter instead of reading one flat PDF.
+- Run with `runtime.max_parallel_chunks = 5` so the demo processes five chunk
+  pipelines in parallel.
 
 Demo command:
 
@@ -121,6 +127,11 @@ min_pages = 2.5
 max_pages = 4.0
 # Word heuristic used when page boundaries are unavailable or noisy.
 words_per_page = 500
+
+[runtime]
+# Process up to N chunk upload + per-chunk Studio pipelines in parallel.
+# Leave this at 1 to keep the run fully sequential.
+max_parallel_chunks = 1
 
 [studios.audio]
 enabled = false
@@ -395,32 +406,35 @@ nblm prepare --config ./examples/workflows/markdown.toml
 
 Use this workflow:
 
-- `./examples/workflows/per-chunk-report-and-slides.toml`
+- `./examples/workflows/ddd-quickly-demo.toml`
 
 What that file currently says:
 
-- `source.path = "../multi-chunk-demo.pdf"`
+- `source.path = "../ddd-quickly.pdf"`
+- `skip_ranges = ["1-10", "99-106"]`
 - `target_pages = 3.0`
 - `min_pages = 2.5`
 - `max_pages = 4.0`
+- `runtime.max_parallel_chunks = 5`
 - `studios.report.per_chunk = true`
 - `studios.slide_deck.per_chunk = true`
 
 Run it with:
 
 ```bash
-nblm run --config ./examples/workflows/per-chunk-report-and-slides.toml
+nblm run --config ./examples/workflows/ddd-quickly-demo.toml
 ```
 
 What happens:
 
 1. The PDF is parsed, with `skip_ranges` applied first if you set them.
 2. The chunker looks for heading boundaries and tries to build chunks around `target_pages = 3.0`, while staying within `2.5 - 4.0` whenever possible.
-3. Each chunk is exported as a separate Markdown file under `./output/per-chunk/chunks`.
-4. Each Markdown chunk is uploaded to NotebookLM as a separate source.
-5. Because `studios.report.per_chunk = true`, one study-guide style report is generated for each uploaded chunk.
-6. Because `studios.slide_deck.per_chunk = true`, one teaching slide deck is generated for each uploaded chunk.
-7. Reports land in `./output/per-chunk/reports`, slide decks land in `./output/per-chunk/slides`.
+3. `runtime.max_parallel_chunks = 5` keeps up to five chunk pipelines in flight at once, so upload plus per-chunk report/slide generation does not bottleneck on a fully sequential run.
+4. Each chunk is exported as a separate Markdown file under `./examples/workflows/output/ddd-quickly/chunks`.
+5. Each Markdown chunk is uploaded to NotebookLM as a separate source.
+6. Because `studios.report.per_chunk = true`, one study-guide style report is generated for each uploaded chunk.
+7. Because `studios.slide_deck.per_chunk = true`, one teaching slide deck is generated for each uploaded chunk.
+8. Reports land in `./examples/workflows/output/ddd-quickly/reports`, slide decks land in `./examples/workflows/output/ddd-quickly/slides`.
 
 For a smaller runnable local chunking demo, the bundled PDF workflow:
 

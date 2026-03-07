@@ -34,6 +34,7 @@ def export_markdown_chunks(
                 "chunk_id": chunk.chunk_id,
                 "file": filename,
                 "source_file": chunk.source_file,
+                "primary_heading": chunk.primary_heading,
                 "heading_path": list(chunk.heading_path),
                 "word_count": chunk.word_count,
                 "estimated_pages": chunk.estimated_pages,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from notebooklm_chunker.chunker import chunk_document
@@ -80,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser(
         "run",
-        help="Prepare a document, upload the chunks, then generate enabled Studio outputs.",
+        help="Prepare a document, create a fresh notebook run, then generate enabled Studio outputs.",
     )
     _add_config_argument(run_parser)
     _add_prepare_arguments(run_parser)
@@ -93,6 +94,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="How many chunk upload + per-chunk Studio pipelines to process at once.",
     )
     run_parser.set_defaults(handler=_handle_run)
+
+    resume_parser = subparsers.add_parser(
+        "resume",
+        help="Continue a previous run from `.nblm-run-state.json` and finish pending uploads or Studio jobs.",
+    )
+    _add_config_argument(resume_parser)
+    _add_prepare_arguments(resume_parser)
+    resume_parser.add_argument("--notebook-id", help="Resume against an explicit notebook ID from the saved run state.")
+    resume_parser.add_argument(
+        "--max-parallel-chunks",
+        type=int,
+        default=None,
+        help="How many chunk upload + per-chunk Studio pipelines to process at once.",
+    )
+    resume_parser.set_defaults(handler=_handle_resume)
     return parser
 
 
@@ -164,7 +180,10 @@ def _handle_init(args: argparse.Namespace) -> int:
         force=args.force,
     )
     print(f"Config file: {config_path}")
-    print("Next: edit the workflow file, run `nblm login`, then run `nblm run --config <file>`.")
+    print(
+        "Next: edit the workflow file, run `nblm login`, then run `nblm run --config <file>` "
+        "for a fresh notebook or `nblm resume --config <file>` to continue an unfinished run."
+    )
     return 0
 
 
@@ -198,6 +217,9 @@ def _handle_upload(args: argparse.Namespace) -> int:
         notebook_id=args.notebook_id or config.notebook.id,
         notebook_title=args.notebook_title or config.notebook.title or directory.name,
         max_parallel_chunks=_resolve_max_parallel_chunks(args, config),
+        studio_wait_timeout_seconds=_resolve_studio_wait_timeout_seconds(config),
+        studio_rate_limit_cooldown_seconds=_resolve_studio_rate_limit_cooldown_seconds(config),
+        rename_remote_titles=config.runtime.rename_remote_titles,
         reporter=_progress,
     )
     print(f"Notebook ID: {notebook_id}")
@@ -221,6 +243,12 @@ def _handle_studios(args: argparse.Namespace) -> int:
         notebook_id=notebook_id,
         studios=config.studios,
         studio_output_dir=studio_output_dir,
+        max_parallel_heavy_studios=_resolve_max_parallel_heavy_studios(config),
+        studio_wait_timeout_seconds=_resolve_studio_wait_timeout_seconds(config),
+        studio_create_retries=_resolve_studio_create_retries(config),
+        studio_create_backoff_seconds=_resolve_studio_create_backoff_seconds(config),
+        studio_rate_limit_cooldown_seconds=_resolve_studio_rate_limit_cooldown_seconds(config),
+        rename_remote_titles=config.runtime.rename_remote_titles,
         reporter=_progress,
     )
     print(f"Notebook ID: {notebook_id}")
@@ -229,6 +257,14 @@ def _handle_studios(args: argparse.Namespace) -> int:
 
 
 def _handle_run(args: argparse.Namespace) -> int:
+    return _run_pipeline(args, resume=False)
+
+
+def _handle_resume(args: argparse.Namespace) -> int:
+    return _run_pipeline(args, resume=True)
+
+
+def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
     config = load_config(_path_or_none(args.config))
     input_path = _resolve_input_path(args.input, config)
     _require_file(input_path, label="Input file")
@@ -245,10 +281,17 @@ def _handle_run(args: argparse.Namespace) -> int:
     notebook_id, uploaded, studios = uploader.ingest_directory(
         output_dir,
         notebook_id=args.notebook_id or config.notebook.id,
-        notebook_title=args.notebook_title or config.notebook.title or input_path.stem,
+        notebook_title=getattr(args, "notebook_title", None) or config.notebook.title or input_path.stem,
         studios=config.studios,
         studio_output_dir=_resolve_studio_output_dir(None, config=config, chunk_output_dir=output_dir),
         max_parallel_chunks=_resolve_max_parallel_chunks(args, config),
+        max_parallel_heavy_studios=_resolve_max_parallel_heavy_studios(config),
+        studio_wait_timeout_seconds=_resolve_studio_wait_timeout_seconds(config),
+        studio_create_retries=_resolve_studio_create_retries(config),
+        studio_create_backoff_seconds=_resolve_studio_create_backoff_seconds(config),
+        studio_rate_limit_cooldown_seconds=_resolve_studio_rate_limit_cooldown_seconds(config),
+        rename_remote_titles=config.runtime.rename_remote_titles,
+        resume=resume,
         reporter=_progress,
     )
     print(f"Notebook ID: {notebook_id}")
@@ -301,7 +344,11 @@ def _print_studio_results(results: list[StudioResult]) -> None:
         label = result.studio.replace("_", "-")
         source_file = getattr(result, "source_file", None)
         prefix = f"{label} [{source_file}]" if source_file else label
-        if result.output_path:
+        status = getattr(result, "status", "completed")
+        if status == "pending":
+            destination = result.output_path or "resume state"
+            print(f"{prefix}: pending -> {destination}")
+        elif result.output_path:
             print(f"{prefix}: {result.output_path}")
         else:
             print(f"{prefix}: completed")
@@ -346,8 +393,36 @@ def _resolve_max_parallel_chunks(args: argparse.Namespace, config: AppConfig) ->
     return value
 
 
+def _resolve_studio_wait_timeout_seconds(config: AppConfig) -> float:
+    return config.runtime.studio_wait_timeout_seconds or 7200.0
+
+
+def _resolve_max_parallel_heavy_studios(config: AppConfig) -> int:
+    value = config.runtime.max_parallel_heavy_studios
+    if value is None:
+        return 1
+    if value < 1:
+        raise ChunkerError("`max_parallel_heavy_studios` must be greater than or equal to 1.")
+    return value
+
+
+def _resolve_studio_create_retries(config: AppConfig) -> int:
+    if config.runtime.studio_create_retries is None:
+        return 3
+    return config.runtime.studio_create_retries
+
+
+def _resolve_studio_create_backoff_seconds(config: AppConfig) -> float:
+    return config.runtime.studio_create_backoff_seconds or 2.0
+
+
+def _resolve_studio_rate_limit_cooldown_seconds(config: AppConfig) -> float:
+    return config.runtime.studio_rate_limit_cooldown_seconds or 30.0
+
+
 def _progress(message: str) -> None:
-    print(f"[nblm] {message}", flush=True)
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"{timestamp} [nblm] {message}", flush=True)
 
 
 def _emit_prepare_log(reporter, message: str) -> None:

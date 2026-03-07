@@ -135,6 +135,9 @@ class CliTests(TestCase):
         self.assertEqual(exit_code, 0)
         mocked_uploader.upload_directory.assert_called_once()
         self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["max_parallel_chunks"], 1)
+        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["studio_wait_timeout_seconds"], 7200.0)
+        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"], 30.0)
+        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["rename_remote_titles"], False)
 
     def test_prepare_command_reports_missing_input_file_cleanly(self) -> None:
         stderr = io.StringIO()
@@ -345,6 +348,10 @@ class CliTests(TestCase):
                         "",
                         "[runtime]",
                         "max_parallel_chunks = 5",
+                        "max_parallel_heavy_studios = 2",
+                        "studio_wait_timeout_seconds = 5400",
+                        "rename_remote_titles = true",
+                        "studio_rate_limit_cooldown_seconds = 45.0",
                         "",
                         "[studios.audio]",
                         "enabled = true",
@@ -368,6 +375,13 @@ class CliTests(TestCase):
         self.assertEqual(exit_code, 0)
         mocked_uploader.ingest_directory.assert_called_once()
         self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 5)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_heavy_studios"], 2)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_wait_timeout_seconds"], 5400.0)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_create_retries"], 3)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_create_backoff_seconds"], 2.0)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"], 45.0)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["rename_remote_titles"], True)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["resume"], False)
         self.assertIn("Generated studios: 1", stdout.getvalue())
         self.assertIn("audio: /tmp/audio.mp4", stdout.getvalue())
 
@@ -405,6 +419,83 @@ class CliTests(TestCase):
                     exit_code = main(
                         [
                             "run",
+                            "--config",
+                            str(config_path),
+                            "--max-parallel-chunks",
+                            "7",
+                        ]
+                    )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 7)
+
+    def test_resume_command_sets_resume_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "book.md"
+            source.write_text("# Chapter 1\n\nBody text.\n", encoding="utf-8")
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[source]",
+                        f'path = "{source.name}"',
+                        "",
+                        "[chunking]",
+                        'output_dir = "./chunks"',
+                        "min_pages = 0.1",
+                        "max_pages = 1.0",
+                        "words_per_page = 500",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+                mocked_uploader = mocked_uploader_class.return_value
+                mocked_uploader.ingest_directory.return_value = ("nb1", [], [])
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = main(["resume", "--config", str(config_path)])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["resume"], True)
+
+    def test_resume_command_cli_parallel_override_wins_over_config(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "book.md"
+            source.write_text("# Chapter 1\n\nBody text.\n", encoding="utf-8")
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[source]",
+                        f'path = "{source.name}"',
+                        "",
+                        "[chunking]",
+                        'output_dir = "./chunks"',
+                        "min_pages = 0.1",
+                        "max_pages = 1.0",
+                        "words_per_page = 500",
+                        "",
+                        "[runtime]",
+                        "max_parallel_chunks = 2",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+                mocked_uploader = mocked_uploader_class.return_value
+                mocked_uploader.ingest_directory.return_value = ("nb1", [], [])
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = main(
+                        [
+                            "resume",
                             "--config",
                             str(config_path),
                             "--max-parallel-chunks",

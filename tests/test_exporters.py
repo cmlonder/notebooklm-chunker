@@ -15,6 +15,7 @@ class ExporterTests(TestCase):
             chunk_id=1,
             source_file="book.md",
             heading_path=("Chapter 1",),
+            primary_heading="Chapter 1",
             markdown="# Chapter 1\n\nHello\n",
             word_count=3,
             estimated_pages=0.01,
@@ -26,12 +27,14 @@ class ExporterTests(TestCase):
 
         self.assertEqual(len(result.files), 1)
         self.assertEqual(manifest[0]["file"], "001-chapter-1.md")
+        self.assertEqual(manifest[0]["primary_heading"], "Chapter 1")
 
     def test_export_removes_stale_chunk_markdown_files(self) -> None:
         chunk = Chunk(
             chunk_id=1,
             source_file="book.md",
             heading_path=("Chapter 1",),
+            primary_heading="Chapter 1",
             markdown="# Chapter 1\n\nHello\n",
             word_count=3,
             estimated_pages=0.01,

@@ -295,6 +295,7 @@ def _finalize_chunk(
         chunk_id=chunk_id,
         source_file=source_path.name,
         heading_path=sections[0].heading_path,
+        primary_heading=_chunk_primary_heading(sections, source_path),
         markdown=markdown,
         word_count=word_count,
         estimated_pages=round(_chunk_pages(sections, settings), 2),
@@ -304,6 +305,15 @@ def _finalize_chunk(
 
 
 def chunk_filename(chunk: Chunk) -> str:
-    slug_source = chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem
+    slug_source = chunk.primary_heading or (chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem)
     slug = re.sub(r"[^a-z0-9]+", "-", slug_source.lower()).strip("-") or "chunk"
     return f"{chunk.chunk_id:03d}-{slug}.md"
+
+
+def _chunk_primary_heading(sections: list[Section], source_path: Path) -> str:
+    for section in sections:
+        if section.heading_path:
+            heading = section.heading_path[-1].strip()
+            if heading:
+                return heading
+    return source_path.stem.replace("_", " ").strip() or source_path.stem

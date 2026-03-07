@@ -64,12 +64,19 @@ class ChunkingConfig:
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
     max_parallel_chunks: int | None = None
+    max_parallel_heavy_studios: int | None = None
+    studio_wait_timeout_seconds: float | None = None
+    rename_remote_titles: bool = False
+    studio_create_retries: int | None = None
+    studio_create_backoff_seconds: float | None = None
+    studio_rate_limit_cooldown_seconds: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class StudioConfig:
     enabled: bool = False
     per_chunk: bool = False
+    max_parallel: int | None = None
     prompt: str | None = None
     output_path: str | None = None
     output_dir: str | None = None
@@ -174,6 +181,30 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
             max_parallel_chunks=_optional_positive_int(
                 runtime.get("max_parallel_chunks"),
                 "runtime.max_parallel_chunks",
+            ),
+            max_parallel_heavy_studios=_optional_positive_int(
+                runtime.get("max_parallel_heavy_studios"),
+                "runtime.max_parallel_heavy_studios",
+            ),
+            studio_wait_timeout_seconds=_optional_positive_float(
+                runtime.get("studio_wait_timeout_seconds"),
+                "runtime.studio_wait_timeout_seconds",
+            ),
+            rename_remote_titles=_optional_bool(
+                runtime.get("rename_remote_titles"),
+                "runtime.rename_remote_titles",
+            ),
+            studio_create_retries=_optional_non_negative_int(
+                runtime.get("studio_create_retries"),
+                "runtime.studio_create_retries",
+            ),
+            studio_create_backoff_seconds=_optional_positive_float(
+                runtime.get("studio_create_backoff_seconds"),
+                "runtime.studio_create_backoff_seconds",
+            ),
+            studio_rate_limit_cooldown_seconds=_optional_positive_float(
+                runtime.get("studio_rate_limit_cooldown_seconds"),
+                "runtime.studio_rate_limit_cooldown_seconds",
             ),
         ),
         studios=StudiosConfig(
@@ -307,13 +338,29 @@ def write_config_template(
             f"words_per_page = {words_per_page}",
             "",
             "[runtime]",
-            "# How many chunk upload + per-chunk Studio pipelines may run at once.",
-            "# Keep this at 1 for fully sequential execution.",
+            "# How many source uploads may run at once.",
+            "# Per-chunk Studio jobs run on their own queues after upload.",
             "max_parallel_chunks = 1",
+            "# Heavy Studio types such as audio, video, slide deck, and infographic",
+            "# are throttled separately so they do not trip NotebookLM create quotas.",
+            "max_parallel_heavy_studios = 1",
+            "# How long to wait for NotebookLM Studio generation to finish.",
+            "studio_wait_timeout_seconds = 7200",
+            "# Retry failed CREATE_ARTIFACT calls before giving up.",
+            "studio_create_retries = 3",
+            "# Base delay for exponential backoff between create retries.",
+            "studio_create_backoff_seconds = 2.0",
+            "# When NotebookLM returns rate-limit or quota errors, hold all Studio",
+            "# create requests for at least this long before trying again.",
+            "studio_rate_limit_cooldown_seconds = 30.0",
+            "# Optional: rename NotebookLM source and artifact titles from chunk headings.",
+            "# When true, the same Studio type runs one-at-a-time per notebook so renames stay correct.",
+            "rename_remote_titles = false",
             "",
             "[studios.audio]",
             "enabled = false",
             "# Local download filename for the generated NotebookLM Studio artifact.",
+            "# Optional override for this Studio type. Example: `max_parallel = 4`.",
             'prompt = """',
             "Create an energetic audio overview that emphasizes",
             "the big ideas and real-world implications.",
@@ -325,6 +372,7 @@ def write_config_template(
             "",
             "[studios.video]",
             "enabled = false",
+            "# Optional override for this Studio type. Example: `max_parallel = 2`.",
             'prompt = """',
             "Turn this into a visual lesson with clear examples",
             "and a teacher-style narrative.",
@@ -338,6 +386,9 @@ def write_config_template(
             "enabled = false",
             "# Generate one report per uploaded chunk instead of one report for the whole notebook.",
             "# per_chunk = true",
+            "# Optional override for this Studio type. Reports are usually fast,",
+            "# so most workflows can leave this unset.",
+            "# max_parallel = 8",
             "# Use `output_dir` for per-chunk outputs.",
             '# output_dir = "./output/studio/reports"',
             'prompt = """',
@@ -352,6 +403,10 @@ def write_config_template(
             "enabled = false",
             "# Generate one slide deck per uploaded chunk instead of one deck for the whole notebook.",
             "# per_chunk = true",
+            "# Optional override for this Studio type. Example: `max_parallel = 4`",
+            "# runs up to four slide-deck jobs at once even if the generic heavy",
+            "# Studio limit is lower.",
+            "# max_parallel = 4",
             "# Use `output_dir` for per-chunk outputs.",
             '# output_dir = "./output/studio/slides"',
             'prompt = """',
@@ -366,6 +421,7 @@ def write_config_template(
             "",
             "[studios.quiz]",
             "enabled = false",
+            "# Optional override for this Studio type.",
             'prompt = """',
             "Ask concept-check questions that reveal whether",
             "the learner really understood the text.",
@@ -377,6 +433,7 @@ def write_config_template(
             "",
             "[studios.flashcards]",
             "enabled = false",
+            "# Optional override for this Studio type.",
             'prompt = """',
             "Turn the important terms, definitions, and examples",
             "into compact recall cards.",
@@ -388,6 +445,7 @@ def write_config_template(
             "",
             "[studios.infographic]",
             "enabled = false",
+            "# Optional override for this Studio type. Infographics can be heavier.",
             'prompt = """',
             "Highlight the process, the main entities,",
             "and the most memorable comparisons.",
@@ -399,6 +457,7 @@ def write_config_template(
             "",
             "[studios.data_table]",
             "enabled = false",
+            "# Optional override for this Studio type.",
             'prompt = """',
             "Create a comparison table of the most important concepts,",
             "examples, and takeaways.",
@@ -408,6 +467,7 @@ def write_config_template(
             "",
             "[studios.mind_map]",
             "enabled = false",
+            "# Optional override for this Studio type.",
             'output_path = "./output/studio/mind-map.json"',
             "",
         ]
@@ -447,6 +507,7 @@ def _load_studio_config(
     return StudioConfig(
         enabled=_optional_bool(raw.get("enabled"), f"{label}.enabled"),
         per_chunk=_optional_bool(raw.get("per_chunk"), f"{label}.per_chunk"),
+        max_parallel=_optional_positive_int(raw.get("max_parallel"), f"{label}.max_parallel"),
         prompt=_optional_str(raw.get("prompt"), f"{label}.prompt"),
         output_path=_optional_path(raw.get("output_path"), f"{label}.output_path", base_dir),
         output_dir=_optional_path(raw.get("output_dir"), f"{label}.output_dir", base_dir),
@@ -522,6 +583,24 @@ def _optional_positive_int(value: Any, label: str) -> int | None:
         return None
     if number < 1:
         raise ConfigError(f"Expected {label} to be >= 1, got {number}")
+    return number
+
+
+def _optional_non_negative_int(value: Any, label: str) -> int | None:
+    number = _optional_int(value, label)
+    if number is None:
+        return None
+    if number < 0:
+        raise ConfigError(f"Expected {label} to be >= 0, got {number}")
+    return number
+
+
+def _optional_positive_float(value: Any, label: str) -> float | None:
+    number = _optional_float(value, label)
+    if number is None:
+        return None
+    if number <= 0:
+        raise ConfigError(f"Expected {label} to be > 0, got {number}")
     return number
 
 

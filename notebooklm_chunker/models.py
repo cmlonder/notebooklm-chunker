@@ -37,6 +37,7 @@ class Chunk:
     chunk_id: int
     source_file: str
     heading_path: tuple[str, ...]
+    primary_heading: str
     markdown: str
     word_count: int
     estimated_pages: float

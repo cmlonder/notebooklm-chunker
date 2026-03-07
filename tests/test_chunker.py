@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-from notebooklm_chunker.chunker import build_sections, chunk_document
+from notebooklm_chunker.chunker import build_sections, chunk_document, chunk_filename
 from notebooklm_chunker.models import Block, ChunkingSettings
 
 
@@ -54,3 +54,18 @@ class ChunkerTests(TestCase):
 
         self.assertGreaterEqual(len(chunks), 2)
         self.assertTrue(chunks[0].heading_path[0].startswith("Chapter 1"))
+
+    def test_chunk_filename_uses_primary_heading_with_leading_numbers(self) -> None:
+        blocks = [
+            Block(kind="heading", text="26 Domain-Driven Design Quickly", level=1, page=1),
+            Block(kind="paragraph", text="Body", page=1),
+        ]
+
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=ChunkingSettings(target_pages=1.0, min_pages=0.5, max_pages=2.0, words_per_page=250),
+        )
+
+        self.assertEqual(chunks[0].primary_heading, "26 Domain-Driven Design Quickly")
+        self.assertEqual(chunk_filename(chunks[0]), "001-26-domain-driven-design-quickly.md")

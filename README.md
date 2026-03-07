@@ -1,32 +1,19 @@
 # notebooklm-chunker
 
-Uploading one large PDF to NotebookLM usually produces shallow Studio results.
-Video Overview, Report, Slide Deck, Quiz, and similar outputs end up working
-against one giant blob of context, so they stay short, generic, and harder to
-reuse as a learning flow.
+Uploading one large PDF to NotebookLM usually gives weak Studio outputs.
+Reports, slide decks, quizzes, and similar artifacts stay short and generic
+because they are generated from one oversized context.
 
-`notebooklm-chunker` fixes that by splitting a long document into meaningful,
-heading-aware chunks, uploading each chunk as a separate source, and then
-generating the NotebookLM Studio outputs you enable from one workflow file.
-The result is closer to an interactive learning kit than a single uploaded PDF.
-
-For long books, do not keep the workflow fully sequential by default. Start
-with `runtime.max_parallel_chunks = 5` so uploads and per-chunk Studio jobs
-move in parallel without opening too many concurrent NotebookLM tasks at once.
+`notebooklm-chunker` solves that by splitting a long document into smaller,
+heading-aware chunks, uploading each chunk as a separate NotebookLM source,
+and then running the Studio outputs you choose. The result is closer to an
+interactive learning kit than a single uploaded PDF.
 
 ## Demo
 
 This repository ships with a full demo built around the freely downloadable
 InfoQ mini-book
 [Domain-Driven Design Quickly](https://www.infoq.com/minibooks/domain-driven-design-quickly/).
-
-Demo goal:
-- Take a real DDD book, split it into heading-aware 2.5-4 page chunks, and
-  turn it into an interactive learning kit.
-- Generate one slide deck and one question-answer style report per chunk so the
-  reader can study DDD chapter by chapter instead of reading one flat PDF.
-- Run with `runtime.max_parallel_chunks = 5` so the demo processes five chunk
-  pipelines in parallel.
 
 Demo command:
 
@@ -35,21 +22,23 @@ nblm run --config ./examples/workflows/ddd-quickly-demo.toml
 ```
 
 Demo files:
+
 - Workflow file: `./examples/workflows/ddd-quickly-demo.toml`
 - Source PDF: `./examples/ddd-quickly.pdf`
 
-Demo result:
+What you get:
+
 - NotebookLM notebook: `[add-your-link-here](https://notebooklm.google.com/)`
 - Markdown chunks under `./examples/workflows/output/ddd-quickly/chunks`
-- One per-chunk report under `./examples/workflows/output/ddd-quickly/reports`
-- One per-chunk slide deck under `./examples/workflows/output/ddd-quickly/slides`
+- One report per chunk under `./examples/workflows/output/ddd-quickly/reports`
+- One slide deck per chunk under `./examples/workflows/output/ddd-quickly/slides`
 
 ## Requirements
 
 - Python 3.12+
 - `pip`
 - A NotebookLM account
-- Use the same Python interpreter for install and Playwright setup
+- The same Python interpreter for install and Playwright setup
 
 This project automates NotebookLM through
 [`notebooklm-py`](https://github.com/teng-lin/notebooklm-py), which is an
@@ -66,9 +55,7 @@ nblm doctor
 nblm login
 ```
 
-Installing the package exposes the `nblm` CLI.
-
-To clear local notebooklm-py authentication state later:
+To clear local `notebooklm-py` auth state later:
 
 ```bash
 nblm logout
@@ -76,266 +63,235 @@ nblm logout
 
 ## Quick Start
 
-Generate a starter workflow file:
+Create a starter workflow:
 
 ```bash
 nblm init
 ```
 
-Edit `source.path` and any workflow settings you need, then check what is
-missing before the first live run:
+Check auth, config, Playwright, and PDF parser readiness:
 
 ```bash
 nblm doctor --config ./nblm.toml
 ```
 
-Then run the whole flow:
+Run the whole flow:
 
 ```bash
 nblm run --config ./nblm.toml
 ```
 
+Continue later from the saved run state:
+
+```bash
+nblm resume --config ./nblm.toml
+```
+
 `source.path` lives in the config file, so you do not need to pass the input
-document as a CLI argument unless you want to override it.
+document as a CLI argument.
+
+## Run State And Resume
+
+`nblm run` always starts a fresh run and writes a state file next to the chunk
+output:
+
+```text
+./output/chunks/.nblm-run-state.json
+```
+
+That file tracks every chunk separately:
+
+- whether its NotebookLM source upload is still pending, uploaded, or failed
+- whether each Studio job for that chunk is pending, completed, or failed
+- the `source_id`, `task_id`, `artifact_id`, output path, and last error when available
+
+Example shape:
+
+```json
+{
+  "chunks": {
+    "001-intro.md": {
+      "source": {
+        "status": "uploaded",
+        "source_id": "src-001-intro"
+      },
+      "studios": {
+        "report": {
+          "status": "completed",
+          "artifact_id": "art-report-1"
+        },
+        "slide_deck": {
+          "status": "pending",
+          "task_id": "art-slide-deck-1"
+        }
+      }
+    }
+  }
+}
+```
+
+This is why `nblm resume` can continue hours or days later after quotas reset:
+it does not guess what happened, it reads the saved job state and continues
+only the unfinished source or Studio jobs.
+
+If you want to inspect progress manually, open `.nblm-run-state.json`.
+
+Source uploads and per-chunk Studio jobs run as separate queues. That means
+new source uploads can keep moving while earlier reports, slide decks, or
+other Studio jobs are still running.
+
+### Resume After Quotas
+
+NotebookLM usage limits and quotas depend on your plan. Google documents those
+limits here:
+
+- [NotebookLM usage limits and upgrades](https://support.google.com/notebooklm/answer/16213268?hl=en)
+
+That matters for long books. If your quota fills up in the middle of a run,
+you can stop, wait for the quota window to reset, and then run:
+
+```bash
+nblm resume --config ./nblm.toml
+```
+
+Because `nblm` persists source and Studio job state separately, it can continue
+from where it left off instead of redoing the whole notebook. NotebookLM's help
+page also notes that daily quotas reset after 24 hours.
 
 ## Workflow File
 
-Below is a full example that shows all supported workflow sections and the
-practical options you are likely to use:
+This is the practical full workflow shape:
 
 ```toml
 [source]
-# Relative paths are resolved from this TOML file.
 path = "./your-document.pdf"
-# PDF only: skip explicit inclusive page ranges as well.
-# Useful for contents, foreword, references, appendix, or index pages.
+# PDF only. Inclusive page ranges to skip.
 # skip_ranges = ["1-8", "399-420", "512"]
 
 [notebook]
-# Create a new notebook with this title unless `id` is set.
 title = "Interactive Learning Notebook"
 # id = "nb_..."
 
 [chunking]
-# Markdown chunks and manifest.json are written here.
 output_dir = "./output/chunks"
-# Preferred chunk size.
 target_pages = 3.0
-# Soft lower bound.
 min_pages = 2.5
-# Hard upper bound.
 max_pages = 4.0
-# Word heuristic used when page boundaries are unavailable or noisy.
 words_per_page = 500
 
 [runtime]
-# Process up to N chunk upload + per-chunk Studio pipelines in parallel.
-# Leave this at 1 to keep the run fully sequential.
-max_parallel_chunks = 1
-
-[studios.audio]
-enabled = false
-# Local download filename for the generated NotebookLM Studio artifact.
-output_path = "./output/studio/audio-overview.mp4"
-language = "en"
-format = "deep-dive"
-length = "long"
-prompt = """
-Create an energetic audio overview that emphasizes
-the big ideas and real-world implications.
-"""
-
-[studios.video]
-enabled = false
-output_path = "./output/studio/video-overview.mp4"
-language = "en"
-format = "explainer"
-style = "whiteboard"
-prompt = """
-Turn this into a visual lesson with clear examples
-and a teacher-style narrative.
-"""
+max_parallel_chunks = 3
+max_parallel_heavy_studios = 1
+studio_wait_timeout_seconds = 7200
+studio_create_retries = 5
+studio_create_backoff_seconds = 5.0
+studio_rate_limit_cooldown_seconds = 30.0
+rename_remote_titles = false
 
 [studios.report]
-enabled = false
-# Set `per_chunk = true` to generate one report per uploaded chunk.
-per_chunk = false
-# If `per_chunk = true`, prefer `output_dir` over `output_path`.
-# output_dir = "./output/studio/reports"
-output_path = "./output/studio/study-guide.md"
+enabled = true
+per_chunk = true
+max_parallel = 3
+output_dir = "./output/reports"
 language = "en"
 format = "study-guide"
 prompt = """
-Focus on key arguments, terminology, and what a student
-should review after reading.
+Write a study-guide style report for this chunk.
+Explain the main ideas, terminology, and design tradeoffs.
 """
 
 [studios.slide_deck]
-enabled = false
-# Set `per_chunk = true` to generate one deck per uploaded chunk.
-per_chunk = false
-# If `per_chunk = true`, prefer `output_dir` over `output_path`.
-# output_dir = "./output/studio/slides"
-output_path = "./output/studio/slide-deck.pdf"
+enabled = true
+per_chunk = true
+max_parallel = 3
+output_dir = "./output/slides"
 language = "en"
 format = "detailed"
 length = "default"
 download_format = "pdf"
 prompt = """
-Build a teaching deck with strong section transitions
-and presenter-friendly structure.
+Build a teaching deck for this chunk.
+Keep the section order and make each slide carry one clear idea.
 """
-
-[studios.quiz]
-enabled = false
-output_path = "./output/studio/quiz.json"
-quantity = "more"
-difficulty = "hard"
-download_format = "json"
-prompt = """
-Ask concept-check questions that reveal whether
-the learner really understood the text.
-"""
-
-[studios.flashcards]
-enabled = false
-output_path = "./output/studio/flashcards.md"
-quantity = "more"
-difficulty = "hard"
-download_format = "markdown"
-prompt = """
-Turn the important terms, definitions, and examples
-into compact recall cards.
-"""
-
-[studios.infographic]
-enabled = false
-output_path = "./output/studio/infographic.png"
-language = "en"
-orientation = "portrait"
-detail = "detailed"
-prompt = """
-Highlight the process, the main entities,
-and the most memorable comparisons.
-"""
-
-[studios.data_table]
-enabled = false
-output_path = "./output/studio/data-table.csv"
-language = "en"
-prompt = """
-Create a comparison table of the most important concepts,
-examples, and takeaways.
-"""
-
-[studios.mind_map]
-enabled = false
-output_path = "./output/studio/mind-map.json"
-# notebooklm-py does not expose a custom prompt surface for mind maps today.
 ```
-
-**General Notes**
-- NotebookLM-side artifact titles are controlled by NotebookLM. Local filenames are controlled by `output_path` or `output_dir`.
-- CLI override is available too: `--skip-range 1-8 --skip-range 399-420`.
-- `nblm logout` removes local notebooklm-py auth files under `NOTEBOOKLM_HOME` or `~/.notebooklm/`.
-- If you use `NOTEBOOKLM_AUTH_JSON`, `nblm logout` cannot clear that environment variable for you.
 
 ## Studio Parameters
 
-The runtime defaults are intentionally set to the richer / fuller side. If you
-leave a field blank, `nblm` will prefer the more complete option rather than a
-short or lightweight one.
-
-### Common Fields
+Common fields:
 
 | Field | Meaning |
 | --- | --- |
-| `enabled` | Turns that Studio output on or off. |
-| `per_chunk` | Generate one artifact per uploaded chunk instead of one artifact for the whole notebook. |
+| `enabled` | Turn the Studio on or off. |
+| `per_chunk` | Generate one output per chunk instead of one output for the whole notebook. |
+| `max_parallel` | Override generic concurrency for this Studio type. |
 | `prompt` | Extra instructions for NotebookLM. Use TOML multiline strings for anything non-trivial. |
-| `output_path` | Single output file location. Best for notebook-level generation. |
-| `output_dir` | Output folder for `per_chunk = true`. |
-| `language` | Output language when the Studio supports it. |
+| `output_path` | Single output file. Best for notebook-level generation. |
+| `output_dir` | Output directory for `per_chunk = true`. |
+| `language` | Output language when supported. |
 
-### Audio Overview
+Per-Studio options:
 
-| Field | Allowed Values | Default |
+| Studio | Extra fields | Defaults |
 | --- | --- | --- |
-| `format` | `deep-dive`, `brief`, `critique`, `debate` | `deep-dive` |
-| `length` | `short`, `default`, `long` | `long` |
+| `audio` | `format`, `length` | `deep-dive`, `long` |
+| `video` | `format`, `style` | `explainer`, `whiteboard` |
+| `report` | `format` | `study-guide` |
+| `slide_deck` | `format`, `length`, `download_format` | `detailed`, `default`, `pdf` |
+| `quiz` | `quantity`, `difficulty`, `download_format` | `more`, `hard`, `json` |
+| `flashcards` | `quantity`, `difficulty`, `download_format` | `more`, `hard`, `markdown` |
+| `infographic` | `orientation`, `detail` | `portrait`, `detailed` |
+| `data_table` | `language`, `prompt` | `en`, built-in comparison prompt |
+| `mind_map` | `output_path` | JSON output path |
 
-### Video Overview
+Notes:
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `format` | `explainer`, `brief` | `explainer` |
-| `style` | `auto`, `classic`, `whiteboard`, `kawaii`, `anime`, `watercolor`, `retro-print`, `heritage`, `paper-craft` | `whiteboard` |
+- For `report`, `format = "custom"` sends `prompt` as the main custom report prompt.
+- For built-in report formats, `prompt` is appended as extra instructions.
+- `mind_map` currently has no custom prompt surface in `notebooklm-py`.
 
-### Report
+## Technical Notes
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `format` | `briefing-doc`, `study-guide`, `blog-post`, `custom` | `study-guide` |
+### Heading-Aware Chunking
 
-If `format = "custom"`, `prompt` is sent as the main custom report prompt. For
-the built-in report formats, `prompt` is appended as extra instructions.
+- chunks start and end on heading boundaries when possible
+- chunk size targets `target_pages` while trying to stay inside `min_pages` and `max_pages`
+- local chunk filenames come from the first or nearest heading, including leading numbers
 
-### Slide Deck
+### PDF Cleanup
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `format` | `detailed`, `presenter` | `detailed` |
-| `length` | `default`, `short` | `default` |
-| `download_format` | `pdf`, `pptx` | `pdf` |
+- `skip_ranges` lets you remove contents, foreword, references, appendix, or index pages
+- ranges are inclusive, for example: `["1-8", "399-420", "512"]`
 
-### Quiz
+### Parallelism And Quotas
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `quantity` | `fewer`, `standard`, `more` | `more` |
-| `difficulty` | `easy`, `medium`, `hard` | `hard` |
-| `download_format` | `json`, `markdown`, `html` | `json` |
+- `max_parallel_chunks` controls how many source uploads run at once
+- per-chunk Studio jobs run on their own queues after each source upload finishes
+- `max_parallel_heavy_studios` is the generic fallback for heavier Studio types such as `audio`, `video`, `slide_deck`, and `infographic`
+- `studios.<name>.max_parallel` overrides that fallback per Studio type
+- good starting point for long books: `max_parallel_chunks = 3`
+- values like `5` can hit NotebookLM quota or rate-limit errors faster
 
-### Flashcards
+### Retry And Backoff
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `quantity` | `fewer`, `standard`, `more` | `more` |
-| `difficulty` | `easy`, `medium`, `hard` | `hard` |
-| `download_format` | `json`, `markdown`, `html` | `markdown` |
+- failed NotebookLM `CREATE_ARTIFACT` calls retry automatically
+- quota or rate-limit errors trigger a shared cooldown before more Studio create requests are sent
+- tune this with:
+  - `runtime.studio_create_retries`
+  - `runtime.studio_create_backoff_seconds`
+  - `runtime.studio_rate_limit_cooldown_seconds`
 
-### Infographic
+### Optional NotebookLM Renaming
 
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `orientation` | `landscape`, `portrait`, `square` | `portrait` |
-| `detail` | `concise`, `standard`, `detailed` | `detailed` |
-
-### Data Table
-
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `language` | any language code or label NotebookLM accepts | `en` |
-| `prompt` | custom table instructions | built-in comparison prompt |
-
-### Mind Map
-
-| Field | Allowed Values | Default |
-| --- | --- | --- |
-| `output_path` | JSON output path | `./output/studio/mind-map.json` |
-
-`notebooklm-py` does not currently expose a custom prompt surface for mind
-maps, so `prompt` is ignored there.
+- by default, NotebookLM keeps its own auto-generated source and artifact titles
+- set `runtime.rename_remote_titles = true` if you want NotebookLM titles to follow chunk headings
+- tradeoff: the related Studio type becomes more serialized so renames stay correct
 
 ## Examples
 
-Most users should start with an end-to-end `nblm run` workflow. The partial
-`prepare` examples are for cases where you only want to inspect or export
-chunks before doing live NotebookLM work.
+Start from the general end-to-end workflows first. Use the partial `prepare`
+examples only when you want to inspect chunking before any live NotebookLM run.
 
 ### DDD Quickly Demo
-
-Use the bundled DDD mini-book and the dedicated DDD teaching prompts:
 
 ```bash
 nblm run --config ./examples/workflows/ddd-quickly-demo.toml
@@ -343,140 +299,68 @@ nblm run --config ./examples/workflows/ddd-quickly-demo.toml
 
 ### Full Learning Kit
 
-Use the generic end-to-end demo when you want to chunk a document, upload the
-resulting sources, and generate multiple NotebookLM Studio outputs in one run:
-
 ```bash
 nblm run --config ./examples/workflows/learning-kit.toml
 ```
 
 ### Per-Chunk Report + Slide Deck
 
-Use this when the main goal is to study a long document section by section,
-with one report and one slide deck generated for every chunk:
-
 ```bash
 nblm run --config ./examples/workflows/per-chunk-report-and-slides.toml
 ```
 
-### Studio Workflows
+### Single-Studio Workflows
 
-NotebookLM Studio is NotebookLM's built-in content generation surface:
-Audio Overview, Video Overview, Report, Slide Deck, Quiz, Flashcards,
-Infographic, Data Table, and Mind Map. These workflows are still end-to-end,
-but each one focuses on a single Studio capability with a dedicated prompt:
+NotebookLM Studio is NotebookLM's built-in generation layer: Audio Overview,
+Video Overview, Report, Slide Deck, Quiz, Flashcards, Infographic, Data Table,
+and Mind Map.
 
-- Audio Overview: `./examples/workflows/studios/audio.toml`
-- Video Overview: `./examples/workflows/studios/video.toml`
-- Report / Study Guide: `./examples/workflows/studios/report.toml`
-- Slide Deck: `./examples/workflows/studios/slide-deck.toml`
-- Quiz: `./examples/workflows/studios/quiz.toml`
-- Flashcards: `./examples/workflows/studios/flashcards.toml`
-- Infographic: `./examples/workflows/studios/infographic.toml`
-- Data Table: `./examples/workflows/studios/data-table.toml`
-- Mind Map: `./examples/workflows/studios/mind-map.toml`
+Single-Studio end-to-end examples live under:
 
-Run any of them with:
+```text
+./examples/workflows/studios/
+```
+
+Run one of them with:
 
 ```bash
 nblm run --config ./examples/workflows/studios/audio.toml
 ```
 
-### PDF Chunking Only
+### Chunking Only
 
-If you only need to inspect chunk boundaries, validate skip ranges, or prepare
-Markdown chunks before uploading anything to NotebookLM, use:
+PDF:
 
 ```bash
 nblm prepare --config ./examples/workflows/pdf.toml
 ```
 
-You can always upload or run Studio generation later with those exported
-chunks.
-
-### Markdown Chunking Only
-
-If your source is already Markdown and you only want the chunk export step, use:
+Markdown:
 
 ```bash
 nblm prepare --config ./examples/workflows/markdown.toml
 ```
 
-## End-to-End Demo
-
-Use this workflow:
-
-- `./examples/workflows/ddd-quickly-demo.toml`
-
-What that file currently says:
-
-- `source.path = "../ddd-quickly.pdf"`
-- `skip_ranges = ["1-10", "99-106"]`
-- `target_pages = 3.0`
-- `min_pages = 2.5`
-- `max_pages = 4.0`
-- `runtime.max_parallel_chunks = 5`
-- `studios.report.per_chunk = true`
-- `studios.slide_deck.per_chunk = true`
-
-Run it with:
-
-```bash
-nblm run --config ./examples/workflows/ddd-quickly-demo.toml
-```
-
-What happens:
-
-1. The PDF is parsed, with `skip_ranges` applied first if you set them.
-2. The chunker looks for heading boundaries and tries to build chunks around `target_pages = 3.0`, while staying within `2.5 - 4.0` whenever possible.
-3. `runtime.max_parallel_chunks = 5` keeps up to five chunk pipelines in flight at once, so upload plus per-chunk report/slide generation does not bottleneck on a fully sequential run.
-4. Each chunk is exported as a separate Markdown file under `./examples/workflows/output/ddd-quickly/chunks`.
-5. Each Markdown chunk is uploaded to NotebookLM as a separate source.
-6. Because `studios.report.per_chunk = true`, one study-guide style report is generated for each uploaded chunk.
-7. Because `studios.slide_deck.per_chunk = true`, one teaching slide deck is generated for each uploaded chunk.
-8. Reports land in `./examples/workflows/output/ddd-quickly/reports`, slide decks land in `./examples/workflows/output/ddd-quickly/slides`.
-
-For a smaller runnable local chunking demo, the bundled PDF workflow:
-
-```bash
-nblm prepare --config ./examples/workflows/pdf.toml
-```
-
-currently produces:
-
-```text
-Detected headings: 9
-Chunks generated: 3
-Output folder: /.../examples/workflows/output/pdf/chunks
-```
-
 ## Commands
 
-The CLI has built-in help through `nblm --help`:
+`nblm --help`:
 
 ```text
-usage: nblm [-h] {login,logout,doctor,init,prepare,upload,studios,run} ...
+usage: nblm [-h]
+            {login,logout,doctor,init,prepare,upload,studios,run,resume} ...
 
 Split long documents into NotebookLM-ready chunks and optionally generate
 Studio outputs.
 
 positional arguments:
-  {login,logout,doctor,init,prepare,upload,studios,run}
-    login               Run `notebooklm login` for notebooklm-py
-                        authentication.
-    logout              Clear notebooklm-py local authentication state from
-                        disk.
-    doctor              Check config discovery, auth, Playwright, PDF parser,
-                        and notebooklm CLI readiness.
-    init                Write a workflow config file with chunking and Studio
-                        settings.
+  {login,logout,doctor,init,prepare,upload,studios,run,resume}
+    login               Run `notebooklm login` for notebooklm-py authentication.
+    logout              Clear notebooklm-py local authentication state from disk.
+    doctor              Check config discovery, auth, Playwright, PDF parser, and notebooklm CLI readiness.
+    init                Write a workflow config file with chunking and Studio settings.
     prepare             Parse a document and export Markdown chunks.
     upload              Upload existing chunks to NotebookLM.
-    studios             Generate enabled Studio outputs for an existing
-                        notebook.
-    run                 Prepare a document, upload the chunks, then generate
-                        enabled Studio outputs.
-
-options:
-  -h, --help            show this help message and exit
+    studios             Generate enabled Studio outputs for an existing notebook.
+    run                 Prepare a document, create a fresh notebook run, then generate enabled Studio outputs.
+    resume              Continue a previous run from `.nblm-run-state.json` and finish pending uploads or Studio jobs.
 ```

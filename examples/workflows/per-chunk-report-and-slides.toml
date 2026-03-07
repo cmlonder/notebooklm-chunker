@@ -14,9 +14,17 @@ min_pages = 2.5
 max_pages = 4.0
 words_per_page = 500
 
+[runtime]
+max_parallel_chunks = 3
+max_parallel_heavy_studios = 1
+studio_create_retries = 5
+studio_create_backoff_seconds = 5.0
+studio_rate_limit_cooldown_seconds = 30.0
+
 [studios.report]
 enabled = true
 per_chunk = true
+max_parallel = 3
 output_dir = "./output/per-chunk/reports"
 language = "en"
 format = "study-guide"
@@ -46,6 +54,7 @@ Writing rules:
 [studios.slide_deck]
 enabled = true
 per_chunk = true
+max_parallel = 3
 output_dir = "./output/per-chunk/slides"
 language = "en"
 format = "detailed"

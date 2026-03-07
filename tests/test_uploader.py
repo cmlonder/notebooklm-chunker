@@ -1,27 +1,40 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import tempfile
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
 from notebooklm_chunker.config import StudioConfig, StudiosConfig
+from notebooklm_chunker.run_state import chunk_content_hash
 from notebooklm_chunker.uploaders.notebooklm_py import (
+    CreateQuotaCooldown,
     NotebookLMPyUploader,
+    UploadError,
+    _create_artifact_with_retry,
     run_notebooklm_login,
     run_notebooklm_logout,
 )
 
 
 class _FakeNotebook:
-    def __init__(self, notebook_id: str) -> None:
+    def __init__(self, notebook_id: str, title: str | None = None) -> None:
         self.id = notebook_id
+        self.title = title
 
 
 class _FakeSource:
     def __init__(self, source_id: str) -> None:
         self.id = source_id
+
+
+class _FakeArtifact:
+    def __init__(self, artifact_id: str, kind: str, title: str) -> None:
+        self.id = artifact_id
+        self.kind = kind
+        self.title = title
 
 
 class _FakeGenerationStatus:
@@ -39,11 +52,20 @@ class _FakeNotebooksAPI:
     def __init__(self, events: list[str]) -> None:
         self.created_titles: list[str] = []
         self.events = events
+        self._titles_by_id: dict[str, str] = {}
 
     async def create(self, title: str) -> _FakeNotebook:
         self.created_titles.append(title)
         self.events.append(f"notebook:{title}")
-        return _FakeNotebook("nb1")
+        self._titles_by_id["nb1"] = title
+        return _FakeNotebook("nb1", title)
+
+    async def get(self, notebook_id: str) -> _FakeNotebook:
+        self.events.append(f"notebook-get:{notebook_id}")
+        return _FakeNotebook(notebook_id, self._titles_by_id.get(notebook_id, "Existing Notebook"))
+
+    async def list(self) -> list[_FakeNotebook]:
+        return [_FakeNotebook(notebook_id, title) for notebook_id, title in self._titles_by_id.items()]
 
 
 class _FakeSourcesAPI:
@@ -53,6 +75,7 @@ class _FakeSourcesAPI:
 
     def __init__(self, events: list[str]) -> None:
         self.calls: list[tuple[str, str, bool]] = []
+        self.rename_calls: list[tuple[str, str, str]] = []
         self.events = events
 
     @classmethod
@@ -73,6 +96,10 @@ class _FakeSourcesAPI:
         finally:
             type(self).active_uploads -= 1
 
+    async def rename(self, notebook_id: str, source_id: str, new_title: str) -> None:
+        self.rename_calls.append((notebook_id, source_id, new_title))
+        self.events.append(f"source-rename:{source_id}:{new_title}")
+
 
 class _FakeArtifactsAPI:
     def __init__(self, events: list[str]) -> None:
@@ -83,6 +110,8 @@ class _FakeArtifactsAPI:
         self.report_download_calls: list[tuple[str, str, str | None]] = []
         self.slide_generate_calls: list[dict[str, object]] = []
         self.slide_download_calls: list[tuple[str, str, str | None, str]] = []
+        self.rename_calls: list[tuple[str, str, str]] = []
+        self._artifacts: list[_FakeArtifact] = []
         self.events = events
 
     async def generate_audio(
@@ -94,6 +123,7 @@ class _FakeArtifactsAPI:
         audio_format=None,
         audio_length=None,
     ) -> _FakeGenerationStatus:
+        artifact_id = f"art-audio-{len(self.audio_generate_calls) + 1}"
         self.audio_generate_calls.append(
             {
                 "notebook_id": notebook_id,
@@ -104,8 +134,9 @@ class _FakeArtifactsAPI:
                 "audio_length": audio_length,
             }
         )
+        self._artifacts.append(_FakeArtifact(artifact_id, "audio", f"Audio {len(self.audio_generate_calls)}"))
         self.events.append("audio:" + ",".join(source_ids or []))
-        return _FakeGenerationStatus("task-audio")
+        return _FakeGenerationStatus(artifact_id)
 
     async def wait_for_completion(
         self,
@@ -134,6 +165,7 @@ class _FakeArtifactsAPI:
         custom_prompt: str | None = None,
         extra_instructions: str | None = None,
     ) -> _FakeGenerationStatus:
+        artifact_id = f"art-report-{len(self.report_generate_calls) + 1}"
         self.report_generate_calls.append(
             {
                 "notebook_id": notebook_id,
@@ -144,8 +176,9 @@ class _FakeArtifactsAPI:
                 "extra_instructions": extra_instructions,
             }
         )
+        self._artifacts.append(_FakeArtifact(artifact_id, "report", f"Report {len(self.report_generate_calls)}"))
         self.events.append("report:" + ",".join(source_ids or []))
-        return _FakeGenerationStatus(f"task-report-{len(self.report_generate_calls)}")
+        return _FakeGenerationStatus(artifact_id)
 
     async def download_report(
         self,
@@ -165,6 +198,7 @@ class _FakeArtifactsAPI:
         slide_format=None,
         slide_length=None,
     ) -> _FakeGenerationStatus:
+        artifact_id = f"art-slide-deck-{len(self.slide_generate_calls) + 1}"
         self.slide_generate_calls.append(
             {
                 "notebook_id": notebook_id,
@@ -175,8 +209,11 @@ class _FakeArtifactsAPI:
                 "slide_length": slide_length,
             }
         )
+        self._artifacts.append(
+            _FakeArtifact(artifact_id, "slide_deck", f"Slide Deck {len(self.slide_generate_calls)}")
+        )
         self.events.append("slide:" + ",".join(source_ids or []))
-        return _FakeGenerationStatus(f"task-slide-{len(self.slide_generate_calls)}")
+        return _FakeGenerationStatus(artifact_id)
 
     async def download_slide_deck(
         self,
@@ -187,6 +224,18 @@ class _FakeArtifactsAPI:
     ) -> str:
         self.slide_download_calls.append((notebook_id, output_path, artifact_id, output_format))
         return output_path
+
+    async def list(self, notebook_id: str) -> list[_FakeArtifact]:
+        return list(self._artifacts)
+
+    async def rename(self, notebook_id: str, artifact_id: str, new_title: str) -> None:
+        self.rename_calls.append((notebook_id, artifact_id, new_title))
+        self.events.append(f"artifact-rename:{artifact_id}:{new_title}")
+        for artifact in self._artifacts:
+            if artifact.id == artifact_id:
+                artifact.title = new_title
+                return
+        raise AssertionError(f"Unknown artifact id: {artifact_id}")
 
 
 class _FakeClient:
@@ -274,7 +323,11 @@ class UploaderTests(TestCase):
                 "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
                 return_value=_FakeNotebookLMClient,
             ):
-                notebook_id, uploads = uploader.upload_directory(chunks_dir, notebook_title="Notebook")
+                notebook_id, uploads = uploader.upload_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    rename_remote_titles=True,
+                )
 
         self.assertEqual(notebook_id, "nb1")
         self.assertEqual(len(uploads), 1)
@@ -282,6 +335,10 @@ class UploaderTests(TestCase):
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.calls,
             [("nb1", "001-test.md", True)],
+        )
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.sources.rename_calls,
+            [("nb1", "src-001-test", "001. Title")],
         )
 
     def test_upload_directory_respects_max_parallel_chunks(self) -> None:
@@ -301,10 +358,371 @@ class UploaderTests(TestCase):
                     chunks_dir,
                     notebook_title="Notebook",
                     max_parallel_chunks=2,
+                    rename_remote_titles=True,
                 )
 
         self.assertEqual(len(uploads), 4)
         self.assertEqual(_FakeSourcesAPI.max_active_uploads, 2)
+
+    def test_upload_directory_does_not_rename_remote_titles_by_default(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            chunks_dir = Path(directory)
+            (chunks_dir / "001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ):
+                _, uploads = uploader.upload_directory(chunks_dir, notebook_title="Notebook")
+
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(_FakeNotebookLMClient.last_client.sources.rename_calls, [])
+
+    def test_run_studios_passes_long_wait_timeout(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with patch(
+            "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+            return_value=_FakeNotebookLMClient,
+        ), patch(
+            "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+            return_value=_FakeRpcModule,
+        ):
+            results = uploader.run_studios(
+                notebook_id="nb1",
+                studios=StudiosConfig(
+                    audio=StudioConfig(
+                        enabled=True,
+                        output_path="/tmp/audio-overview.mp4",
+                    )
+                ),
+                studio_wait_timeout_seconds=7200.0,
+            )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.artifacts.wait_calls,
+            [("nb1", "art-audio-1", 7200.0)],
+        )
+
+    def test_slide_deck_create_failure_is_saved_for_resume(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _NoTaskArtifacts(_FakeArtifactsAPI):
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                return _FakeGenerationStatus("", status="failed", error="upstream create failed")
+
+        class _NoTaskClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _NoTaskArtifacts(self.events)
+
+        class _NoTaskNotebookLMClient:
+            @classmethod
+            async def from_storage(cls):
+                return _NoTaskClient()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_NoTaskNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                notebook_id, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    studio_create_retries=0,
+                    studio_create_backoff_seconds=0.01,
+                )
+
+            state = json.loads((chunks_dir / ".nblm-run-state.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(notebook_id, "nb1")
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(len(studio_results), 1)
+        self.assertEqual(studio_results[0].status, "pending")
+        self.assertEqual(state["version"], 2)
+        self.assertEqual(
+            state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["status"],
+            "create_failed",
+        )
+        self.assertIn(
+            "slide-deck [001-intro.md] create failed before a task ID was returned",
+            state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["last_error"],
+        )
+
+    def test_ingest_directory_logs_create_failure_details(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _NoTaskArtifacts(_FakeArtifactsAPI):
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                return _FakeGenerationStatus("", status="failed", error="upstream create failed")
+
+        class _NoTaskClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _NoTaskArtifacts(self.events)
+
+        class _NoTaskNotebookLMClient:
+            @classmethod
+            async def from_storage(cls):
+                return _NoTaskClient()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+            progress: list[str] = []
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_NoTaskNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    studio_create_retries=0,
+                    studio_create_backoff_seconds=0.01,
+                    reporter=progress.append,
+                )
+
+        self.assertTrue(
+            any(
+                "studio: create failure slide-deck [001-intro.md] attempt 1/1:" in line
+                and "status=failed, error=upstream create failed" in line
+                for line in progress
+            )
+        )
+
+    def test_ingest_directory_fails_fast_when_resume_notebook_is_missing(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _MissingNotebookNotebooksAPI(_FakeNotebooksAPI):
+            async def get(self, notebook_id: str) -> _FakeNotebook:  # type: ignore[override]
+                raise ValueError(f"Notebook not found: {notebook_id}")
+
+        class _MissingNotebookClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.notebooks = _MissingNotebookNotebooksAPI(self.events)
+
+        class _MissingNotebookLMClient:
+            @classmethod
+            async def from_storage(cls):
+                return _MissingNotebookClient()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            chunk_path = chunks_dir / "001-intro.md"
+            chunk_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 1,
+                "notebook_id": "nb-missing",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "001-intro.md": {
+                        "content_hash": chunk_content_hash(chunk_path),
+                        "source_id": "src-001-intro",
+                        "studios": {},
+                    }
+                },
+                "notebook_studios": {},
+            }
+            (chunks_dir / ".nblm-run-state.json").write_text(
+                json.dumps(state_payload, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_MissingNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                with self.assertRaises(UploadError) as context:
+                    uploader.ingest_directory(
+                        chunks_dir,
+                        notebook_title="Notebook",
+                        studios=StudiosConfig(),
+                        resume=True,
+                    )
+
+        self.assertIn('Notebook "nb-missing" is not available', str(context.exception))
+        self.assertIn(".nblm-run-state.json", str(context.exception))
+
+    def test_ingest_directory_resume_requires_existing_state_file(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                with self.assertRaises(UploadError) as context:
+                    uploader.ingest_directory(
+                        chunks_dir,
+                        notebook_title="Notebook",
+                        studios=StudiosConfig(),
+                        resume=True,
+                    )
+
+        self.assertIn("No resume state found", str(context.exception))
+        self.assertIn("nblm run", str(context.exception))
+
+    def test_ingest_directory_default_run_ignores_existing_resume_state(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            chunk_path = chunks_dir / "001-intro.md"
+            chunk_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 1,
+                "notebook_id": "nb-old",
+                "notebook_title": "Old Notebook",
+                "chunks": {
+                    "001-intro.md": {
+                        "content_hash": chunk_content_hash(chunk_path),
+                        "source_id": "src-old",
+                        "studios": {},
+                    }
+                },
+                "notebook_studios": {},
+            }
+            (chunks_dir / ".nblm-run-state.json").write_text(
+                json.dumps(state_payload, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                notebook_id, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(),
+                )
+
+            state = json.loads((chunks_dir / ".nblm-run-state.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(notebook_id, "nb1")
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(studio_results, [])
+        self.assertEqual(_FakeNotebookLMClient.last_client.notebooks.created_titles, ["Notebook"])
+        self.assertEqual(_FakeNotebookLMClient.last_client.sources.calls, [("nb1", "001-intro.md", True)])
+        self.assertEqual(state["notebook_id"], "nb1")
+
+    def test_ingest_directory_retries_create_artifact_failures_with_backoff(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _RetrySlideArtifacts(_FakeArtifactsAPI):
+            def __init__(self, events: list[str]) -> None:
+                super().__init__(events)
+                self.slide_attempts = 0
+
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                self.slide_attempts += 1
+                if self.slide_attempts == 1:
+                    return _FakeGenerationStatus("", status="failed", error="temporary create failure")
+                return await super().generate_slide_deck(*args, **kwargs)
+
+        class _RetrySlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _RetrySlideArtifacts(self.events)
+
+        class _RetrySlideNotebookLMClient:
+            last_client: _RetrySlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _RetrySlideClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+            progress: list[str] = []
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_RetrySlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                _, _, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    studio_create_retries=2,
+                    studio_create_backoff_seconds=0.01,
+                    reporter=progress.append,
+                )
+
+        self.assertEqual(len(studio_results), 1)
+        self.assertEqual(_RetrySlideNotebookLMClient.last_client.artifacts.slide_attempts, 2)
+        self.assertTrue(any("retry 1/2 slide-deck [001-intro.md] create after failure" in line for line in progress))
 
     def test_upload_directory_prefers_manifest_and_ignores_stale_markdown(self) -> None:
         uploader = NotebookLMPyUploader()
@@ -321,12 +739,20 @@ class UploaderTests(TestCase):
                 "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
                 return_value=_FakeNotebookLMClient,
             ):
-                _, uploads = uploader.upload_directory(chunks_dir, notebook_title="Notebook")
+                _, uploads = uploader.upload_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    rename_remote_titles=True,
+                )
 
         self.assertEqual([Path(item.file_path).name for item in uploads], ["001-test.md"])
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.calls,
             [("nb1", "001-test.md", True)],
+        )
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.sources.rename_calls,
+            [("nb1", "src-001-test", "001. Title")],
         )
 
     def test_ingest_directory_generates_audio_from_uploaded_sources(self) -> None:
@@ -355,13 +781,14 @@ class UploaderTests(TestCase):
                             output_path=str((root / "studio" / "audio-overview.mp4").resolve()),
                         )
                     ),
+                    rename_remote_titles=True,
                 )
 
         self.assertEqual(notebook_id, "nb1")
         self.assertEqual(len(uploads), 2)
         self.assertEqual(len(studio_results), 1)
         self.assertEqual(studio_results[0].studio, "audio")
-        self.assertEqual(studio_results[0].artifact_id, "task-audio")
+        self.assertEqual(studio_results[0].artifact_id, "art-audio-1")
         self.assertEqual(
             _FakeNotebookLMClient.last_client.artifacts.audio_generate_calls,
             [
@@ -377,7 +804,7 @@ class UploaderTests(TestCase):
         )
         self.assertEqual(
             _FakeNotebookLMClient.last_client.artifacts.audio_download_calls,
-            [("nb1", str((root / "studio" / "audio-overview.mp4").resolve()), "task-audio")],
+            [("nb1", str((root / "studio" / "audio-overview.mp4").resolve()), "art-audio-1")],
         )
 
     def test_run_login_calls_notebooklm_cli(self) -> None:
@@ -447,6 +874,7 @@ class UploaderTests(TestCase):
                             length="default",
                         ),
                     ),
+                    rename_remote_titles=True,
                 )
 
         self.assertEqual(len(studio_results), 4)
@@ -498,12 +926,12 @@ class UploaderTests(TestCase):
                 (
                     "nb1",
                     str((root / "studio" / "reports" / "001-intro-report.md").resolve()),
-                    "task-report-1",
+                    "art-report-1",
                 ),
                 (
                     "nb1",
                     str((root / "studio" / "reports" / "002-summary-report.md").resolve()),
-                    "task-report-2",
+                    "art-report-2",
                 ),
             ],
         )
@@ -513,18 +941,492 @@ class UploaderTests(TestCase):
                 (
                     "nb1",
                     str((root / "studio" / "slides" / "001-intro-slide-deck.pdf").resolve()),
-                    "task-slide-1",
+                    "art-slide-deck-1",
                     "pdf",
                 ),
                 (
                     "nb1",
                     str((root / "studio" / "slides" / "002-summary-slide-deck.pdf").resolve()),
-                    "task-slide-2",
+                    "art-slide-deck-2",
                     "pdf",
                 ),
             ],
         )
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.sources.rename_calls,
+            [
+                ("nb1", "src-001-intro", "001. Intro"),
+                ("nb1", "src-002-summary", "002. Summary"),
+            ],
+        )
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.artifacts.rename_calls,
+            [
+                ("nb1", "art-report-1", "001. Intro - Report"),
+                ("nb1", "art-report-2", "002. Summary - Report"),
+                ("nb1", "art-slide-deck-1", "001. Intro - Slide Deck"),
+                ("nb1", "art-slide-deck-2", "002. Summary - Slide Deck"),
+            ],
+        )
         self.assertLess(
             _FakeNotebookLMClient.last_client.events.index("report:src-001-intro"),
-            _FakeNotebookLMClient.last_client.events.index("upload:002-summary.md"),
+            _FakeNotebookLMClient.last_client.events.index("slide:src-001-intro"),
         )
+
+    def test_ingest_directory_throttles_heavy_studios_separately_from_chunk_parallelism(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _ThrottledSlideArtifacts(_FakeArtifactsAPI):
+            active_slide_jobs = 0
+            max_active_slide_jobs = 0
+
+            @classmethod
+            def reset_state(cls) -> None:
+                cls.active_slide_jobs = 0
+                cls.max_active_slide_jobs = 0
+
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                type(self).active_slide_jobs += 1
+                type(self).max_active_slide_jobs = max(
+                    type(self).max_active_slide_jobs,
+                    type(self).active_slide_jobs,
+                )
+                try:
+                    await asyncio.sleep(0.02)
+                    return await super().generate_slide_deck(*args, **kwargs)
+                finally:
+                    type(self).active_slide_jobs -= 1
+
+        class _ThrottledSlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _ThrottledSlideArtifacts(self.events)
+
+        class _ThrottledSlideNotebookLMClient:
+            last_client: _ThrottledSlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _ThrottledSlideClient()
+                return cls.last_client
+
+        _ThrottledSlideArtifacts.reset_state()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "002-summary.md").write_text("# Summary\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_ThrottledSlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                _, _, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    max_parallel_chunks=2,
+                    max_parallel_heavy_studios=1,
+                )
+
+        self.assertEqual(len(studio_results), 2)
+        self.assertEqual(_ThrottledSlideArtifacts.max_active_slide_jobs, 1)
+
+    def test_ingest_directory_uses_per_studio_parallel_override_for_slide_deck(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _OverriddenSlideArtifacts(_FakeArtifactsAPI):
+            active_slide_jobs = 0
+            max_active_slide_jobs = 0
+
+            @classmethod
+            def reset_state(cls) -> None:
+                cls.active_slide_jobs = 0
+                cls.max_active_slide_jobs = 0
+
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                type(self).active_slide_jobs += 1
+                type(self).max_active_slide_jobs = max(
+                    type(self).max_active_slide_jobs,
+                    type(self).active_slide_jobs,
+                )
+                try:
+                    await asyncio.sleep(0.02)
+                    return await super().generate_slide_deck(*args, **kwargs)
+                finally:
+                    type(self).active_slide_jobs -= 1
+
+        class _OverriddenSlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _OverriddenSlideArtifacts(self.events)
+
+        class _OverriddenSlideNotebookLMClient:
+            last_client: _OverriddenSlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _OverriddenSlideClient()
+                return cls.last_client
+
+        _OverriddenSlideArtifacts.reset_state()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            for index in range(1, 6):
+                (chunks_dir / f"{index:03d}-slide.md").write_text("# Slide\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_OverriddenSlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                _, _, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            max_parallel=4,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    max_parallel_chunks=5,
+                    max_parallel_heavy_studios=1,
+                )
+
+        self.assertEqual(len(studio_results), 5)
+        self.assertEqual(_OverriddenSlideArtifacts.max_active_slide_jobs, 4)
+
+    def test_create_artifact_retry_applies_shared_quota_cooldown(self) -> None:
+        async def run_scenario() -> tuple[list[str], float]:
+            progress: list[str] = []
+            cooldown = CreateQuotaCooldown(0.02)
+            first_attempt_at: float | None = None
+            second_attempt_at: float | None = None
+
+            async def create_operation():
+                nonlocal first_attempt_at, second_attempt_at
+                loop = asyncio.get_running_loop()
+                if first_attempt_at is None:
+                    first_attempt_at = loop.time()
+                    return _FakeGenerationStatus("", status="failed", error="API rate limit or quota exceeded.")
+                second_attempt_at = loop.time()
+                return _FakeGenerationStatus("task-1")
+
+            await _create_artifact_with_retry(
+                studio_label="report [001-test.md]",
+                create_operation=create_operation,
+                retry_count=1,
+                backoff_seconds=0.01,
+                quota_cooldown=cooldown,
+                reporter=progress.append,
+            )
+            assert first_attempt_at is not None
+            assert second_attempt_at is not None
+            return progress, second_attempt_at - first_attempt_at
+
+        progress, elapsed = asyncio.run(run_scenario())
+
+        self.assertGreaterEqual(elapsed, 0.02)
+        self.assertTrue(any("quota cooldown triggered" in line for line in progress))
+        self.assertTrue(any("quota cooldown delayed" in line for line in progress))
+
+    def test_ingest_directory_continues_uploading_while_reports_run(self) -> None:
+        uploader = NotebookLMPyUploader()
+        _FakeSourcesAPI.delay_seconds = 0.01
+
+        class _SlowReportArtifacts(_FakeArtifactsAPI):
+            async def generate_report(self, *args, **kwargs):  # type: ignore[override]
+                await asyncio.sleep(0.05)
+                return await super().generate_report(*args, **kwargs)
+
+        class _SlowReportClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _SlowReportArtifacts(self.events)
+
+        class _SlowReportNotebookLMClient:
+            last_client: _SlowReportClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _SlowReportClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            for index in range(1, 5):
+                (chunks_dir / f"{index:03d}-chapter.md").write_text("# Chapter\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_SlowReportNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                _, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        report=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "reports").resolve()),
+                            format="study-guide",
+                        ),
+                    ),
+                    max_parallel_chunks=2,
+                )
+
+        self.assertEqual(len(uploads), 4)
+        self.assertEqual(len(studio_results), 4)
+        events = _SlowReportNotebookLMClient.last_client.events
+        self.assertLess(
+            events.index("upload:003-chapter.md"),
+            events.index("report:src-001-chapter"),
+        )
+
+    def test_ingest_directory_continues_uploading_while_heavy_studio_retries(self) -> None:
+        uploader = NotebookLMPyUploader()
+        _FakeSourcesAPI.delay_seconds = 0.01
+
+        class _SlowSlideArtifacts(_FakeArtifactsAPI):
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                await asyncio.sleep(0.05)
+                return await super().generate_slide_deck(*args, **kwargs)
+
+        class _SlowSlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _SlowSlideArtifacts(self.events)
+
+        class _SlowSlideNotebookLMClient:
+            last_client: _SlowSlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _SlowSlideClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            for index in range(1, 5):
+                (chunks_dir / f"{index:03d}-chapter.md").write_text("# Chapter\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_SlowSlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                _, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        report=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "reports").resolve()),
+                            format="study-guide",
+                        ),
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    max_parallel_chunks=2,
+                    max_parallel_heavy_studios=1,
+                )
+
+        self.assertEqual(len(uploads), 4)
+        self.assertEqual(len(studio_results), 8)
+        events = _SlowSlideNotebookLMClient.last_client.events
+        self.assertLess(
+            events.index("upload:003-chapter.md"),
+            events.index("slide:src-001-chapter"),
+        )
+
+    def test_ingest_directory_marks_slide_deck_pending_on_wait_timeout(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _TimeoutSlideArtifacts(_FakeArtifactsAPI):
+            async def wait_for_completion(self, notebook_id: str, task_id: str, timeout: float = 300.0):  # type: ignore[override]
+                if task_id.startswith("art-slide-deck-"):
+                    raise TimeoutError("slide deck still running")
+                return await super().wait_for_completion(notebook_id, task_id, timeout)
+
+        class _TimeoutSlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _TimeoutSlideArtifacts(self.events)
+
+        class _TimeoutSlideNotebookLMClient:
+            last_client: _TimeoutSlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _TimeoutSlideClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            chunk_path = chunks_dir / "001-intro.md"
+            chunk_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_TimeoutSlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                notebook_id, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                )
+
+            state = json.loads((chunks_dir / ".nblm-run-state.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(notebook_id, "nb1")
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(len(studio_results), 1)
+        self.assertEqual(studio_results[0].status, "pending")
+        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["notebook_id"], "nb1")
+        self.assertEqual(state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["status"], "pending")
+        self.assertEqual(
+            state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["task_id"],
+            "art-slide-deck-1",
+        )
+
+    def test_ingest_directory_resumes_pending_slide_deck_task(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _ResumeSlideArtifacts(_FakeArtifactsAPI):
+            def __init__(self, events: list[str]) -> None:
+                super().__init__(events)
+                self.wait_calls: list[tuple[str, str, float]] = []
+
+            async def generate_slide_deck(self, *args, **kwargs):  # type: ignore[override]
+                raise AssertionError("resume should not create a new slide deck task")
+
+        class _ResumeSlideClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _ResumeSlideArtifacts(self.events)
+
+        class _ResumeSlideNotebookLMClient:
+            last_client: _ResumeSlideClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _ResumeSlideClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            chunk_path = chunks_dir / "001-intro.md"
+            chunk_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            output_path = (root / "studio" / "slides" / "001-intro-slide-deck.pdf").resolve()
+            state_payload = {
+                "version": 1,
+                "notebook_id": "nb-resume",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "001-intro.md": {
+                        "content_hash": chunk_content_hash(chunk_path),
+                        "source_id": "src-001-intro",
+                        "studios": {
+                            "slide_deck": {
+                                "status": "pending",
+                                "task_id": "art-slide-deck-1",
+                                "output_path": str(output_path),
+                                "remote_title": None,
+                                "error": "slide deck still running",
+                            }
+                        },
+                    }
+                },
+                "notebook_studios": {},
+            }
+            (chunks_dir / ".nblm-run-state.json").write_text(
+                json.dumps(state_payload, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_ResumeSlideNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                notebook_id, uploads, studio_results = uploader.ingest_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    studios=StudiosConfig(
+                        slide_deck=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "slides").resolve()),
+                            download_format="pdf",
+                            format="detailed",
+                            length="default",
+                        ),
+                    ),
+                    resume=True,
+                )
+
+        self.assertEqual(notebook_id, "nb-resume")
+        self.assertEqual(len(uploads), 1)
+        self.assertEqual(len(studio_results), 1)
+        self.assertEqual(studio_results[0].status, "completed")
+        self.assertEqual(_ResumeSlideNotebookLMClient.last_client.notebooks.created_titles, [])
+        self.assertEqual(_ResumeSlideNotebookLMClient.last_client.sources.calls, [])

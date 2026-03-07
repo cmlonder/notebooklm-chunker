@@ -57,6 +57,13 @@ class ConfigTests(TestCase):
         self.assertIn('skip_ranges = ["1-8", "399-420", "512"]', content)
         self.assertIn("[runtime]", content)
         self.assertIn("max_parallel_chunks = 1", content)
+        self.assertIn("max_parallel_heavy_studios = 1", content)
+        self.assertIn("# max_parallel = 4", content)
+        self.assertIn("studio_wait_timeout_seconds = 7200", content)
+        self.assertIn("studio_create_retries = 3", content)
+        self.assertIn("studio_create_backoff_seconds = 2.0", content)
+        self.assertIn("studio_rate_limit_cooldown_seconds = 30.0", content)
+        self.assertIn("rename_remote_titles = false", content)
         self.assertIn("[chunking]", content)
 
     def test_load_config_resolves_relative_source_and_studio_paths(self) -> None:
@@ -81,10 +88,17 @@ class ConfigTests(TestCase):
                         "",
                         "[runtime]",
                         "max_parallel_chunks = 5",
+                        "max_parallel_heavy_studios = 2",
+                        "studio_wait_timeout_seconds = 5400",
+                        "studio_create_retries = 4",
+                        "studio_create_backoff_seconds = 1.5",
+                        "studio_rate_limit_cooldown_seconds = 45.0",
+                        "rename_remote_titles = true",
                         "",
                         "[studios.audio]",
                         "enabled = true",
                         "per_chunk = true",
+                        "max_parallel = 3",
                         'output_dir = "../build/studio/audio"',
                         'output_path = "../build/studio/audio-overview.mp4"',
                         'format = "deep-dive"',
@@ -101,8 +115,15 @@ class ConfigTests(TestCase):
         self.assertEqual(config.chunking.target_pages, 3.0)
         self.assertEqual(config.chunking.output_dir, str((root / "build" / "chunks").resolve()))
         self.assertEqual(config.runtime.max_parallel_chunks, 5)
+        self.assertEqual(config.runtime.max_parallel_heavy_studios, 2)
+        self.assertEqual(config.runtime.studio_wait_timeout_seconds, 5400.0)
+        self.assertEqual(config.runtime.studio_create_retries, 4)
+        self.assertEqual(config.runtime.studio_create_backoff_seconds, 1.5)
+        self.assertEqual(config.runtime.studio_rate_limit_cooldown_seconds, 45.0)
+        self.assertTrue(config.runtime.rename_remote_titles)
         self.assertTrue(config.studios.audio.enabled)
         self.assertTrue(config.studios.audio.per_chunk)
+        self.assertEqual(config.studios.audio.max_parallel, 3)
         self.assertEqual(
             config.studios.audio.output_dir,
             str((root / "build" / "studio" / "audio").resolve()),

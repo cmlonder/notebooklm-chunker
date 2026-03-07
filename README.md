@@ -27,7 +27,7 @@ Demo files:
 - Source PDF: `./examples/ddd-quickly.pdf`
 
 What you get:
-
+- NotebookLM is ready with your chunked PDF sources and configured Studio (report and slide in this case) outputs
 - Markdown chunks under `./examples/workflows/output/ddd-quickly/chunks`
 - One report per chunk under `./examples/workflows/output/ddd-quickly/reports`
 - One slide deck per chunk under `./examples/workflows/output/ddd-quickly/slides`

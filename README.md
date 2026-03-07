@@ -28,7 +28,6 @@ Demo files:
 
 What you get:
 
-- NotebookLM notebook: `[add-your-link-here](https://notebooklm.google.com/)`
 - Markdown chunks under `./examples/workflows/output/ddd-quickly/chunks`
 - One report per chunk under `./examples/workflows/output/ddd-quickly/reports`
 - One slide deck per chunk under `./examples/workflows/output/ddd-quickly/slides`

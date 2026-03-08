@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Authentication &amp; Account Gateway - NotebookLM Chunker</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "system-ui", "-apple-system", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .vibrant-bg {
+            background: radial-gradient(circle at top left, #e0f2fe 0%, #ffffff 40%),
+                        radial-gradient(circle at bottom right, #eff6ff 0%, #f8fafc 100%);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased">
+<div class="relative flex min-h-screen w-full flex-col items-center justify-center vibrant-bg p-6">
+<!-- Background Accents for Vibrancy -->
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]"></div>
+<!-- Main Card Container -->
+<div class="relative z-10 w-full max-w-[520px] glass-panel rounded-xl shadow-2xl p-8 md:p-12 flex flex-col items-center text-center">
+<!-- Icon Section -->
+<div class="mb-8 flex items-center justify-center w-20 h-20 bg-primary/10 rounded-xl text-primary">
+<span class="material-symbols-outlined !text-5xl">auto_stories</span>
+</div>
+<!-- Header Content -->
+<div class="space-y-4 mb-10">
+<h1 class="text-slate-900 dark:text-slate-100 text-4xl font-bold tracking-tight leading-tight">
+                Welcome to <br/>NotebookLM Chunker
+            </h1>
+<p class="text-slate-600 dark:text-slate-400 text-lg leading-relaxed max-w-sm mx-auto">
+                Connect your Google account to start polishing your knowledge.
+            </p>
+</div>
+<!-- Action Button -->
+<div class="w-full space-y-4">
+<button class="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 text-white font-semibold py-4 px-8 rounded-lg transition-all shadow-lg shadow-primary/20 active:scale-[0.98]">
+<svg class="w-5 h-5" viewbox="0 0 24 24">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="currentColor"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="currentColor"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="currentColor"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="currentColor"></path>
+</svg>
+                Sign in to NotebookLM
+            </button>
+</div>
+<!-- Security Note -->
+<div class="mt-12 flex flex-col items-center gap-2">
+<div class="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 text-xs font-medium uppercase tracking-widest">
+<span class="material-symbols-outlined !text-sm">lock</span>
+                Secure Session
+            </div>
+<p class="text-slate-400 dark:text-slate-500 text-sm max-w-[280px]">
+                Your credentials are never stored locally; we use a secure browser session.
+            </p>
+</div>
+</div>
+<!-- Background Decorative Elements -->
+<div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] pointer-events-none opacity-20">
+<div class="w-full h-full bg-no-repeat bg-center bg-contain" data-alt="Soft blue and white mesh gradient background circle" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAJXUF1DI1iLWTgrfqwmrjgM7N65fFJEa-gw5DG2mwYyyyv1_IMzd4JUStm2yIpvghkaPQO81F6eC9gXrhmRojiuSrCgPRqyEhQxjvBzYJjJ90qhPws2X2P-AFZjbphMlEhToahKhm7LKpVcHNjkZ-8Z59ivV7jdsjgCj-VrfLp9b-JvgCZz9yAG-5VFOifKDoKeD9Tm-oEBeiucnohl1MwiHfOsBpXpRl8Q9s6mRLzjFgVl1tQ-1xVMgu0dBHuizWqs92Y6EUuvTg');"></div>
+</div>
+</div>
+</body></html>

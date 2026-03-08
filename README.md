@@ -47,8 +47,19 @@ For local development and contribution flow, see `DEVELOPMENT.md`.
 
 ## Installation
 
+From PyPI, once the package is published:
+
 ```bash
 pip install "notebooklm-chunker[full]"
+python -m playwright install chromium
+nblm doctor
+nblm login
+```
+
+From a local checkout:
+
+```bash
+python -m pip install "/ABS/PATH/notebooklm-chunker[full]"
 python -m playwright install chromium
 nblm doctor
 nblm login

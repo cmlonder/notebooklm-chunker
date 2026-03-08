@@ -127,6 +127,36 @@ Before tagging a release, build the package locally:
 python -m build
 ```
 
+Validate the built metadata too:
+
+```bash
+python -m twine check dist/*
+```
+
+## Release Flow
+
+The repo is set up for GitHub Actions based release automation:
+
+- `.github/workflows/ci.yml` runs tests, builds the package, and checks the built metadata on pushes and pull requests
+- `.github/workflows/publish.yml` builds and publishes to PyPI when a GitHub release is published or when the workflow is run manually
+
+PyPI publishing expects Trusted Publishing to be configured for this repository.
+In PyPI, add this GitHub repository as a trusted publisher for the `notebooklm-chunker`
+project before using the publish workflow.
+
+Typical release flow:
+
+```bash
+python -m unittest discover -s tests -v
+python -m build
+python -m twine check dist/*
+git tag v0.1.0
+git push origin main --tags
+```
+
+Then publish a GitHub release for that tag. The `Publish` workflow will build
+the distribution again and upload it to PyPI.
+
 ## Project Layout
 
 Important paths:

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NotebookLM Chunker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <h1>📚 NotebookLM Chunker</h1>
+        <div class="header-actions">
+          <span class="version" id="version">v0.1.0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <nav class="nav">
+          <button class="nav-item active" data-view="prepare">
+            <span class="icon">📄</span>
+            <span>Prepare</span>
+          </button>
+          <button class="nav-item" data-view="run">
+            <span class="icon">🚀</span>
+            <span>Run</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+          </button>
+          <button class="nav-item" data-view="about">
+            <span class="icon">ℹ️</span>
+            <span>About</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Content Area -->
+      <div class="content">
+        <!-- Prepare View -->
+        <div class="view active" id="prepare-view">
+          <h2>Prepare Document</h2>
+          
+          <div class="card">
+            <h3>Source Document</h3>
+            <div class="file-selector">
+              <button class="btn btn-primary" id="select-pdf-btn">
+                📁 Select PDF File
+              </button>
+              <div class="file-info" id="pdf-info" style="display: none;">
+                <span class="file-name" id="pdf-name"></span>
+                <button class="btn-icon" id="clear-pdf-btn">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Chunking Settings</h3>
+            <div class="form-group">
+              <label>Target Pages per Chunk</label>
+              <input type="number" id="target-pages" value="3.0" step="0.5" min="1" max="10">
+            </div>
+            <div class="form-group">
+              <label>Min Pages</label>
+              <input type="number" id="min-pages" value="2.5" step="0.5" min="1" max="10">
+            </div>
+            <div class="form-group">
+              <label>Max Pages</label>
+              <input type="number" id="max-pages" value="4.0" step="0.5" min="1" max="10">
+            </div>
+            <div class="form-group">
+              <label>Output Directory</label>
+              <div class="file-selector">
+                <button class="btn" id="select-output-btn">
+                  📁 Select Directory
+                </button>
+                <span class="file-path" id="output-path">./chunks</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Studio Outputs</h3>
+            <div class="checkbox-group">
+              <label class="checkbox">
+                <input type="checkbox" id="studio-report" checked>
+                <span>📊 Report</span>
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="studio-slides" checked>
+                <span>📽️ Slide Deck</span>
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="studio-quiz">
+                <span>❓ Quiz</span>
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" id="studio-audio">
+                <span>🎧 Audio</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-large btn-primary" id="run-btn" disabled>
+              🚀 Run Workflow
+            </button>
+          </div>
+        </div>
+
+        <!-- Run View -->
+        <div class="view" id="run-view">
+          <h2>Running Workflow</h2>
+          
+          <div class="card">
+            <div class="progress-container">
+              <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+              </div>
+              <div class="progress-text" id="progress-text">Ready to start...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Output Log</h3>
+            <div class="terminal" id="terminal">
+              <div class="terminal-line">Waiting for process to start...</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-danger" id="stop-btn">
+              ⏹️ Stop Process
+            </button>
+            <button class="btn" id="back-btn">
+              ← Back to Prepare
+            </button>
+          </div>
+        </div>
+
+        <!-- Settings View -->
+        <div class="view" id="settings-view">
+          <h2>Settings</h2>
+          
+          <div class="card">
+            <h3>CLI Status</h3>
+            <div class="status-item">
+              <span>nblm CLI:</span>
+              <span class="status" id="cli-status">Checking...</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Preferences</h3>
+            <div class="form-group">
+              <label class="checkbox">
+                <input type="checkbox" id="auto-open-results">
+                <span>Auto-open results folder</span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="checkbox">
+                <input type="checkbox" id="show-notifications">
+                <span>Show notifications</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- About View -->
+        <div class="view" id="about-view">
+          <h2>About</h2>
+          
+          <div class="card">
+            <h3>NotebookLM Chunker</h3>
+            <p>Desktop application for splitting long documents into NotebookLM-ready chunks.</p>
+            <p><strong>Version:</strong> <span id="about-version">0.1.0</span></p>
+            <p><strong>License:</strong> MIT</p>
+            <p><strong>Author:</strong> cmlonder</p>
+          </div>
+
+          <div class="card">
+            <h3>Links</h3>
+            <div class="links">
+              <a href="#" class="link">📖 Documentation</a>
+              <a href="#" class="link">🐛 Report Issue</a>
+              <a href="#" class="link">⭐ Star on GitHub</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

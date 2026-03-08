@@ -15,22 +15,18 @@ This repository ships with a full demo built around the freely downloadable
 InfoQ mini-book
 [Domain-Driven Design Quickly](https://www.infoq.com/minibooks/domain-driven-design-quickly/).
 
-Demo command:
+This demo command is set up to split the book into 5 chunks, then generate
+5 reports and 5 slide decks from those chunks.
+
+Command:
 
 ```bash
 nblm run --config ./examples/workflows/ddd-quickly-demo.toml
 ```
 
-Demo files:
+Generated NotebookLM:
 
-- Workflow file: `./examples/workflows/ddd-quickly-demo.toml`
-- Source PDF: `./examples/ddd-quickly.pdf`
-
-What you get:
-- NotebookLM is ready with your chunked PDF sources and configured Studio (report and slide in this case) outputs
-- Markdown chunks under `./examples/workflows/output/ddd-quickly/chunks`
-- One report per chunk under `./examples/workflows/output/ddd-quickly/reports`
-- One slide deck per chunk under `./examples/workflows/output/ddd-quickly/slides`
+- [DDD Quickly Interactive Learning Kit](https://notebooklm.google.com/notebook/3dec967d-7093-4937-917f-173763f79395)
 
 ## Requirements
 
@@ -52,7 +48,6 @@ From PyPI, once the package is published:
 ```bash
 pip install "notebooklm-chunker[full]"
 python -m playwright install chromium
-nblm doctor
 nblm login
 ```
 
@@ -61,7 +56,6 @@ From a local checkout:
 ```bash
 python -m pip install "/ABS/PATH/notebooklm-chunker[full]"
 python -m playwright install chromium
-nblm doctor
 nblm login
 ```
 

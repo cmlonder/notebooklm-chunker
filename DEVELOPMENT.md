@@ -157,6 +157,20 @@ git push origin main --tags
 Then publish a GitHub release for that tag. The `Publish` workflow will build
 the distribution again and upload it to PyPI.
 
+## Release Verification
+
+After the PyPI publish succeeds, do one clean install test in a fresh virtual
+environment so you are not accidentally relying on your local editable install:
+
+```bash
+python -m venv /tmp/nblm-test
+source /tmp/nblm-test/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "notebooklm-chunker[full]"
+nblm --help
+deactivate
+```
+
 ## Project Layout
 
 Important paths:

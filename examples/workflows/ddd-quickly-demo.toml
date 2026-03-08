@@ -8,9 +8,9 @@ title = "DDD Quickly Interactive Learning Kit"
 
 [chunking]
 output_dir = "./output/ddd-quickly/chunks"
-target_pages = 3.0
-min_pages = 2.5
-max_pages = 4.0
+target_pages = 20.0
+min_pages = 16.0
+max_pages = 24.0
 words_per_page = 500
 
 [runtime]

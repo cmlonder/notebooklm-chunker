@@ -10,6 +10,50 @@ from notebooklm_chunker.run_state import RunStateStore, chunk_content_hash
 
 
 class RunStateStoreTests(unittest.TestCase):
+    def test_uploaded_chunk_sources_returns_uploaded_chunks_in_filename_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state_path = root / ".nblm-run-state.json"
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 2,
+                        "notebook_id": "nb1",
+                        "chunks": {
+                            "c010-summary.md": {
+                                "content_hash": "hash-10",
+                                "source": {"status": "uploaded", "source_id": "src-10", "remote_title": "C010 Summary"},
+                                "studios": {},
+                            },
+                            "c002-intro.md": {
+                                "content_hash": "hash-2",
+                                "source": {"status": "uploaded", "source_id": "src-2", "remote_title": "C002 Intro"},
+                                "studios": {},
+                            },
+                            "c005-pending.md": {
+                                "content_hash": "hash-5",
+                                "source": {"status": "pending", "source_id": None, "remote_title": None},
+                                "studios": {},
+                            },
+                        },
+                        "notebook_studios": {},
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            state = RunStateStore.load(state_path)
+
+        self.assertEqual(
+            state.uploaded_chunk_sources(),
+            [
+                {"file_name": "c002-intro.md", "source_id": "src-2", "remote_title": "C002 Intro"},
+                {"file_name": "c010-summary.md", "source_id": "src-10", "remote_title": "C010 Summary"},
+            ],
+        )
+
     def test_load_migrates_legacy_v1_chunk_and_studio_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -27,7 +71,7 @@ class RunStateStoreTests(unittest.TestCase):
                             "001-intro.md": {
                                 "content_hash": content_hash,
                                 "source_id": "src-001-intro",
-                                "remote_title": "001. Intro",
+                                "remote_title": "C001 Intro",
                                 "studios": {
                                     "slide_deck": {
                                         "status": "pending",
@@ -49,7 +93,7 @@ class RunStateStoreTests(unittest.TestCase):
             state = RunStateStore.load(state_path)
 
         uploaded_source = state.uploaded_source("001-intro.md", content_hash=content_hash)
-        self.assertEqual(uploaded_source, ("src-001-intro", "001. Intro"))
+        self.assertEqual(uploaded_source, ("src-001-intro", "C001 Intro"))
         pending_slide = state.pending_chunk_studio(
             file_name="001-intro.md",
             studio_name="slide_deck",
@@ -80,7 +124,7 @@ class RunStateStoreTests(unittest.TestCase):
                     file_name="001-intro.md",
                     content_hash=content_hash,
                     source_id="src-001-intro",
-                    remote_title="001. Intro",
+                    remote_title="C001 Intro",
                 )
                 await state.record_pending_chunk_studio(
                     file_name="001-intro.md",
@@ -97,7 +141,7 @@ class RunStateStoreTests(unittest.TestCase):
 
             payload = json.loads(state_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(payload["version"], 2)
+        self.assertEqual(payload["version"], 4)
         self.assertEqual(payload["notebook_id"], "nb1")
         self.assertEqual(
             payload["chunks"]["001-intro.md"]["source"]["status"],
@@ -117,6 +161,71 @@ class RunStateStoreTests(unittest.TestCase):
         )
         self.assertIn("updated_at", payload["chunks"]["001-intro.md"]["source"])
         self.assertIn("attempts", payload["chunks"]["001-intro.md"]["studios"]["report"])
+
+    def test_load_migrates_legacy_quota_block_to_studio_specific_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state_path = root / ".nblm-run-state.json"
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "version": 3,
+                        "notebook_id": "nb1",
+                        "chunks": {},
+                        "notebook_studios": {},
+                        "quota_block": {
+                            "blocked_until": "2026-03-09T09:00:00Z",
+                            "last_error": "quota exceeded",
+                            "studio_name": "report",
+                            "source_file": "c001-intro.md",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            state = RunStateStore.load(state_path)
+
+        self.assertEqual(
+            state.quota_block("report"),
+            {
+                "blocked_until": "2026-03-09T09:00:00Z",
+                "last_error": "quota exceeded",
+                "source_file": "c001-intro.md",
+                "updated_at": None,
+            },
+        )
+
+    def test_completed_studio_state_does_not_require_downloaded_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunk_path = root / "001-intro.md"
+            chunk_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            content_hash = chunk_content_hash(chunk_path)
+            state = RunStateStore(root / ".nblm-run-state.json")
+
+            async def scenario() -> None:
+                await state.record_completed_chunk_studio(
+                    file_name="001-intro.md",
+                    studio_name="report",
+                    content_hash=content_hash,
+                    artifact_id="art-report-1",
+                    output_path=None,
+                    remote_title="Report",
+                )
+
+            asyncio.run(scenario())
+
+        completed = state.completed_chunk_studio(
+            file_name="001-intro.md",
+            studio_name="report",
+            content_hash=content_hash,
+        )
+        assert completed is not None
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(completed["output_path"], None)
 
 
 if __name__ == "__main__":

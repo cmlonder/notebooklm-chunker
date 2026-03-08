@@ -67,6 +67,7 @@ class RuntimeConfig:
     max_parallel_heavy_studios: int | None = None
     studio_wait_timeout_seconds: float | None = None
     rename_remote_titles: bool = False
+    download_outputs: bool = True
     studio_create_retries: int | None = None
     studio_create_backoff_seconds: float | None = None
     studio_rate_limit_cooldown_seconds: float | None = None
@@ -157,10 +158,11 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
     chunking = _as_dict(raw.get("chunking"))
     runtime = _as_dict(raw.get("runtime"))
     studios = _as_dict(raw.get("studios"))
+    source_path = _optional_path(source.get("path"), "source.path", base_dir)
 
     return AppConfig(
         source=SourceConfig(
-            path=_optional_path(source.get("path"), "source.path", base_dir),
+            path=source_path,
             skip_ranges=_optional_page_ranges(
                 source.get("skip_ranges"),
                 "source.skip_ranges",
@@ -175,7 +177,12 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
             min_pages=_optional_float(chunking.get("min_pages"), "chunking.min_pages"),
             max_pages=_optional_float(chunking.get("max_pages"), "chunking.max_pages"),
             words_per_page=_optional_int(chunking.get("words_per_page"), "chunking.words_per_page"),
-            output_dir=_optional_path(chunking.get("output_dir"), "chunking.output_dir", base_dir),
+            output_dir=_optional_template_path(
+                chunking.get("output_dir"),
+                "chunking.output_dir",
+                base_dir,
+                source_path=source_path,
+            ),
         ),
         runtime=RuntimeConfig(
             max_parallel_chunks=_optional_positive_int(
@@ -193,6 +200,14 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
             rename_remote_titles=_optional_bool(
                 runtime.get("rename_remote_titles"),
                 "runtime.rename_remote_titles",
+            ),
+            download_outputs=(
+                True
+                if runtime.get("download_outputs") is None
+                else _optional_bool(
+                    runtime.get("download_outputs"),
+                    "runtime.download_outputs",
+                )
             ),
             studio_create_retries=_optional_non_negative_int(
                 runtime.get("studio_create_retries"),
@@ -212,6 +227,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "audio",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_formats=_AUDIO_FORMATS,
                 allowed_lengths=_AUDIO_LENGTHS,
             ),
@@ -219,6 +235,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "video",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_formats=_VIDEO_FORMATS,
                 allowed_styles=_VIDEO_STYLES,
             ),
@@ -226,12 +243,14 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "report",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_formats=_REPORT_FORMATS,
             ),
             slide_deck=_load_studio_config(
                 studios,
                 "slide_deck",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_formats=_SLIDE_FORMATS,
                 allowed_lengths=_SLIDE_LENGTHS,
                 allowed_download_formats=_SLIDE_DOWNLOAD_FORMATS,
@@ -240,6 +259,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "quiz",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_quantities=_QUIZ_QUANTITIES,
                 allowed_difficulties=_QUIZ_DIFFICULTIES,
                 allowed_download_formats=_INTERACTIVE_OUTPUT_FORMATS,
@@ -248,6 +268,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "flashcards",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_quantities=_QUIZ_QUANTITIES,
                 allowed_difficulties=_QUIZ_DIFFICULTIES,
                 allowed_download_formats=_INTERACTIVE_OUTPUT_FORMATS,
@@ -256,6 +277,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "infographic",
                 base_dir=base_dir,
+                source_path=source_path,
                 allowed_orientations=_INFOGRAPHIC_ORIENTATIONS,
                 allowed_details=_INFOGRAPHIC_DETAILS,
             ),
@@ -263,11 +285,13 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 studios,
                 "data_table",
                 base_dir=base_dir,
+                source_path=source_path,
             ),
             mind_map=_load_studio_config(
                 studios,
                 "mind_map",
                 base_dir=base_dir,
+                source_path=source_path,
             ),
         ),
         config_path=str(config_path),
@@ -316,8 +340,9 @@ def write_config_template(
             "[source]",
             "# Relative paths are resolved from this TOML file.",
             'path = "./your-document.pdf"',
-            "# PDF only: skip explicit inclusive page ranges.",
-            '# Example: ["1-8", "399-420"] skips front matter and references by page range.',
+            "# PDF only: skip explicit inclusive physical PDF page ranges (1-based).",
+            "# These are file pages, not the page numbers printed inside the book.",
+            '# Example: ["1-8", "399-420"] skips front matter and references by file page range.',
             '# skip_ranges = ["1-8", "399-420", "512"]',
             "",
             "[notebook]",
@@ -326,8 +351,9 @@ def write_config_template(
             '# id = "nb_..."',
             "",
             "[chunking]",
-            "# Markdown chunks and manifest.json are written here.",
-            'output_dir = "./output/chunks"',
+            "# Markdown chunks, manifest.json, and .nblm-run-state.json are written here.",
+            '# `{source_stem}` expands from `source.path`. Example: `book.pdf` -> `book`.',
+            'output_dir = "./output/{source_stem}/chunks"',
             "# Preferred chunk size.",
             f"target_pages = {target_pages}",
             "# Soft lower bound.",
@@ -356,6 +382,9 @@ def write_config_template(
             "# Optional: rename NotebookLM source and artifact titles from chunk headings.",
             "# When true, the same Studio type runs one-at-a-time per notebook so renames stay correct.",
             "rename_remote_titles = false",
+            "# Optional: keep generated Studio files on disk. When false, completion is tracked in",
+            "# .nblm-run-state.json only and Studio artifacts are not downloaded locally.",
+            "download_outputs = true",
             "",
             "[studios.audio]",
             "enabled = false",
@@ -365,7 +394,7 @@ def write_config_template(
             "Create an energetic audio overview that emphasizes",
             "the big ideas and real-world implications.",
             '"""',
-            'output_path = "./output/studio/audio-overview.mp4"',
+            'output_path = "./output/{source_stem}/studio/audio-overview.mp4"',
             'language = "en"',
             'format = "deep-dive"',
             'length = "long"',
@@ -377,7 +406,7 @@ def write_config_template(
             "Turn this into a visual lesson with clear examples",
             "and a teacher-style narrative.",
             '"""',
-            'output_path = "./output/studio/video-overview.mp4"',
+            'output_path = "./output/{source_stem}/studio/video-overview.mp4"',
             'language = "en"',
             'format = "explainer"',
             'style = "whiteboard"',
@@ -390,12 +419,12 @@ def write_config_template(
             "# so most workflows can leave this unset.",
             "# max_parallel = 8",
             "# Use `output_dir` for per-chunk outputs.",
-            '# output_dir = "./output/studio/reports"',
+            '# output_dir = "./output/{source_stem}/studio/reports"',
             'prompt = """',
             "Focus on key arguments, terminology, and what a student",
             "should review after reading.",
             '"""',
-            'output_path = "./output/studio/study-guide.md"',
+            'output_path = "./output/{source_stem}/studio/study-guide.md"',
             'language = "en"',
             'format = "study-guide"',
             "",
@@ -408,12 +437,12 @@ def write_config_template(
             "# Studio limit is lower.",
             "# max_parallel = 4",
             "# Use `output_dir` for per-chunk outputs.",
-            '# output_dir = "./output/studio/slides"',
+            '# output_dir = "./output/{source_stem}/studio/slides"',
             'prompt = """',
             "Build a teaching deck with strong section transitions",
             "and presenter-friendly structure.",
             '"""',
-            'output_path = "./output/studio/slide-deck.pdf"',
+            'output_path = "./output/{source_stem}/studio/slide-deck.pdf"',
             'language = "en"',
             'format = "detailed"',
             'length = "default"',
@@ -426,7 +455,7 @@ def write_config_template(
             "Ask concept-check questions that reveal whether",
             "the learner really understood the text.",
             '"""',
-            'output_path = "./output/studio/quiz.json"',
+            'output_path = "./output/{source_stem}/studio/quiz.json"',
             'quantity = "more"',
             'difficulty = "hard"',
             'download_format = "json"',
@@ -438,7 +467,7 @@ def write_config_template(
             "Turn the important terms, definitions, and examples",
             "into compact recall cards.",
             '"""',
-            'output_path = "./output/studio/flashcards.md"',
+            'output_path = "./output/{source_stem}/studio/flashcards.md"',
             'quantity = "more"',
             'difficulty = "hard"',
             'download_format = "markdown"',
@@ -450,7 +479,7 @@ def write_config_template(
             "Highlight the process, the main entities,",
             "and the most memorable comparisons.",
             '"""',
-            'output_path = "./output/studio/infographic.png"',
+            'output_path = "./output/{source_stem}/studio/infographic.png"',
             'language = "en"',
             'orientation = "portrait"',
             'detail = "detailed"',
@@ -462,13 +491,13 @@ def write_config_template(
             "Create a comparison table of the most important concepts,",
             "examples, and takeaways.",
             '"""',
-            'output_path = "./output/studio/data-table.csv"',
+            'output_path = "./output/{source_stem}/studio/data-table.csv"',
             'language = "en"',
             "",
             "[studios.mind_map]",
             "enabled = false",
             "# Optional override for this Studio type.",
-            'output_path = "./output/studio/mind-map.json"',
+            'output_path = "./output/{source_stem}/studio/mind-map.json"',
             "",
         ]
     )
@@ -490,6 +519,7 @@ def _load_studio_config(
     key: str,
     *,
     base_dir: Path,
+    source_path: str | None,
     allowed_formats: tuple[str, ...] | None = None,
     allowed_lengths: tuple[str, ...] | None = None,
     allowed_styles: tuple[str, ...] | None = None,
@@ -509,8 +539,8 @@ def _load_studio_config(
         per_chunk=_optional_bool(raw.get("per_chunk"), f"{label}.per_chunk"),
         max_parallel=_optional_positive_int(raw.get("max_parallel"), f"{label}.max_parallel"),
         prompt=_optional_str(raw.get("prompt"), f"{label}.prompt"),
-        output_path=_optional_path(raw.get("output_path"), f"{label}.output_path", base_dir),
-        output_dir=_optional_path(raw.get("output_dir"), f"{label}.output_dir", base_dir),
+        output_path=_optional_template_path(raw.get("output_path"), f"{label}.output_path", base_dir, source_path),
+        output_dir=_optional_template_path(raw.get("output_dir"), f"{label}.output_dir", base_dir, source_path),
         language=_optional_str(raw.get("language"), f"{label}.language"),
         format=_optional_choice(raw.get("format"), f"{label}.format", allowed_formats),
         length=_optional_choice(raw.get("length"), f"{label}.length", allowed_lengths),
@@ -626,6 +656,18 @@ def _optional_path(value: Any, label: str, base_dir: Path) -> str | None:
     return str(_resolve_relative_path(text, base_dir))
 
 
+def _optional_template_path(
+    value: Any,
+    label: str,
+    base_dir: Path,
+    source_path: str | None,
+) -> str | None:
+    text = _optional_str(value, label)
+    if text is None:
+        return None
+    return str(_resolve_relative_path(_expand_source_path_placeholders(text, label, source_path), base_dir))
+
+
 def _optional_str(value: Any, label: str) -> str | None:
     if value is None:
         return None
@@ -642,3 +684,13 @@ def _resolve_relative_path(value: str, base_dir: Path) -> Path:
     else:
         path = path.resolve()
     return path
+
+
+def _expand_source_path_placeholders(value: str, label: str, source_path: str | None) -> str:
+    if "{source_stem}" not in value:
+        return value
+    if source_path is None:
+        raise ConfigError(
+            f"{label} uses {{source_stem}} but `source.path` is not set in this config."
+        )
+    return value.replace("{source_stem}", Path(source_path).stem)

@@ -304,10 +304,25 @@ def _finalize_chunk(
     )
 
 
-def chunk_filename(chunk: Chunk) -> str:
-    slug_source = chunk.primary_heading or (chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem)
-    slug = re.sub(r"[^a-z0-9]+", "-", slug_source.lower()).strip("-") or "chunk"
-    return f"{chunk.chunk_id:03d}-{slug}.md"
+def chunk_filename(chunk: Chunk, *, include_page_span: bool = False) -> str:
+    slug = _chunk_slug(chunk)
+    if include_page_span:
+        page_slug = _chunk_page_slug(chunk)
+        if page_slug is not None:
+            slug = f"{slug}-{page_slug}"
+    return f"{_chunk_sort_prefix(chunk)}-{slug}.md"
+
+
+def chunk_filenames(chunks: list[Chunk]) -> dict[int, str]:
+    slug_counts: dict[str, int] = {}
+    for chunk in chunks:
+        slug = _chunk_slug(chunk)
+        slug_counts[slug] = slug_counts.get(slug, 0) + 1
+
+    return {
+        chunk.chunk_id: chunk_filename(chunk, include_page_span=(slug_counts[_chunk_slug(chunk)] > 1))
+        for chunk in chunks
+    }
 
 
 def _chunk_primary_heading(sections: list[Section], source_path: Path) -> str:
@@ -317,3 +332,29 @@ def _chunk_primary_heading(sections: list[Section], source_path: Path) -> str:
             if heading:
                 return heading
     return source_path.stem.replace("_", " ").strip() or source_path.stem
+
+
+def _chunk_slug(chunk: Chunk) -> str:
+    slug_source = chunk.primary_heading or (chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem)
+    cleaned = _strip_heading_numbering(slug_source)
+    return re.sub(r"[^a-z0-9]+", "-", cleaned.lower()).strip("-") or "chunk"
+
+
+def _chunk_page_slug(chunk: Chunk) -> str | None:
+    if chunk.start_page is None and chunk.end_page is None:
+        return None
+    if chunk.start_page is not None and chunk.end_page is not None:
+        if chunk.start_page == chunk.end_page:
+            return f"p{chunk.start_page}"
+        return f"p{chunk.start_page}-{chunk.end_page}"
+    if chunk.start_page is not None:
+        return f"from-p{chunk.start_page}"
+    return f"to-p{chunk.end_page}"
+
+
+def _strip_heading_numbering(text: str) -> str:
+    return re.sub(r"^\s*\d+(?:\.\d+)*\s+", "", text).strip()
+
+
+def _chunk_sort_prefix(chunk: Chunk) -> str:
+    return f"c{chunk.chunk_id:03d}"

@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import UTC, datetime, timedelta
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -90,6 +91,14 @@ _INFOGRAPHIC_DETAIL_TO_MEMBER = {
 
 class UploadError(ChunkerError):
     """Raised when notebook uploads or studio generation fail."""
+
+
+class QuotaExceededError(UploadError):
+    """Raised when NotebookLM appears to have hit a longer-lived quota block."""
+
+    def __init__(self, message: str, *, blocked_until: str) -> None:
+        super().__init__(message)
+        self.blocked_until = blocked_until
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +197,7 @@ class NotebookLMPyUploader:
         studio_create_backoff_seconds: float = DEFAULT_STUDIO_CREATE_BACKOFF_SECONDS,
         studio_rate_limit_cooldown_seconds: float = DEFAULT_STUDIO_RATE_LIMIT_COOLDOWN_SECONDS,
         rename_remote_titles: bool = False,
+        download_outputs: bool = True,
         resume: bool = False,
         reporter: Callable[[str], None] | None = None,
     ) -> tuple[str, list[UploadResult], list[StudioResult]]:
@@ -208,6 +218,7 @@ class NotebookLMPyUploader:
                 studio_create_backoff_seconds=studio_create_backoff_seconds,
                 studio_rate_limit_cooldown_seconds=studio_rate_limit_cooldown_seconds,
                 rename_remote_titles=rename_remote_titles,
+                download_outputs=download_outputs,
                 resume=resume,
                 reporter=reporter,
             )
@@ -216,15 +227,17 @@ class NotebookLMPyUploader:
     def run_studios(
         self,
         *,
-        notebook_id: str,
+        notebook_id: str | None,
         studios: StudiosConfig,
         studio_output_dir: Path | None = None,
+        run_state_path: Path | None = None,
         max_parallel_heavy_studios: int = DEFAULT_MAX_PARALLEL_HEAVY_STUDIOS,
         studio_wait_timeout_seconds: float = DEFAULT_STUDIO_WAIT_TIMEOUT_SECONDS,
         studio_create_retries: int = DEFAULT_STUDIO_CREATE_RETRIES,
         studio_create_backoff_seconds: float = DEFAULT_STUDIO_CREATE_BACKOFF_SECONDS,
         studio_rate_limit_cooldown_seconds: float = DEFAULT_STUDIO_RATE_LIMIT_COOLDOWN_SECONDS,
         rename_remote_titles: bool = False,
+        download_outputs: bool = True,
         reporter: Callable[[str], None] | None = None,
     ) -> list[StudioResult]:
         return asyncio.run(
@@ -232,6 +245,7 @@ class NotebookLMPyUploader:
                 notebook_id=notebook_id,
                 studios=studios,
                 studio_output_dir=studio_output_dir,
+                run_state_path=run_state_path,
                 source_ids=None,
                 max_parallel_heavy_studios=max_parallel_heavy_studios,
                 studio_wait_timeout_seconds=studio_wait_timeout_seconds,
@@ -239,6 +253,7 @@ class NotebookLMPyUploader:
                 studio_create_backoff_seconds=studio_create_backoff_seconds,
                 studio_rate_limit_cooldown_seconds=studio_rate_limit_cooldown_seconds,
                 rename_remote_titles=rename_remote_titles,
+                download_outputs=download_outputs,
                 reporter=reporter,
             )
         )
@@ -300,6 +315,7 @@ class NotebookLMPyUploader:
         studio_create_backoff_seconds: float,
         studio_rate_limit_cooldown_seconds: float,
         rename_remote_titles: bool,
+        download_outputs: bool,
         resume: bool,
         reporter: Callable[[str], None] | None,
     ) -> tuple[str, list[UploadResult], list[StudioResult]]:
@@ -369,6 +385,7 @@ class NotebookLMPyUploader:
                     studio_create_backoff_seconds=studio_create_backoff_seconds,
                     create_quota_cooldown=create_quota_cooldown,
                     rename_remote_titles=rename_remote_titles,
+                    download_outputs=download_outputs,
                     reporter=reporter,
                 )
 
@@ -391,11 +408,15 @@ class NotebookLMPyUploader:
                             studio_create_backoff_seconds=studio_create_backoff_seconds,
                             create_quota_cooldown=create_quota_cooldown,
                             rename_remote_titles=rename_remote_titles,
+                            download_outputs=download_outputs,
                             reporter=reporter,
                             announce_queue=True,
                         )
                     )
+                _raise_for_relevant_quota_blocks(run_state, studios=studios)
                 return resolved_notebook_id, uploaded, studio_results
+        except QuotaExceededError:
+            raise
         except UploadError:
             raise
         except Exception as exc:  # pragma: no cover - exercised with mocked failure path if needed
@@ -406,9 +427,10 @@ class NotebookLMPyUploader:
     async def _run_studios_async(
         self,
         *,
-        notebook_id: str,
+        notebook_id: str | None,
         studios: StudiosConfig,
         studio_output_dir: Path | None,
+        run_state_path: Path | None,
         source_ids: list[str] | None,
         max_parallel_heavy_studios: int,
         studio_wait_timeout_seconds: float,
@@ -416,6 +438,7 @@ class NotebookLMPyUploader:
         studio_create_backoff_seconds: float,
         studio_rate_limit_cooldown_seconds: float,
         rename_remote_titles: bool,
+        download_outputs: bool,
         reporter: Callable[[str], None] | None,
     ) -> list[StudioResult]:
         studio_wait_timeout_seconds = _normalize_wait_timeout(studio_wait_timeout_seconds)
@@ -426,12 +449,39 @@ class NotebookLMPyUploader:
         client_class = _load_notebooklm_client_class()
         rpc_module = _load_notebooklm_rpc_module()
         create_quota_cooldown = CreateQuotaCooldown(studio_rate_limit_cooldown_seconds)
+        run_state = None
+        uploaded_sources: list[UploadResult] | None = None
+        if run_state_path is not None and run_state_path.is_file():
+            run_state = RunStateStore.load(run_state_path)
+            notebook_id = _resolve_state_notebook_id(
+                run_state,
+                requested_notebook_id=notebook_id,
+                reporter=reporter,
+                mode_label="studios",
+            )
+            uploaded_sources = _uploaded_sources_from_run_state(run_state)
+            if uploaded_sources:
+                _emit(
+                    reporter,
+                    f"studio: using {len(uploaded_sources)} uploaded chunk source(s) from {run_state.path.name}",
+                )
+                if source_ids is None:
+                    source_ids = [item.source_id for item in uploaded_sources if item.source_id]
+        elif notebook_id is None:
+            raise UploadError(
+                "Notebook ID is required for `nblm studios` unless a previous `.nblm-run-state.json` is available."
+            )
+        if notebook_id is None:
+            raise UploadError(
+                "The saved `.nblm-run-state.json` does not contain a notebook ID. Run `nblm run` again, "
+                "or pass `--notebook-id` to `nblm studios`."
+            )
         try:
             async with await client_class.from_storage() as client:
                 existing_notebook = await _verify_existing_notebook(
                     client,
                     notebook_id=notebook_id,
-                    resume_state_path=None,
+                    resume_state_path=run_state.path if run_state is not None else None,
                 )
                 if existing_notebook is None:
                     _emit(
@@ -455,21 +505,26 @@ class NotebookLMPyUploader:
                     notebook_id=notebook_id,
                     studios=studios,
                     studio_output_dir=studio_output_dir,
-                    uploaded_sources=None,
+                    uploaded_sources=uploaded_sources,
                     source_ids=source_ids,
                     studio_locks=_build_remote_rename_locks(studios, rename_remote_titles=rename_remote_titles),
                     studio_semaphores=_build_studio_execution_semaphores(
                         studios,
                         max_parallel_heavy_studios=max_parallel_heavy_studios,
                     ),
-                    run_state=None,
+                    run_state=run_state,
                     studio_wait_timeout_seconds=studio_wait_timeout_seconds,
                     studio_create_retries=studio_create_retries,
                     studio_create_backoff_seconds=studio_create_backoff_seconds,
                     create_quota_cooldown=create_quota_cooldown,
                     rename_remote_titles=rename_remote_titles,
+                    download_outputs=download_outputs,
                     reporter=reporter,
                 )
+                if run_state is not None:
+                    _raise_for_relevant_quota_blocks(run_state, studios=studios)
+        except QuotaExceededError:
+            raise
         except UploadError:
             raise
         except Exception as exc:  # pragma: no cover - exercised with mocked failure path if needed
@@ -664,6 +719,7 @@ async def _run_chunk_pipelines(
     studio_create_backoff_seconds: float,
     create_quota_cooldown: CreateQuotaCooldown,
     rename_remote_titles: bool,
+    download_outputs: bool,
     reporter: Callable[[str], None] | None,
 ) -> tuple[list[UploadResult], list[StudioResult]]:
     total_files = len(markdown_files)
@@ -673,6 +729,7 @@ async def _run_chunk_pipelines(
     studio_queues: dict[str, asyncio.Queue[UploadResult | None]] = {}
     studio_worker_counts: dict[str, int] = {}
     studio_workers: list[asyncio.Task[list[StudioResult]]] = []
+    blocked_studios: dict[str, str] = {}
 
     for studio_name, studio_config in per_chunk_items:
         queue: asyncio.Queue[UploadResult | None] = asyncio.Queue()
@@ -700,6 +757,8 @@ async def _run_chunk_pipelines(
                     try:
                         if uploaded_item.source_id is None:
                             continue
+                        if current_studio_name in blocked_studios:
+                            continue
                         results.append(
                             await _run_single_studio(
                                 client,
@@ -719,11 +778,20 @@ async def _run_chunk_pipelines(
                                 studio_create_backoff_seconds=studio_create_backoff_seconds,
                                 create_quota_cooldown=create_quota_cooldown,
                                 rename_remote_titles=rename_remote_titles,
+                                download_outputs=download_outputs,
+                                studio_quota_blocks=blocked_studios,
                                 reporter=reporter,
                                 job_index=job_indices[(current_studio_name, Path(uploaded_item.file_path).name)],
                                 job_total=job_total,
                             )
                         )
+                    except QuotaExceededError as exc:
+                        if current_studio_name not in blocked_studios:
+                            blocked_studios[current_studio_name] = exc.blocked_until
+                            _emit(
+                                reporter,
+                                f"studio: suspending remaining {current_studio_name.replace('_', '-')} jobs until {exc.blocked_until}",
+                            )
                     finally:
                         current_queue.task_done()
 
@@ -918,6 +986,7 @@ async def _run_enabled_studios(
     studio_create_backoff_seconds: float,
     create_quota_cooldown: CreateQuotaCooldown,
     rename_remote_titles: bool,
+    download_outputs: bool,
     reporter: Callable[[str], None] | None,
     announce_queue: bool = True,
 ) -> list[StudioResult]:
@@ -947,33 +1016,46 @@ async def _run_enabled_studios(
 
     results: list[StudioResult] = []
     total_jobs = len(jobs)
+    blocked_studios: dict[str, str] = {}
     if total_jobs and announce_queue:
         _emit(reporter, f"studio: {total_jobs} generation job(s) queued")
     for index, (studio_name, studio_config, job_source_ids, source_file, source_remote_title) in enumerate(jobs, start=1):
-        results.append(
-            await _run_single_studio(
-                client,
-                rpc_module,
-                notebook_id=notebook_id,
-                studio_name=studio_name,
-                studio_config=studio_config,
-                studio_output_dir=studio_output_dir,
-                source_ids=job_source_ids,
-                source_file=source_file,
-                source_remote_title=source_remote_title,
-                studio_locks=studio_locks,
-                studio_semaphores=studio_semaphores,
-                run_state=run_state,
-                studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-                studio_create_retries=studio_create_retries,
-                studio_create_backoff_seconds=studio_create_backoff_seconds,
-                create_quota_cooldown=create_quota_cooldown,
-                rename_remote_titles=rename_remote_titles,
-                reporter=reporter,
-                job_index=index,
-                job_total=total_jobs,
+        if studio_name in blocked_studios:
+            continue
+        try:
+            results.append(
+                await _run_single_studio(
+                    client,
+                    rpc_module,
+                    notebook_id=notebook_id,
+                    studio_name=studio_name,
+                    studio_config=studio_config,
+                    studio_output_dir=studio_output_dir,
+                    source_ids=job_source_ids,
+                    source_file=source_file,
+                    source_remote_title=source_remote_title,
+                    studio_locks=studio_locks,
+                    studio_semaphores=studio_semaphores,
+                    run_state=run_state,
+                    studio_wait_timeout_seconds=studio_wait_timeout_seconds,
+                    studio_create_retries=studio_create_retries,
+                    studio_create_backoff_seconds=studio_create_backoff_seconds,
+                    create_quota_cooldown=create_quota_cooldown,
+                    rename_remote_titles=rename_remote_titles,
+                    download_outputs=download_outputs,
+                    studio_quota_blocks=blocked_studios,
+                    reporter=reporter,
+                    job_index=index,
+                    job_total=total_jobs,
+                )
             )
-        )
+        except QuotaExceededError as exc:
+            if studio_name not in blocked_studios:
+                blocked_studios[studio_name] = exc.blocked_until
+                _emit(
+                    reporter,
+                    f"studio: suspending remaining {studio_name.replace('_', '-')} jobs until {exc.blocked_until}",
+                )
     return results
 
 
@@ -996,6 +1078,8 @@ async def _run_single_studio(
     studio_create_backoff_seconds: float,
     create_quota_cooldown: CreateQuotaCooldown,
     rename_remote_titles: bool,
+    download_outputs: bool,
+    studio_quota_blocks: dict[str, str] | None,
     reporter: Callable[[str], None] | None,
     job_index: int,
     job_total: int,
@@ -1027,6 +1111,8 @@ async def _run_single_studio(
                     run_state=run_state,
                     create_semaphore=create_semaphore,
                     create_quota_cooldown=create_quota_cooldown,
+                    download_outputs=download_outputs,
+                    studio_quota_blocks=studio_quota_blocks,
                     reporter=reporter,
                     job_index=job_index,
                     job_total=job_total,
@@ -1050,6 +1136,8 @@ async def _run_single_studio(
                 run_state=run_state,
                 create_semaphore=create_semaphore,
                 create_quota_cooldown=create_quota_cooldown,
+                download_outputs=download_outputs,
+                studio_quota_blocks=studio_quota_blocks,
                 reporter=reporter,
                 job_index=job_index,
                 job_total=job_total,
@@ -1073,6 +1161,8 @@ async def _run_single_studio(
                 run_state=run_state,
                 create_semaphore=create_semaphore,
                 create_quota_cooldown=create_quota_cooldown,
+                download_outputs=download_outputs,
+                studio_quota_blocks=studio_quota_blocks,
                 reporter=reporter,
                 job_index=job_index,
                 job_total=job_total,
@@ -1094,6 +1184,8 @@ async def _run_single_studio(
         run_state=run_state,
         create_semaphore=create_semaphore,
         create_quota_cooldown=create_quota_cooldown,
+        download_outputs=download_outputs,
+        studio_quota_blocks=studio_quota_blocks,
         reporter=reporter,
         job_index=job_index,
         job_total=job_total,
@@ -1118,6 +1210,8 @@ async def _run_single_studio_locked(
     run_state: RunStateStore | None,
     create_semaphore: asyncio.Semaphore | None,
     create_quota_cooldown: CreateQuotaCooldown,
+    download_outputs: bool,
+    studio_quota_blocks: dict[str, str] | None,
     reporter: Callable[[str], None] | None,
     job_index: int,
     job_total: int,
@@ -1128,13 +1222,13 @@ async def _run_single_studio_locked(
         studio_output_dir,
         source_file=source_file,
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if download_outputs:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     studio_attempt_label = _studio_label(studio_name, source_file)
     resumed = _resume_completed_studio(
         run_state,
         studio_name=studio_name,
         source_file=source_file,
-        output_path=output_path,
     )
     if resumed is not None:
         _emit(reporter, f"studio: resume {job_index}/{job_total} {studio_attempt_label} -> {output_path}")
@@ -1196,6 +1290,8 @@ async def _run_single_studio_locked(
             wait_label="audio",
             create_operation=create_audio,
             download_operation=download_audio,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "video":
@@ -1247,6 +1343,8 @@ async def _run_single_studio_locked(
             wait_label="video",
             create_operation=create_video,
             download_operation=download_video,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "report":
@@ -1294,6 +1392,8 @@ async def _run_single_studio_locked(
             wait_label="report",
             create_operation=create_report,
             download_operation=download_report,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "slide_deck":
@@ -1348,6 +1448,8 @@ async def _run_single_studio_locked(
             wait_label="slide deck",
             create_operation=create_slide_deck,
             download_operation=download_slide_deck,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "quiz":
@@ -1399,6 +1501,8 @@ async def _run_single_studio_locked(
             wait_label="quiz",
             create_operation=create_quiz,
             download_operation=download_quiz,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "flashcards":
@@ -1450,6 +1554,8 @@ async def _run_single_studio_locked(
             wait_label="flashcards",
             create_operation=create_flashcards,
             download_operation=download_flashcards,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "infographic":
@@ -1501,6 +1607,8 @@ async def _run_single_studio_locked(
             wait_label="infographic",
             create_operation=create_infographic,
             download_operation=download_infographic,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "data_table":
@@ -1540,6 +1648,8 @@ async def _run_single_studio_locked(
             wait_label="data table",
             create_operation=create_data_table,
             download_operation=download_data_table,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
         )
 
     if studio_name == "mind_map":
@@ -1548,11 +1658,13 @@ async def _run_single_studio_locked(
             source_ids=source_ids,
         )
         note_id = result.get("note_id") if isinstance(result, dict) else None
-        downloaded = await client.artifacts.download_mind_map(
-            notebook_id,
-            str(output_path),
-            artifact_id=note_id,
-        )
+        downloaded: str | None = None
+        if download_outputs:
+            downloaded = await client.artifacts.download_mind_map(
+                notebook_id,
+                str(output_path),
+                artifact_id=note_id,
+            )
         await _record_completed_studio(
             run_state,
             studio_name=studio_name,
@@ -1561,7 +1673,8 @@ async def _run_single_studio_locked(
             output_path=downloaded,
             remote_title=None,
         )
-        _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {downloaded}")
+        destination = downloaded or "remote artifact only"
+        _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}")
         return StudioResult("mind_map", note_id, downloaded, source_file=source_file, remote_title=None)
 
     raise UploadError(f"Unsupported studio type: {studio_name}")
@@ -1583,12 +1696,14 @@ async def _run_artifact_studio_job(
     studio_wait_timeout_seconds: float,
     studio_create_retries: int,
     studio_create_backoff_seconds: float,
+    studio_quota_blocks: dict[str, str] | None,
     reporter: Callable[[str], None] | None,
     job_index: int,
     job_total: int,
     wait_label: str,
     create_operation: Callable[[], Awaitable[Any]],
     download_operation: Callable[[str | None, Path], Awaitable[str]],
+    download_outputs: bool,
 ) -> StudioResult:
     pending_state = _resume_pending_studio_state(
         run_state,
@@ -1605,11 +1720,34 @@ async def _run_artifact_studio_job(
             status = await _create_artifact_with_retry(
                 studio_label=studio_attempt_label,
                 create_operation=_limit_create_operation(create_operation, create_semaphore=create_semaphore),
+                studio_name=studio_name,
                 retry_count=studio_create_retries,
                 backoff_seconds=studio_create_backoff_seconds,
                 quota_cooldown=create_quota_cooldown,
+                studio_quota_blocks=studio_quota_blocks,
                 reporter=reporter,
             )
+        except QuotaExceededError as exc:
+            if run_state is not None:
+                await _record_pending_studio(
+                    run_state,
+                    studio_name=studio_name,
+                    source_file=source_file,
+                    task_id=None,
+                    output_path=str(output_path) if download_outputs else None,
+                    remote_title=remote_title,
+                    error=str(exc),
+                    status="quota_blocked",
+                    next_retry_at=exc.blocked_until,
+                )
+                await run_state.record_quota_block(
+                    blocked_until=exc.blocked_until,
+                    error=str(exc),
+                    studio_name=studio_name,
+                    source_file=source_file,
+                )
+            _emit(reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}")
+            raise
         except UploadError as exc:
             if run_state is None:
                 raise
@@ -1618,7 +1756,7 @@ async def _run_artifact_studio_job(
                 studio_name=studio_name,
                 source_file=source_file,
                 task_id=None,
-                output_path=str(output_path),
+                output_path=str(output_path) if download_outputs else None,
                 remote_title=remote_title,
                 error=str(exc),
                 status="create_failed",
@@ -1628,14 +1766,14 @@ async def _run_artifact_studio_job(
                 studio_name=studio_name,
                 source_file=source_file,
                 remote_title=remote_title,
-                output_path=output_path,
+                output_path=output_path if download_outputs else None,
             )
         await _record_pending_studio(
             run_state,
             studio_name=studio_name,
             source_file=source_file,
             task_id=_read_attr(status, "task_id"),
-            output_path=str(output_path),
+            output_path=str(output_path) if download_outputs else None,
             remote_title=remote_title,
             error=None,
             status="pending",
@@ -1643,6 +1781,28 @@ async def _run_artifact_studio_job(
 
     try:
         status = await _wait_for_completion(client, notebook_id, status, wait_label, studio_wait_timeout_seconds)
+    except QuotaExceededError as exc:
+        if run_state is None:
+            raise
+        await _record_pending_studio(
+            run_state,
+            studio_name=studio_name,
+            source_file=source_file,
+            task_id=_read_attr(status, "task_id"),
+            output_path=str(output_path) if download_outputs else None,
+            remote_title=remote_title,
+            error=str(exc),
+            status="quota_blocked",
+            next_retry_at=exc.blocked_until,
+        )
+        await run_state.record_quota_block(
+            blocked_until=exc.blocked_until,
+            error=str(exc),
+            studio_name=studio_name,
+            source_file=source_file,
+        )
+        _emit(reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}")
+        raise
     except Exception as exc:
         if run_state is None:
             raise
@@ -1651,7 +1811,7 @@ async def _run_artifact_studio_job(
             studio_name=studio_name,
             source_file=source_file,
             task_id=_read_attr(status, "task_id"),
-            output_path=str(output_path),
+            output_path=str(output_path) if download_outputs else None,
             remote_title=remote_title,
             error=str(exc),
             status="pending",
@@ -1661,7 +1821,7 @@ async def _run_artifact_studio_job(
             studio_name=studio_name,
             source_file=source_file,
             remote_title=remote_title,
-            output_path=output_path,
+            output_path=output_path if download_outputs else None,
         )
 
     artifact_id = await _resolve_artifact_id(
@@ -1678,7 +1838,9 @@ async def _run_artifact_studio_job(
         remote_title=remote_title,
         reporter=reporter,
     )
-    downloaded = await download_operation(artifact_id, output_path)
+    downloaded: str | None = None
+    if download_outputs:
+        downloaded = await download_operation(artifact_id, output_path)
     await _record_completed_studio(
         run_state,
         studio_name=studio_name,
@@ -1687,7 +1849,8 @@ async def _run_artifact_studio_job(
         output_path=downloaded,
         remote_title=remote_title,
     )
-    _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {downloaded}")
+    destination = downloaded or "remote artifact only"
+    _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}")
     return StudioResult(studio_name, artifact_id, downloaded, source_file=source_file, remote_title=remote_title)
 
 
@@ -1734,6 +1897,12 @@ async def _wait_for_completion(
     )
     if getattr(final_status, "is_failed", False):
         error = _read_attr(final_status, "error") or f"{studio_label} generation failed."
+        if _looks_like_quota_exhausted_message(error):
+            blocked_until = _quota_blocked_until()
+            raise QuotaExceededError(
+                f"{error} Daily NotebookLM quota appears exhausted. Try `nblm resume` again after {blocked_until}.",
+                blocked_until=blocked_until,
+            )
         raise UploadError(str(error))
     return final_status
 
@@ -1742,15 +1911,24 @@ async def _create_artifact_with_retry(
     *,
     studio_label: str,
     create_operation: Callable[[], Awaitable[Any]],
+    studio_name: str,
     retry_count: int,
     backoff_seconds: float,
     quota_cooldown: CreateQuotaCooldown | None,
+    studio_quota_blocks: dict[str, str] | None,
     reporter: Callable[[str], None] | None,
 ) -> Any:
     max_attempts = retry_count + 1
     last_error: str | None = None
 
     for attempt in range(1, max_attempts + 1):
+        if studio_quota_blocks is not None and studio_name in studio_quota_blocks:
+            blocked_until = studio_quota_blocks[studio_name]
+            raise QuotaExceededError(
+                f"{studio_label} create skipped because {studio_name.replace('_', '-')} quota is already blocked. "
+                f"Try `nblm resume` again after {blocked_until}.",
+                blocked_until=blocked_until,
+            )
         if quota_cooldown is not None:
             waited = await quota_cooldown.wait_if_needed()
             if waited > 0:
@@ -1758,11 +1936,13 @@ async def _create_artifact_with_retry(
                     reporter,
                     f"studio: quota cooldown delayed {studio_label} create by {waited:.1f}s",
                 )
+        quota_exhausted = False
         try:
             status = await create_operation()
         except Exception as exc:
             last_error = f"{studio_label} create failed before a task ID was returned: {_describe_exception(exc)}"
             rate_limited = _is_rate_limited_error(exc)
+            quota_exhausted = _is_quota_exhausted_error(exc)
         else:
             task_id = _read_attr(status, "task_id")
             if task_id:
@@ -1771,6 +1951,16 @@ async def _create_artifact_with_retry(
                 return status
             last_error = _describe_create_failure(studio_label, status)
             rate_limited = _is_rate_limited_status(status)
+            quota_exhausted = _is_quota_exhausted_status(status)
+
+        if quota_exhausted:
+            blocked_until = _quota_blocked_until()
+            if studio_quota_blocks is not None:
+                studio_quota_blocks[studio_name] = blocked_until
+            raise QuotaExceededError(
+                f"{last_error} Daily NotebookLM quota appears exhausted. Try `nblm resume` again after {blocked_until}.",
+                blocked_until=blocked_until,
+            )
 
         _emit(reporter, f"studio: create failure {studio_label} attempt {attempt}/{max_attempts}: {last_error}")
 
@@ -1828,11 +2018,66 @@ def _is_rate_limited_status(status: Any) -> bool:
     return _looks_like_rate_limit_message(error)
 
 
+def _is_quota_exhausted_error(exc: Exception) -> bool:
+    return _looks_like_quota_exhausted_message(_describe_exception(exc))
+
+
+def _is_quota_exhausted_status(status: Any) -> bool:
+    error = _read_attr(status, "error")
+    return _looks_like_quota_exhausted_message(error)
+
+
 def _looks_like_rate_limit_message(message: str | None) -> bool:
     if message is None:
         return False
     normalized = message.lower()
     return "rate limit" in normalized or "quota exceeded" in normalized or "too many requests" in normalized
+
+
+def _looks_like_quota_exhausted_message(message: str | None) -> bool:
+    if message is None:
+        return False
+    normalized = message.lower()
+    return "quota exceeded" in normalized or "daily quota" in normalized
+
+
+def _quota_blocked_until() -> str:
+    return (datetime.now(UTC) + timedelta(hours=24)).isoformat().replace("+00:00", "Z")
+
+
+def _raise_for_relevant_quota_blocks(run_state: RunStateStore, *, studios: StudiosConfig) -> None:
+    active_blocks = run_state.quota_blocks(
+        studio_names=[studio_name for studio_name, _ in studios.enabled_items()]
+    )
+    if not active_blocks:
+        return
+
+    summaries = [
+        f"{studio_name.replace('_', '-')} until {block['blocked_until']}"
+        for studio_name, block in sorted(active_blocks.items())
+        if block.get("blocked_until")
+    ]
+    if not summaries:
+        return
+    latest_block = max(
+        (
+            block["blocked_until"]
+            for block in active_blocks.values()
+            if isinstance(block.get("blocked_until"), str)
+        ),
+        default=None,
+    )
+    retry_hint = (
+        f" Try `nblm resume` again after {latest_block}."
+        if latest_block is not None
+        else ""
+    )
+    raise UploadError(
+        "Daily NotebookLM quota appears exhausted for: "
+        + ", ".join(summaries)
+        + ". Completed work was saved to the run state."
+        + retry_hint
+    )
 
 
 def _describe_missing_notebook(
@@ -1956,22 +2201,37 @@ async def _resolve_artifact_id(
     )
 
 
-def _resolve_resume_notebook_id(
+def _resolve_state_notebook_id(
     run_state: RunStateStore,
     *,
     requested_notebook_id: str | None,
     reporter: Callable[[str], None] | None,
+    mode_label: str,
 ) -> str | None:
     resumed_notebook_id = run_state.notebook_id
     if resumed_notebook_id is None:
         return requested_notebook_id
     if requested_notebook_id is not None and requested_notebook_id != resumed_notebook_id:
         raise UploadError(
-            "Resume state points to a different notebook ID. Delete "
-            f"{run_state.path.name} to start a fresh run, or reuse notebook {resumed_notebook_id}."
+            f"Saved state in {run_state.path.name} points to a different notebook ID. "
+            f"Reuse notebook {resumed_notebook_id}, or replace that state file if you want to target another notebook."
         )
-    _emit(reporter, f"resume: using notebook {resumed_notebook_id} from {run_state.path.name}")
+    _emit(reporter, f"{mode_label}: using notebook {resumed_notebook_id} from {run_state.path.name}")
     return resumed_notebook_id
+
+
+def _resolve_resume_notebook_id(
+    run_state: RunStateStore,
+    *,
+    requested_notebook_id: str | None,
+    reporter: Callable[[str], None] | None,
+) -> str | None:
+    return _resolve_state_notebook_id(
+        run_state,
+        requested_notebook_id=requested_notebook_id,
+        reporter=reporter,
+        mode_label="resume",
+    )
 
 
 def _open_run_state(path: Path, *, resume: bool) -> RunStateStore:
@@ -1984,12 +2244,23 @@ def _open_run_state(path: Path, *, resume: bool) -> RunStateStore:
     return RunStateStore(path)
 
 
+def _uploaded_sources_from_run_state(run_state: RunStateStore) -> list[UploadResult]:
+    return [
+        UploadResult(
+            file_path=entry["file_name"],
+            source_id=entry["source_id"],
+            remote_title=entry["remote_title"],
+        )
+        for entry in run_state.uploaded_chunk_sources()
+        if entry["source_id"] is not None
+    ]
+
+
 def _resume_completed_studio(
     run_state: RunStateStore | None,
     *,
     studio_name: str,
     source_file: str | None,
-    output_path: Path,
 ) -> StudioResult | None:
     if run_state is None:
         return None
@@ -1999,19 +2270,15 @@ def _resume_completed_studio(
             file_name=source_file,
             studio_name=studio_name,
             content_hash=chunk_content_hash(chunk_path),
-            output_path=output_path,
         )
     else:
-        studio_entry = run_state.completed_notebook_studio(
-            studio_name=studio_name,
-            output_path=output_path,
-        )
+        studio_entry = run_state.completed_notebook_studio(studio_name=studio_name)
     if studio_entry is None:
         return None
     return StudioResult(
         studio=studio_name,
         artifact_id=_dict_optional_str(studio_entry.get("artifact_id")),
-        output_path=str(output_path),
+        output_path=_dict_optional_str(studio_entry.get("output_path")),
         source_file=source_file,
         remote_title=_dict_optional_str(studio_entry.get("remote_title")),
     )
@@ -2045,6 +2312,7 @@ async def _record_pending_studio(
     remote_title: str | None,
     error: str | None,
     status: str = "pending",
+    next_retry_at: str | None = None,
 ) -> None:
     if run_state is None:
         return
@@ -2059,6 +2327,7 @@ async def _record_pending_studio(
             remote_title=remote_title,
             error=error,
             status=status,
+            next_retry_at=next_retry_at,
         )
         return
     await run_state.record_pending_notebook_studio(
@@ -2068,6 +2337,7 @@ async def _record_pending_studio(
         remote_title=remote_title,
         error=error,
         status=status,
+        next_retry_at=next_retry_at,
     )
 
 
@@ -2076,12 +2346,12 @@ def _pending_studio_result(
     studio_name: str,
     source_file: str | None,
     remote_title: str | None,
-    output_path: Path,
+    output_path: Path | None,
 ) -> StudioResult:
     return StudioResult(
         studio=studio_name,
         artifact_id=None,
-        output_path=str(output_path),
+        output_path=str(output_path) if output_path is not None else None,
         source_file=source_file,
         remote_title=remote_title,
         status="pending",
@@ -2434,7 +2704,7 @@ def _remote_source_title(path: Path) -> str:
     heading = _first_markdown_heading(path) or _humanize_path_stem(path.stem)
     chunk_prefix = _chunk_prefix(path.stem)
     if chunk_prefix:
-        return f"{chunk_prefix}. {heading}"
+        return f"{chunk_prefix} {heading}"
     return heading
 
 
@@ -2459,27 +2729,41 @@ def _artifact_kind_matches_studio(kind: str | None, studio_name: str) -> bool:
 
 def _first_markdown_heading(path: Path) -> str | None:
     try:
+        headings: list[tuple[int, str]] = []
         for line in path.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if not stripped.startswith("#"):
                 continue
-            heading = stripped.lstrip("#").strip()
+            level = len(stripped) - len(stripped.lstrip("#"))
+            heading = _strip_heading_numbering(stripped.lstrip("#").strip())
             if heading:
-                return heading
+                headings.append((level, heading))
     except OSError:
         return None
+
+    for level, heading in headings:
+        if level > 1:
+            return heading
+    if headings:
+        return headings[0][1]
     return None
 
 
 def _humanize_path_stem(stem: str) -> str:
     text = re.sub(r"[-_]+", " ", stem).strip()
-    return re.sub(r"\s+", " ", text)
+    text = re.sub(r"^c\d+\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^\d+\s+", "", text)
+    return _strip_heading_numbering(re.sub(r"\s+", " ", text))
+
+
+def _strip_heading_numbering(text: str) -> str:
+    return re.sub(r"^\s*\d+(?:\.\d+)*\s+", "", text).strip()
 
 
 def _chunk_prefix(stem: str) -> str | None:
-    match = re.match(r"^(\d+)-", stem)
+    match = re.match(r"^(c\d+)-", stem, flags=re.IGNORECASE)
     if match:
-        return match.group(1)
+        return match.group(1).upper()
     return None
 
 

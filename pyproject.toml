@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notebooklm-chunker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Turn long PDFs into chunked NotebookLM workflows with Studio outputs"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { file = "LICENSE" }
+license = "MIT"
 authors = [{ name = "cmlonder" }]
 keywords = ["notebooklm", "pdf", "chunking", "study-tools", "llm"]
 classifiers = [
@@ -16,7 +16,6 @@ classifiers = [
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",

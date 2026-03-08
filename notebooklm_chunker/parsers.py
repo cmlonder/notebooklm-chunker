@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import zipfile
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree
@@ -15,6 +16,13 @@ class ChunkerError(RuntimeError):
 
 class UnsupportedDocumentError(ChunkerError):
     """Raised when an input format cannot be parsed."""
+
+
+@dataclass(frozen=True, slots=True)
+class PdfPageSelection:
+    total_pages: int
+    included_pages: tuple[int, ...]
+    skipped_pages: tuple[int, ...]
 
 
 def parse_document(
@@ -91,6 +99,21 @@ def parse_pdf(
     )
 
 
+def inspect_pdf_page_selection(
+    path: Path,
+    *,
+    skip_ranges: tuple[str, ...] = (),
+) -> PdfPageSelection:
+    total_pages = _pdf_total_pages(path)
+    skipped_pages = tuple(sorted(_expanded_skip_pages(total_pages, skip_ranges)))
+    included_pages = tuple(_pdf_page_numbers(total_pages, skip_ranges=skip_ranges))
+    return PdfPageSelection(
+        total_pages=total_pages,
+        included_pages=included_pages,
+        skipped_pages=skipped_pages,
+    )
+
+
 def _parse_pdf_with_fitz(
     path: Path,
     *,
@@ -101,19 +124,15 @@ def _parse_pdf_with_fitz(
     except ImportError:
         return None
 
-    blocks: list[Block] = []
     document = fitz.open(path)
     try:
-        page_numbers = _pdf_page_numbers(
-            len(document),
-            skip_ranges=skip_ranges,
-        )
-        for page_number in page_numbers:
+        page_entries: list[tuple[int, list[str]]] = []
+        for page_number in _pdf_page_numbers(len(document), skip_ranges=skip_ranges):
             page = document.load_page(page_number - 1)
-            blocks.extend(_blocks_from_text(page.get_text("text").splitlines(), page=page_number))
+            page_entries.append((page_number, page.get_text("text").splitlines()))
     finally:
         document.close()
-    return blocks
+    return _blocks_from_pdf_pages(page_entries)
 
 
 def _parse_pdf_with_pypdf(
@@ -127,16 +146,47 @@ def _parse_pdf_with_pypdf(
         return None
 
     reader = PdfReader(str(path))
-    blocks: list[Block] = []
-    for page_number in _pdf_page_numbers(
-        len(reader.pages),
-        skip_ranges=skip_ranges,
-    ):
+    page_entries: list[tuple[int, list[str]]] = []
+    for page_number in _pdf_page_numbers(len(reader.pages), skip_ranges=skip_ranges):
         page = reader.pages[page_number - 1]
-        blocks.extend(
-            _blocks_from_text((page.extract_text() or "").splitlines(), page=page_number)
-        )
-    return blocks
+        page_entries.append((page_number, (page.extract_text() or "").splitlines()))
+    return _blocks_from_pdf_pages(page_entries)
+
+
+def _pdf_total_pages(path: Path) -> int:
+    fitz_total_pages = _pdf_total_pages_with_fitz(path)
+    if fitz_total_pages is not None:
+        return fitz_total_pages
+
+    pypdf_total_pages = _pdf_total_pages_with_pypdf(path)
+    if pypdf_total_pages is not None:
+        return pypdf_total_pages
+
+    raise UnsupportedDocumentError(
+        "PDF parsing requires PyMuPDF (`fitz`) or `pypdf`. Install `notebooklm-chunker[pdf]` for the easy path."
+    )
+
+
+def _pdf_total_pages_with_fitz(path: Path) -> int | None:
+    try:
+        import fitz  # type: ignore
+    except ImportError:
+        return None
+
+    document = fitz.open(path)
+    try:
+        return len(document)
+    finally:
+        document.close()
+
+
+def _pdf_total_pages_with_pypdf(path: Path) -> int | None:
+    try:
+        from pypdf import PdfReader  # type: ignore
+    except ImportError:
+        return None
+
+    return len(PdfReader(str(path)).pages)
 
 
 def _pdf_page_numbers(
@@ -183,6 +233,77 @@ def _parse_page_range(raw_range: str) -> tuple[int, int]:
             f"Invalid PDF skip range: {raw_range!r}. Range start must be <= range end."
         )
     return start_page, end_page
+
+
+def _blocks_from_pdf_pages(page_entries: list[tuple[int, list[str]]]) -> list[Block]:
+    blocks: list[Block] = []
+    for page_number, lines in _clean_pdf_page_entries(page_entries):
+        blocks.extend(_blocks_from_text(lines, page=page_number))
+    return blocks
+
+
+def _clean_pdf_page_entries(page_entries: list[tuple[int, list[str]]]) -> list[tuple[int, list[str]]]:
+    if not page_entries:
+        return []
+
+    normalized_entries = [
+        (page_number, [line.strip() for line in lines if line.strip()])
+        for page_number, lines in page_entries
+    ]
+    repeated_titles = _repeated_edge_titles(normalized_entries)
+    return [
+        (page_number, _trim_pdf_edge_noise(lines, repeated_titles))
+        for page_number, lines in normalized_entries
+    ]
+
+
+def _repeated_edge_titles(page_entries: list[tuple[int, list[str]]]) -> set[str]:
+    counts: dict[str, int] = {}
+    for _, lines in page_entries:
+        for line in _edge_candidates(lines):
+            if _looks_like_running_title(line):
+                counts[line] = counts.get(line, 0) + 1
+    return {line for line, count in counts.items() if count >= 3}
+
+
+def _edge_candidates(lines: list[str]) -> set[str]:
+    candidates: set[str] = set()
+    candidates.update(lines[:2])
+    if len(lines) > 2:
+        candidates.update(lines[-2:])
+    return {line for line in candidates if line}
+
+
+def _trim_pdf_edge_noise(lines: list[str], repeated_titles: set[str]) -> list[str]:
+    start = 0
+    end = len(lines)
+
+    while start < end and _is_pdf_edge_noise(lines[start], repeated_titles):
+        start += 1
+    while end > start and _is_pdf_edge_noise(lines[end - 1], repeated_titles):
+        end -= 1
+
+    return lines[start:end]
+
+
+def _is_pdf_edge_noise(line: str, repeated_titles: set[str]) -> bool:
+    if not line:
+        return True
+    if re.fullmatch(r"\d+", line):
+        return True
+    if line in repeated_titles:
+        return True
+    return False
+
+
+def _looks_like_running_title(line: str) -> bool:
+    if len(line) > 60:
+        return False
+    if len(line.split()) > 8:
+        return False
+    if re.fullmatch(r"\d+(?:\.\d+)*", line):
+        return False
+    return _looks_like_heading(line, "")
 
 
 def _blocks_from_markdown_lines(lines: list[str]) -> list[Block]:
@@ -273,6 +394,19 @@ def _blocks_from_text(lines: list[str], page: int | None = None) -> list[Block]:
             index += 2
             continue
 
+        if _looks_like_numbered_heading_prefix(current) and _looks_like_heading_title(next_line):
+            flush_paragraph()
+            blocks.append(
+                Block(
+                    kind="heading",
+                    text=_normalize_space(f"{current} {next_line}"),
+                    level=2,
+                    page=page,
+                )
+            )
+            index += 2
+            continue
+
         if _looks_like_heading(current, next_line):
             flush_paragraph()
             normalized = current.title() if current.isupper() else current
@@ -299,6 +433,24 @@ def _looks_like_heading(line: str, next_line: str) -> bool:
     words = line.split()
     title_like = sum(word[:1].isupper() for word in words) >= max(1, len(words) - 1)
     return (line.isupper() or title_like) and (not next_line or len(next_line.split()) > 8)
+
+
+def _looks_like_numbered_heading_prefix(line: str) -> bool:
+    return re.fullmatch(r"\d+(?:\.\d+)+", line) is not None
+
+
+def _looks_like_heading_title(line: str) -> bool:
+    if not line:
+        return False
+    if len(line) > 90 or len(line.split()) > 10:
+        return False
+    if line.endswith((".", "!", "?", ";", ",")):
+        return False
+    letters = [char for char in line if char.isalpha()]
+    if len(letters) < 3:
+        return False
+    words = line.split()
+    return sum(word[:1].isupper() for word in words) >= max(1, len(words) - 1)
 
 
 def _normalize_space(text: str) -> str:

@@ -1,6 +1,7 @@
 [source]
 path = "../multi-chunk-demo.pdf"
-# Skip explicit inclusive page ranges when needed.
+# Skip explicit inclusive physical PDF page ranges when needed.
+# These are file pages, not the page numbers printed inside the book.
 # Example: skip_ranges = ["1-2", "18-20"]
 skip_ranges = []
 
@@ -8,7 +9,7 @@ skip_ranges = []
 title = "Section-by-Section Learning Demo"
 
 [chunking]
-output_dir = "./output/per-chunk/chunks"
+output_dir = "./output/{source_stem}/chunks"
 target_pages = 3.0
 min_pages = 2.5
 max_pages = 4.0
@@ -25,7 +26,7 @@ studio_rate_limit_cooldown_seconds = 30.0
 enabled = true
 per_chunk = true
 max_parallel = 3
-output_dir = "./output/per-chunk/reports"
+output_dir = "./output/{source_stem}/reports"
 language = "en"
 format = "study-guide"
 prompt = """
@@ -55,7 +56,7 @@ Writing rules:
 enabled = true
 per_chunk = true
 max_parallel = 3
-output_dir = "./output/per-chunk/slides"
+output_dir = "./output/{source_stem}/slides"
 language = "en"
 format = "detailed"
 length = "default"

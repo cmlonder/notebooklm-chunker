@@ -40,6 +40,16 @@ Show the CLI:
 nblm --help
 ```
 
+Show the installed CLI version:
+
+```bash
+nblm --version
+```
+
+If `prepare` or a fresh `run` targets a non-empty chunk output folder, `nblm`
+asks before overwriting the chunk files and run state there. Use `--yes` when
+you want to skip that confirmation.
+
 Run the built-in health check:
 
 ```bash
@@ -95,11 +105,24 @@ If you already have a notebook and only want to rerun Studio generation:
 nblm studios --config ./examples/workflows/studios/report.toml --notebook-id <notebook_id>
 ```
 
+If a previous run already uploaded chunk sources, `nblm studios` can also reuse
+`.nblm-run-state.json` to run new per-chunk Studio jobs later without
+re-uploading the chunks:
+
+```bash
+nblm studios --config ./examples/workflows/studios/quiz.toml
+```
+
 ## Workflow Notes
 
 - Full workflow examples live under `examples/workflows/`.
 - Single-Studio workflow examples live under `examples/workflows/studios/`.
 - Paths inside workflow files are resolved relative to that file.
+- Config paths may use `{source_stem}`. Example: if `source.path` is
+  `./docs/book.pdf`, then `./output/{source_stem}/chunks` becomes
+  `./output/book/chunks`.
+- `runtime.download_outputs = false` keeps Studio completion in the run state
+  without downloading local artifact files.
 - Start with `runtime.max_parallel_chunks = 3` for live NotebookLM runs; values like `5` can hit quota faster.
 - Use `studios.slide_deck.max_parallel = 4` if you want slide decks to run four at a time while keeping the generic heavy-Studio fallback lower for everything else.
 - Generated example outputs go under `examples/workflows/output/` and are gitignored.
@@ -107,6 +130,8 @@ nblm studios --config ./examples/workflows/studios/report.toml --notebook-id <no
   does not accidentally widen the context to unrelated sources already in the
   same notebook.
 - `nblm run` starts fresh; `nblm resume` is the explicit continuation path for `.nblm-run-state.json`.
+- Saved quota blocks are Studio-specific. If `report` is blocked, other Studio
+  types may still keep moving until they hit their own limits.
 
 ## Editable Install Notes
 
@@ -150,26 +175,52 @@ Typical release flow:
 python -m unittest discover -s tests -v
 python -m build
 python -m twine check dist/*
-git tag v0.1.0
+git tag v0.2.0
 git push origin main --tags
 ```
 
 Then publish a GitHub release for that tag. The `Publish` workflow will build
 the distribution again and upload it to PyPI.
 
+## Local Package Verification
+
+Before publishing, do one clean install test in a fresh virtual environment so
+you can verify the binary that would be installed from your current checkout,
+not the editable install in your repo shell:
+
+```bash
+python -m venv /tmp/nblm-test
+source /tmp/nblm-test/bin/activate
+python -m pip install --upgrade pip
+python -m pip install --force-reinstall "/ABS/PATH/notebooklm-chunker[full]"
+which nblm
+nblm --version
+nblm --help
+deactivate
+```
+
+This installs from your local checkout. It is the right check when you have
+new code that has not been published to PyPI yet.
+
 ## Release Verification
 
-After the PyPI publish succeeds, do one clean install test in a fresh virtual
-environment so you are not accidentally relying on your local editable install:
+After the PyPI publish succeeds, do one more clean install test in a fresh
+virtual environment so you are not accidentally relying on your local checkout
+or your editable install:
 
 ```bash
 python -m venv /tmp/nblm-test
 source /tmp/nblm-test/bin/activate
 python -m pip install --upgrade pip
 python -m pip install "notebooklm-chunker[full]"
+which nblm
+nblm --version
 nblm --help
 deactivate
 ```
+
+This installs from PyPI. If this test still shows old behavior, the new release
+did not make it to the index you are testing against yet.
 
 ## Project Layout
 

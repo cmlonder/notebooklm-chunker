@@ -6,7 +6,12 @@ import zipfile
 from pathlib import Path
 from unittest import TestCase
 
-from notebooklm_chunker.parsers import _pdf_page_numbers, parse_document
+from notebooklm_chunker.parsers import (
+    _clean_pdf_page_entries,
+    _pdf_page_numbers,
+    inspect_pdf_page_selection,
+    parse_document,
+)
 
 
 class ParserTests(TestCase):
@@ -34,6 +39,19 @@ class ParserTests(TestCase):
         self.assertEqual([block.kind for block in blocks], ["heading", "paragraph", "heading", "paragraph"])
         self.assertEqual(blocks[0].text, "Chapter 1")
         self.assertEqual(blocks[2].level, 2)
+
+    def test_text_parser_merges_numbered_heading_prefix_with_following_title(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "book.txt"
+            source.write_text(
+                "1.1\nIntroduction\nBody paragraph.\n",
+                encoding="utf-8",
+            )
+
+            blocks = parse_document(source)
+
+        self.assertEqual([block.kind for block in blocks], ["heading", "paragraph"])
+        self.assertEqual(blocks[0].text, "1.1 Introduction")
 
     def test_html_parser_detects_headings_and_paragraphs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -119,3 +137,58 @@ class ParserTests(TestCase):
     def test_pdf_page_numbers_reject_excluding_entire_document(self) -> None:
         with self.assertRaisesRegex(Exception, "exclude the entire document"):
             list(_pdf_page_numbers(4, skip_ranges=("1-10",)))
+
+    def test_inspect_pdf_page_selection_reports_included_and_skipped_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "book.pdf"
+            source.write_bytes(b"%PDF-1.4 placeholder")
+
+            from unittest.mock import patch
+
+            with patch("notebooklm_chunker.parsers._pdf_total_pages", return_value=10):
+                selection = inspect_pdf_page_selection(source, skip_ranges=("1-2", "5", "99-100"))
+
+        self.assertEqual(selection.total_pages, 10)
+        self.assertEqual(selection.included_pages, (3, 4, 6, 7, 8, 9, 10))
+        self.assertEqual(selection.skipped_pages, (1, 2, 5))
+
+    def test_clean_pdf_page_entries_removes_repeated_running_titles_and_page_numbers(self) -> None:
+        cleaned = _clean_pdf_page_entries(
+            [
+                (
+                    30,
+                    [
+                        "Body line A",
+                        "Body line B",
+                        "4",
+                        "1",
+                        "Origins",
+                    ],
+                ),
+                (
+                    31,
+                    [
+                        "Body line C",
+                        "Body line D",
+                        "5",
+                        "1",
+                        "Origins",
+                    ],
+                ),
+                (
+                    32,
+                    [
+                        "1.3",
+                        "Airline Deregulation",
+                        "Body line E",
+                        "6",
+                        "1",
+                        "Origins",
+                    ],
+                ),
+            ]
+        )
+
+        self.assertEqual(cleaned[0][1], ["Body line A", "Body line B"])
+        self.assertEqual(cleaned[1][1], ["Body line C", "Body line D"])
+        self.assertEqual(cleaned[2][1], ["1.3", "Airline Deregulation", "Body line E"])

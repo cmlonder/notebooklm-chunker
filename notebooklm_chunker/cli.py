@@ -5,14 +5,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from notebooklm_chunker import __version__
 from notebooklm_chunker.chunker import chunk_document
 from notebooklm_chunker.config import AppConfig, load_config, write_config_template
 from notebooklm_chunker.doctor import format_doctor_report, run_doctor
 from notebooklm_chunker.exporters import export_markdown_chunks
 from notebooklm_chunker.models import ChunkingSettings, ExportResult
-from notebooklm_chunker.parsers import ChunkerError, parse_document
+from notebooklm_chunker.parsers import ChunkerError, inspect_pdf_page_selection, parse_document
+from notebooklm_chunker.run_state import RunStateStore
 from notebooklm_chunker.uploaders.notebooklm_py import (
     NotebookLMPyUploader,
+    RUN_STATE_BASENAME,
     StudioResult,
     run_notebooklm_login,
     run_notebooklm_logout,
@@ -24,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="nblm",
         description="Split long documents into NotebookLM-ready chunks and optionally generate Studio outputs.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login_parser = subparsers.add_parser("login", help="Run `notebooklm login` for notebooklm-py authentication.")
@@ -69,7 +73,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     upload_parser.set_defaults(handler=_handle_upload)
 
-    studios_parser = subparsers.add_parser("studios", help="Generate enabled Studio outputs for an existing notebook.")
+    studios_parser = subparsers.add_parser(
+        "studios",
+        help="Generate enabled Studio outputs for an existing notebook or a saved run state.",
+    )
     _add_config_argument(studios_parser)
     studios_parser.add_argument("--notebook-id", help="Notebook ID to run Studio generation against.")
     studios_parser.add_argument(
@@ -134,6 +141,12 @@ def _add_prepare_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-pages", type=float, default=None, help="Maximum estimated pages per chunk.")
     parser.add_argument("--words-per-page", type=int, default=None, help="Word heuristic for one page.")
     parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Overwrite an existing non-empty chunk output directory without prompting.",
+    )
+    parser.add_argument(
         "--skip-range",
         action="append",
         default=None,
@@ -192,6 +205,7 @@ def _handle_prepare(args: argparse.Namespace) -> int:
     input_path = _resolve_input_path(args.input, config)
     _require_file(input_path, label="Input file")
     output_dir = _resolve_chunk_output_dir(args.output_dir, input_path, config)
+    _confirm_chunk_output_overwrite(output_dir, assume_yes=args.yes, action_label="prepare")
     settings = _resolve_chunking_settings(args, config)
     blocks, export_result = _prepare_document(
         input_path,
@@ -230,8 +244,18 @@ def _handle_upload(args: argparse.Namespace) -> int:
 def _handle_studios(args: argparse.Namespace) -> int:
     config = load_config(_path_or_none(args.config))
     notebook_id = args.notebook_id or config.notebook.id
-    if notebook_id is None:
-        raise ChunkerError("Notebook ID is required for `studios`. Set `notebook.id` in config or pass `--notebook-id`.")
+    run_state_path = _resolve_run_state_path(config)
+    if notebook_id is None and run_state_path is None:
+        raise ChunkerError(
+            "Notebook ID is required for `studios` unless a previous `.nblm-run-state.json` is available. "
+            "Set `notebook.id`, pass `--notebook-id`, or run `nblm run` first."
+        )
+    _confirm_quota_block_if_needed(
+        run_state_path,
+        assume_yes=False,
+        action_label="studios",
+        studio_names=tuple(studio_name for studio_name, _ in config.studios.enabled_items()),
+    )
 
     uploader = NotebookLMPyUploader()
     studio_output_dir = _resolve_studio_output_dir(
@@ -243,15 +267,20 @@ def _handle_studios(args: argparse.Namespace) -> int:
         notebook_id=notebook_id,
         studios=config.studios,
         studio_output_dir=studio_output_dir,
+        run_state_path=run_state_path,
         max_parallel_heavy_studios=_resolve_max_parallel_heavy_studios(config),
         studio_wait_timeout_seconds=_resolve_studio_wait_timeout_seconds(config),
         studio_create_retries=_resolve_studio_create_retries(config),
         studio_create_backoff_seconds=_resolve_studio_create_backoff_seconds(config),
         studio_rate_limit_cooldown_seconds=_resolve_studio_rate_limit_cooldown_seconds(config),
         rename_remote_titles=config.runtime.rename_remote_titles,
+        download_outputs=_resolve_download_outputs(config),
         reporter=_progress,
     )
-    print(f"Notebook ID: {notebook_id}")
+    display_notebook_id = notebook_id
+    if display_notebook_id is None and run_state_path is not None:
+        display_notebook_id = RunStateStore.load(run_state_path).notebook_id
+    print(f"Notebook ID: {display_notebook_id}")
     _print_studio_results(results)
     return 0
 
@@ -269,12 +298,22 @@ def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
     input_path = _resolve_input_path(args.input, config)
     _require_file(input_path, label="Input file")
     output_dir = _resolve_chunk_output_dir(args.output_dir, input_path, config)
+    if not resume:
+        _confirm_chunk_output_overwrite(output_dir, assume_yes=getattr(args, "yes", False), action_label="run")
+    else:
+        _confirm_quota_block_if_needed(
+            output_dir / RUN_STATE_BASENAME,
+            assume_yes=getattr(args, "yes", False),
+            action_label="resume",
+            studio_names=tuple(studio_name for studio_name, _ in config.studios.enabled_items()),
+        )
     settings = _resolve_chunking_settings(args, config)
     _, export_result = _prepare_document(
         input_path,
         output_dir,
         settings,
         pdf_skip_ranges=_resolve_skip_ranges(args, config),
+        reporter=_progress,
     )
 
     uploader = NotebookLMPyUploader()
@@ -291,6 +330,7 @@ def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
         studio_create_backoff_seconds=_resolve_studio_create_backoff_seconds(config),
         studio_rate_limit_cooldown_seconds=_resolve_studio_rate_limit_cooldown_seconds(config),
         rename_remote_titles=config.runtime.rename_remote_titles,
+        download_outputs=_resolve_download_outputs(config),
         resume=resume,
         reporter=_progress,
     )
@@ -312,6 +352,16 @@ def _prepare_document(
     _emit_prepare_log(reporter, f"parse: {input_path}")
     if pdf_skip_ranges:
         _emit_prepare_log(reporter, f"parse: skip_ranges={_format_skip_ranges(pdf_skip_ranges)}")
+    if input_path.suffix.lower() == ".pdf":
+        page_selection = inspect_pdf_page_selection(input_path, skip_ranges=pdf_skip_ranges)
+        if page_selection.included_pages:
+            _emit_prepare_log(
+                reporter,
+                "parse: "
+                f"PDF physical pages kept {len(page_selection.included_pages)}/{page_selection.total_pages} "
+                f"(first={page_selection.included_pages[0]}, last={page_selection.included_pages[-1]}, "
+                f"skipped={len(page_selection.skipped_pages)})",
+            )
     blocks = parse_document(
         input_path,
         pdf_skip_ranges=pdf_skip_ranges,
@@ -420,6 +470,10 @@ def _resolve_studio_rate_limit_cooldown_seconds(config: AppConfig) -> float:
     return config.runtime.studio_rate_limit_cooldown_seconds or 30.0
 
 
+def _resolve_download_outputs(config: AppConfig) -> bool:
+    return config.runtime.download_outputs
+
+
 def _progress(message: str) -> None:
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"{timestamp} [nblm] {message}", flush=True)
@@ -476,6 +530,99 @@ def _resolve_studio_output_dir(
     if config.chunking.output_dir:
         return Path(config.chunking.output_dir) / "studio"
     return Path.cwd() / "nblm-studio"
+
+
+def _resolve_run_state_path(config: AppConfig) -> Path | None:
+    chunk_output_dir = config.chunking.output_dir
+    if chunk_output_dir:
+        candidate = Path(chunk_output_dir) / RUN_STATE_BASENAME
+        if candidate.is_file():
+            return candidate
+    if config.source.path:
+        candidate = _resolve_chunk_output_dir(None, Path(config.source.path), config) / RUN_STATE_BASENAME
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _confirm_chunk_output_overwrite(output_dir: Path, *, assume_yes: bool, action_label: str) -> None:
+    if assume_yes or not output_dir.exists() or not output_dir.is_dir():
+        return
+    try:
+        has_contents = any(output_dir.iterdir())
+    except OSError as exc:
+        raise ChunkerError(f"Could not inspect output folder {output_dir}: {exc}") from exc
+    if not has_contents:
+        return
+    prompt = (
+        f"Output folder already has files: {output_dir}\n"
+        f"`nblm {action_label}` will overwrite chunk files, manifest.json, and saved run state there.\n"
+        "Continue? [y/N]: "
+    )
+    try:
+        answer = input(prompt)
+    except EOFError as exc:
+        raise ChunkerError(
+            f"Output folder is not empty: {output_dir}. Re-run with `--yes` if you want to overwrite it."
+        ) from exc
+    if answer.strip().lower() not in {"y", "yes"}:
+        raise ChunkerError("Aborted because the chunk output folder is not empty.")
+
+
+def _confirm_quota_block_if_needed(
+    run_state_path: Path | None,
+    *,
+    assume_yes: bool,
+    action_label: str,
+    studio_names: tuple[str, ...] = (),
+) -> None:
+    if assume_yes or run_state_path is None or not run_state_path.is_file():
+        return
+    quota_blocks = RunStateStore.load(run_state_path).quota_blocks(studio_names=studio_names or None)
+    if not quota_blocks:
+        return
+    active_blocks: list[tuple[str, datetime, dict[str, object]]] = []
+    for studio_name, quota_block in quota_blocks.items():
+        blocked_until_text = quota_block.get("blocked_until")
+        blocked_until = _parse_zulu_timestamp(blocked_until_text)
+        if blocked_until is None:
+            continue
+        active_blocks.append((studio_name, blocked_until, quota_block))
+    if not active_blocks:
+        return
+    now = datetime.now().astimezone()
+    active_blocks = [entry for entry in active_blocks if entry[1] > now]
+    if not active_blocks:
+        return
+    lines = [
+        f"- {studio_name.replace('_', '-')} until {blocked_until.astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')}"
+        for studio_name, blocked_until, _ in active_blocks
+    ]
+    prompt = (
+        "Saved run state says these NotebookLM Studio quotas are likely still blocked:\n"
+        + "\n".join(lines)
+        + "\n"
+        + f"`nblm {action_label}` may still continue other Studio types, but the blocked ones will probably fail again before then.\n"
+        "Try anyway? [y/N]: "
+    )
+    try:
+        answer = input(prompt)
+    except EOFError as exc:
+        raise ChunkerError(
+            "NotebookLM quota is likely still blocked for one or more Studio types. "
+            "Re-run later or pass `--yes` to try anyway."
+        ) from exc
+    if answer.strip().lower() not in {"y", "yes"}:
+        raise ChunkerError("Aborted because one or more NotebookLM Studio quotas are likely still blocked.")
+
+
+def _parse_zulu_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone()
+    except ValueError:
+        return None
 
 
 def _path_or_none(value: str | None) -> Path | None:

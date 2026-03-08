@@ -64,7 +64,10 @@ class ConfigTests(TestCase):
         self.assertIn("studio_create_backoff_seconds = 2.0", content)
         self.assertIn("studio_rate_limit_cooldown_seconds = 30.0", content)
         self.assertIn("rename_remote_titles = false", content)
+        self.assertIn("download_outputs = true", content)
         self.assertIn("[chunking]", content)
+        self.assertIn('output_dir = "./output/{source_stem}/chunks"', content)
+        self.assertIn('output_path = "./output/{source_stem}/studio/audio-overview.mp4"', content)
 
     def test_load_config_resolves_relative_source_and_studio_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -94,6 +97,7 @@ class ConfigTests(TestCase):
                         "studio_create_backoff_seconds = 1.5",
                         "studio_rate_limit_cooldown_seconds = 45.0",
                         "rename_remote_titles = true",
+                        "download_outputs = false",
                         "",
                         "[studios.audio]",
                         "enabled = true",
@@ -121,6 +125,7 @@ class ConfigTests(TestCase):
         self.assertEqual(config.runtime.studio_create_backoff_seconds, 1.5)
         self.assertEqual(config.runtime.studio_rate_limit_cooldown_seconds, 45.0)
         self.assertTrue(config.runtime.rename_remote_titles)
+        self.assertFalse(config.runtime.download_outputs)
         self.assertTrue(config.studios.audio.enabled)
         self.assertTrue(config.studios.audio.per_chunk)
         self.assertEqual(config.studios.audio.max_parallel, 3)
@@ -131,4 +136,41 @@ class ConfigTests(TestCase):
         self.assertEqual(
             config.studios.audio.output_path,
             str((root / "build" / "studio" / "audio-overview.mp4").resolve()),
+        )
+
+    def test_load_config_expands_source_stem_placeholder_in_output_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs" / "aviation.pdf"
+            source.parent.mkdir(parents=True)
+            source.write_text("placeholder", encoding="utf-8")
+
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[source]",
+                        'path = "./docs/aviation.pdf"',
+                        "",
+                        "[chunking]",
+                        'output_dir = "./output/{source_stem}/chunks"',
+                        "",
+                        "[studios.report]",
+                        "enabled = true",
+                        'output_path = "./output/{source_stem}/studio/report.md"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(
+            config.chunking.output_dir,
+            str((root / "output" / "aviation" / "chunks").resolve()),
+        )
+        self.assertEqual(
+            config.studios.report.output_path,
+            str((root / "output" / "aviation" / "studio" / "report.md").resolve()),
         )

@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-from notebooklm_chunker.chunker import build_sections, chunk_document, chunk_filename
-from notebooklm_chunker.models import Block, ChunkingSettings
+from notebooklm_chunker.chunker import build_sections, chunk_document, chunk_filename, chunk_filenames
+from notebooklm_chunker.models import Block, Chunk, ChunkingSettings
 
 
 class ChunkerTests(TestCase):
@@ -68,4 +68,35 @@ class ChunkerTests(TestCase):
         )
 
         self.assertEqual(chunks[0].primary_heading, "26 Domain-Driven Design Quickly")
-        self.assertEqual(chunk_filename(chunks[0]), "001-26-domain-driven-design-quickly.md")
+        self.assertEqual(chunk_filename(chunks[0]), "c001-domain-driven-design-quickly.md")
+
+    def test_chunk_filenames_add_page_ranges_for_duplicate_headings(self) -> None:
+        chunks = [
+            Chunk(
+                chunk_id=1,
+                source_file="book.pdf",
+                heading_path=("Book", "Origins"),
+                primary_heading="Origins",
+                markdown="# Book\n\n## Origins\n\nBody\n",
+                word_count=3,
+                estimated_pages=3.0,
+                start_page=30,
+                end_page=32,
+            ),
+            Chunk(
+                chunk_id=2,
+                source_file="book.pdf",
+                heading_path=("Book", "Origins"),
+                primary_heading="Origins",
+                markdown="# Book\n\n## Origins\n\nBody\n",
+                word_count=3,
+                estimated_pages=3.0,
+                start_page=34,
+                end_page=36,
+            ),
+        ]
+
+        filenames = chunk_filenames(chunks)
+
+        self.assertEqual(filenames[1], "c001-origins-p30-32.md")
+        self.assertEqual(filenames[2], "c002-origins-p34-36.md")

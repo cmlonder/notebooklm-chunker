@@ -14,3 +14,7 @@ examples/sample-chunks/
 examples/workflows/output/
 nblm-studio/
 nblm.toml
+quiz.toml
+output/
+per-chunk-report-and-slides.toml
+havacılık.pdf

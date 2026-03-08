@@ -110,6 +110,8 @@ class _FakeArtifactsAPI:
         self.report_download_calls: list[tuple[str, str, str | None]] = []
         self.slide_generate_calls: list[dict[str, object]] = []
         self.slide_download_calls: list[tuple[str, str, str | None, str]] = []
+        self.quiz_generate_calls: list[dict[str, object]] = []
+        self.quiz_download_calls: list[tuple[str, str, str | None, str]] = []
         self.rename_calls: list[tuple[str, str, str]] = []
         self._artifacts: list[_FakeArtifact] = []
         self.events = events
@@ -225,6 +227,38 @@ class _FakeArtifactsAPI:
         self.slide_download_calls.append((notebook_id, output_path, artifact_id, output_format))
         return output_path
 
+    async def generate_quiz(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        instructions: str | None = None,
+        quantity=None,
+        difficulty=None,
+    ) -> _FakeGenerationStatus:
+        artifact_id = f"art-quiz-{len(self.quiz_generate_calls) + 1}"
+        self.quiz_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "instructions": instructions,
+                "quantity": quantity,
+                "difficulty": difficulty,
+            }
+        )
+        self._artifacts.append(_FakeArtifact(artifact_id, "quiz", f"Quiz {len(self.quiz_generate_calls)}"))
+        self.events.append("quiz:" + ",".join(source_ids or []))
+        return _FakeGenerationStatus(artifact_id)
+
+    async def download_quiz(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+        output_format: str = "json",
+    ) -> str:
+        self.quiz_download_calls.append((notebook_id, output_path, artifact_id, output_format))
+        return output_path
+
     async def list(self, notebook_id: str) -> list[_FakeArtifact]:
         return list(self._artifacts)
 
@@ -307,6 +341,24 @@ class _FakeRpcModule:
             "SHORT": "SHORT",
         },
     )
+    QuizQuantity = type(
+        "QuizQuantity",
+        (),
+        {
+            "FEWER": "FEWER",
+            "STANDARD": "STANDARD",
+            "MORE": "MORE",
+        },
+    )
+    QuizDifficulty = type(
+        "QuizDifficulty",
+        (),
+        {
+            "EASY": "EASY",
+            "MEDIUM": "MEDIUM",
+            "HARD": "HARD",
+        },
+    )
 
 
 class UploaderTests(TestCase):
@@ -318,7 +370,7 @@ class UploaderTests(TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             chunks_dir = Path(directory)
-            (chunks_dir / "001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "c001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
             with patch(
                 "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
                 return_value=_FakeNotebookLMClient,
@@ -334,11 +386,11 @@ class UploaderTests(TestCase):
         self.assertEqual(_FakeNotebookLMClient.last_client.notebooks.created_titles, ["Notebook"])
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.calls,
-            [("nb1", "001-test.md", True)],
+            [("nb1", "c001-test.md", True)],
         )
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.rename_calls,
-            [("nb1", "src-001-test", "001. Title")],
+            [("nb1", "src-c001-test", "C001 Title")],
         )
 
     def test_upload_directory_respects_max_parallel_chunks(self) -> None:
@@ -364,12 +416,33 @@ class UploaderTests(TestCase):
         self.assertEqual(len(uploads), 4)
         self.assertEqual(_FakeSourcesAPI.max_active_uploads, 2)
 
+    def test_upload_directory_prefers_first_section_heading_for_remote_title(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            chunks_dir = Path(directory)
+            (chunks_dir / "c001-test.md").write_text("# Book\n\n## Origins\n\nBody\n", encoding="utf-8")
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ):
+                uploader.upload_directory(
+                    chunks_dir,
+                    notebook_title="Notebook",
+                    rename_remote_titles=True,
+                )
+
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.sources.rename_calls,
+            [("nb1", "src-c001-test", "C001 Origins")],
+        )
+
     def test_upload_directory_does_not_rename_remote_titles_by_default(self) -> None:
         uploader = NotebookLMPyUploader()
 
         with tempfile.TemporaryDirectory() as directory:
             chunks_dir = Path(directory)
-            (chunks_dir / "001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "c001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
             with patch(
                 "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
                 return_value=_FakeNotebookLMClient,
@@ -405,6 +478,258 @@ class UploaderTests(TestCase):
             _FakeNotebookLMClient.last_client.artifacts.wait_calls,
             [("nb1", "art-audio-1", 7200.0)],
         )
+
+    def test_run_studios_can_generate_per_chunk_quiz_from_saved_run_state(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            intro_path = chunks_dir / "c001-intro.md"
+            summary_path = chunks_dir / "c002-summary.md"
+            intro_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            summary_path.write_text("# Summary\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 2,
+                "notebook_id": "nb1",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "c001-intro.md": {
+                        "content_hash": chunk_content_hash(intro_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c001-intro",
+                            "remote_title": "C001 Intro",
+                        },
+                        "studios": {},
+                    },
+                    "c002-summary.md": {
+                        "content_hash": chunk_content_hash(summary_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c002-summary",
+                            "remote_title": "C002 Summary",
+                        },
+                        "studios": {},
+                    },
+                },
+                "notebook_studios": {},
+            }
+            state_path = chunks_dir / ".nblm-run-state.json"
+            state_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                results = uploader.run_studios(
+                    notebook_id=None,
+                    run_state_path=state_path,
+                    studios=StudiosConfig(
+                        quiz=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "quizzes").resolve()),
+                            quantity="more",
+                            difficulty="hard",
+                            download_format="json",
+                        )
+                    ),
+                )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(_FakeNotebookLMClient.last_client.sources.calls, [])
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.artifacts.quiz_generate_calls,
+            [
+                {
+                    "notebook_id": "nb1",
+                    "source_ids": ["src-c001-intro"],
+                    "instructions": None,
+                    "quantity": "MORE",
+                    "difficulty": "HARD",
+                },
+                {
+                    "notebook_id": "nb1",
+                    "source_ids": ["src-c002-summary"],
+                    "instructions": None,
+                    "quantity": "MORE",
+                    "difficulty": "HARD",
+                },
+            ],
+        )
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.artifacts.quiz_download_calls,
+            [
+                (
+                    "nb1",
+                    str((root / "studio" / "quizzes" / "c001-intro-quiz.json").resolve()),
+                    "art-quiz-1",
+                    "json",
+                ),
+                (
+                    "nb1",
+                    str((root / "studio" / "quizzes" / "c002-summary-quiz.json").resolve()),
+                    "art-quiz-2",
+                    "json",
+                ),
+            ],
+        )
+
+    def test_run_studios_can_complete_without_downloading_outputs(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            intro_path = chunks_dir / "c001-intro.md"
+            intro_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 4,
+                "notebook_id": "nb1",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "c001-intro.md": {
+                        "content_hash": chunk_content_hash(intro_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c001-intro",
+                            "remote_title": "C001 Intro",
+                        },
+                        "studios": {},
+                    },
+                },
+                "notebook_studios": {},
+                "quota_blocks": {},
+            }
+            state_path = chunks_dir / ".nblm-run-state.json"
+            state_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_FakeNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                results = uploader.run_studios(
+                    notebook_id=None,
+                    run_state_path=state_path,
+                    studios=StudiosConfig(
+                        quiz=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "quizzes").resolve()),
+                            quantity="more",
+                            difficulty="hard",
+                            download_format="json",
+                        )
+                    ),
+                    download_outputs=False,
+                )
+
+            saved_state = json.loads(state_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0].output_path)
+        self.assertEqual(_FakeNotebookLMClient.last_client.artifacts.quiz_download_calls, [])
+        self.assertEqual(
+            saved_state["chunks"]["c001-intro.md"]["studios"]["quiz"]["status"],
+            "completed",
+        )
+        self.assertIsNone(saved_state["chunks"]["c001-intro.md"]["studios"]["quiz"]["output_path"])
+
+    def test_completed_studio_without_download_is_reused_on_resume(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _NoCreateQuizArtifacts(_FakeArtifactsAPI):
+            async def generate_quiz(self, *args, **kwargs):  # type: ignore[override]
+                raise AssertionError("completed quiz should not be generated again")
+
+        class _NoCreateQuizClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _NoCreateQuizArtifacts(self.events)
+
+        class _NoCreateQuizNotebookLMClient:
+            last_client: _NoCreateQuizClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _NoCreateQuizClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            intro_path = chunks_dir / "c001-intro.md"
+            intro_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 4,
+                "notebook_id": "nb1",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "c001-intro.md": {
+                        "content_hash": chunk_content_hash(intro_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c001-intro",
+                            "remote_title": "C001 Intro",
+                        },
+                        "studios": {
+                            "quiz": {
+                                "status": "completed",
+                                "task_id": None,
+                                "artifact_id": "art-quiz-1",
+                                "output_path": None,
+                                "remote_title": None,
+                                "attempts": 1,
+                                "last_error": None,
+                                "next_retry_at": None,
+                                "updated_at": "2026-03-08T00:00:00Z",
+                            }
+                        },
+                    },
+                },
+                "notebook_studios": {},
+                "quota_blocks": {},
+            }
+            state_path = chunks_dir / ".nblm-run-state.json"
+            state_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_NoCreateQuizNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                results = uploader.run_studios(
+                    notebook_id=None,
+                    run_state_path=state_path,
+                    studios=StudiosConfig(
+                        quiz=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "quizzes").resolve()),
+                            quantity="more",
+                            difficulty="hard",
+                            download_format="json",
+                        )
+                    ),
+                    download_outputs=False,
+                )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].status, "completed")
+        self.assertIsNone(results[0].output_path)
+        self.assertEqual(_NoCreateQuizNotebookLMClient.last_client.artifacts.quiz_generate_calls, [])
 
     def test_slide_deck_create_failure_is_saved_for_resume(self) -> None:
         uploader = NotebookLMPyUploader()
@@ -459,7 +784,7 @@ class UploaderTests(TestCase):
         self.assertEqual(len(uploads), 1)
         self.assertEqual(len(studio_results), 1)
         self.assertEqual(studio_results[0].status, "pending")
-        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["version"], 4)
         self.assertEqual(
             state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["status"],
             "create_failed",
@@ -467,6 +792,95 @@ class UploaderTests(TestCase):
         self.assertIn(
             "slide-deck [001-intro.md] create failed before a task ID was returned",
             state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["last_error"],
+        )
+
+    def test_ingest_directory_blocks_only_exhausted_studio_type_and_preserves_other_results(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        class _QuotaArtifacts(_FakeArtifactsAPI):
+            async def generate_report(self, *args, **kwargs):  # type: ignore[override]
+                return _FakeGenerationStatus("", status="failed", error="API rate limit or quota exceeded. Please wait before retrying.")
+
+        class _QuotaClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _QuotaArtifacts(self.events)
+
+        class _QuotaNotebookLMClient:
+            last_client: _QuotaClient | None = None
+
+            @classmethod
+            async def from_storage(cls):
+                cls.last_client = _QuotaClient()
+                return cls.last_client
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+            progress: list[str] = []
+
+            with patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                return_value=_QuotaNotebookLMClient,
+            ), patch(
+                "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                return_value=_FakeRpcModule,
+            ):
+                with self.assertRaises(UploadError) as context:
+                    uploader.ingest_directory(
+                        chunks_dir,
+                        notebook_title="Notebook",
+                        studios=StudiosConfig(
+                            report=StudioConfig(
+                                enabled=True,
+                                per_chunk=True,
+                                output_dir=str((root / "studio" / "reports").resolve()),
+                                format="study-guide",
+                            ),
+                            slide_deck=StudioConfig(
+                                enabled=True,
+                                per_chunk=True,
+                                output_dir=str((root / "studio" / "slides").resolve()),
+                                download_format="pdf",
+                                format="detailed",
+                                length="default",
+                            ),
+                        ),
+                        studio_create_retries=5,
+                        studio_create_backoff_seconds=0.01,
+                        reporter=progress.append,
+                    )
+
+            state = json.loads((chunks_dir / ".nblm-run-state.json").read_text(encoding="utf-8"))
+
+        self.assertIn("Daily NotebookLM quota appears exhausted for: report until", str(context.exception))
+        self.assertIsNotNone(state["quota_blocks"]["report"]["blocked_until"])
+        self.assertEqual(state["chunks"]["001-intro.md"]["studios"]["report"]["status"], "quota_blocked")
+        self.assertEqual(state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["status"], "completed")
+        self.assertEqual(
+            state["chunks"]["001-intro.md"]["studios"]["report"]["next_retry_at"],
+            state["quota_blocks"]["report"]["blocked_until"],
+        )
+        self.assertNotIn("slide_deck", state["quota_blocks"])
+        self.assertEqual(
+            _QuotaNotebookLMClient.last_client.artifacts.slide_download_calls,
+            [
+                (
+                    "nb1",
+                    str((root / "studio" / "slides" / "001-intro-slide-deck.pdf").resolve()),
+                    "art-slide-deck-1",
+                    "pdf",
+                ),
+            ],
+        )
+        self.assertTrue(
+            any(
+                "studio: quota exhausted report [001-intro.md] ->" in line
+                or "studio: suspending remaining report jobs until" in line
+                for line in progress
+            )
         )
 
     def test_ingest_directory_logs_create_failure_details(self) -> None:
@@ -729,10 +1143,10 @@ class UploaderTests(TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             chunks_dir = Path(directory)
-            (chunks_dir / "001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "c001-test.md").write_text("# Title\n\nBody\n", encoding="utf-8")
             (chunks_dir / "999-stale.md").write_text("# Stale\n\nBody\n", encoding="utf-8")
             (chunks_dir / "manifest.json").write_text(
-                '[{"file":"001-test.md"}]\n',
+                '[{"file":"c001-test.md"}]\n',
                 encoding="utf-8",
             )
             with patch(
@@ -745,14 +1159,14 @@ class UploaderTests(TestCase):
                     rename_remote_titles=True,
                 )
 
-        self.assertEqual([Path(item.file_path).name for item in uploads], ["001-test.md"])
+        self.assertEqual([Path(item.file_path).name for item in uploads], ["c001-test.md"])
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.calls,
-            [("nb1", "001-test.md", True)],
+            [("nb1", "c001-test.md", True)],
         )
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.rename_calls,
-            [("nb1", "src-001-test", "001. Title")],
+            [("nb1", "src-c001-test", "C001 Title")],
         )
 
     def test_ingest_directory_generates_audio_from_uploaded_sources(self) -> None:
@@ -845,8 +1259,8 @@ class UploaderTests(TestCase):
             root = Path(directory)
             chunks_dir = root / "chunks"
             chunks_dir.mkdir()
-            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
-            (chunks_dir / "002-summary.md").write_text("# Summary\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "c001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+            (chunks_dir / "c002-summary.md").write_text("# Summary\n\nBody\n", encoding="utf-8")
 
             with patch(
                 "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
@@ -884,7 +1298,7 @@ class UploaderTests(TestCase):
                 {
                     "notebook_id": "nb1",
                     "report_format": "STUDY_GUIDE",
-                    "source_ids": ["src-001-intro"],
+                    "source_ids": ["src-c001-intro"],
                     "language": "en",
                     "custom_prompt": None,
                     "extra_instructions": None,
@@ -892,7 +1306,7 @@ class UploaderTests(TestCase):
                 {
                     "notebook_id": "nb1",
                     "report_format": "STUDY_GUIDE",
-                    "source_ids": ["src-002-summary"],
+                    "source_ids": ["src-c002-summary"],
                     "language": "en",
                     "custom_prompt": None,
                     "extra_instructions": None,
@@ -904,7 +1318,7 @@ class UploaderTests(TestCase):
             [
                 {
                     "notebook_id": "nb1",
-                    "source_ids": ["src-001-intro"],
+                    "source_ids": ["src-c001-intro"],
                     "language": "en",
                     "instructions": None,
                     "slide_format": "DETAILED_DECK",
@@ -912,7 +1326,7 @@ class UploaderTests(TestCase):
                 },
                 {
                     "notebook_id": "nb1",
-                    "source_ids": ["src-002-summary"],
+                    "source_ids": ["src-c002-summary"],
                     "language": "en",
                     "instructions": None,
                     "slide_format": "DETAILED_DECK",
@@ -925,12 +1339,12 @@ class UploaderTests(TestCase):
             [
                 (
                     "nb1",
-                    str((root / "studio" / "reports" / "001-intro-report.md").resolve()),
+                    str((root / "studio" / "reports" / "c001-intro-report.md").resolve()),
                     "art-report-1",
                 ),
                 (
                     "nb1",
-                    str((root / "studio" / "reports" / "002-summary-report.md").resolve()),
+                    str((root / "studio" / "reports" / "c002-summary-report.md").resolve()),
                     "art-report-2",
                 ),
             ],
@@ -940,13 +1354,13 @@ class UploaderTests(TestCase):
             [
                 (
                     "nb1",
-                    str((root / "studio" / "slides" / "001-intro-slide-deck.pdf").resolve()),
+                    str((root / "studio" / "slides" / "c001-intro-slide-deck.pdf").resolve()),
                     "art-slide-deck-1",
                     "pdf",
                 ),
                 (
                     "nb1",
-                    str((root / "studio" / "slides" / "002-summary-slide-deck.pdf").resolve()),
+                    str((root / "studio" / "slides" / "c002-summary-slide-deck.pdf").resolve()),
                     "art-slide-deck-2",
                     "pdf",
                 ),
@@ -955,22 +1369,22 @@ class UploaderTests(TestCase):
         self.assertEqual(
             _FakeNotebookLMClient.last_client.sources.rename_calls,
             [
-                ("nb1", "src-001-intro", "001. Intro"),
-                ("nb1", "src-002-summary", "002. Summary"),
+                ("nb1", "src-c001-intro", "C001 Intro"),
+                ("nb1", "src-c002-summary", "C002 Summary"),
             ],
         )
         self.assertEqual(
             _FakeNotebookLMClient.last_client.artifacts.rename_calls,
             [
-                ("nb1", "art-report-1", "001. Intro - Report"),
-                ("nb1", "art-report-2", "002. Summary - Report"),
-                ("nb1", "art-slide-deck-1", "001. Intro - Slide Deck"),
-                ("nb1", "art-slide-deck-2", "002. Summary - Slide Deck"),
+                ("nb1", "art-report-1", "C001 Intro - Report"),
+                ("nb1", "art-report-2", "C002 Summary - Report"),
+                ("nb1", "art-slide-deck-1", "C001 Intro - Slide Deck"),
+                ("nb1", "art-slide-deck-2", "C002 Summary - Slide Deck"),
             ],
         )
         self.assertLess(
-            _FakeNotebookLMClient.last_client.events.index("report:src-001-intro"),
-            _FakeNotebookLMClient.last_client.events.index("slide:src-001-intro"),
+            _FakeNotebookLMClient.last_client.events.index("report:src-c001-intro"),
+            _FakeNotebookLMClient.last_client.events.index("slide:src-c001-intro"),
         )
 
     def test_ingest_directory_throttles_heavy_studios_separately_from_chunk_parallelism(self) -> None:
@@ -1132,16 +1546,18 @@ class UploaderTests(TestCase):
                 loop = asyncio.get_running_loop()
                 if first_attempt_at is None:
                     first_attempt_at = loop.time()
-                    return _FakeGenerationStatus("", status="failed", error="API rate limit or quota exceeded.")
+                    return _FakeGenerationStatus("", status="failed", error="API rate limit or too many requests.")
                 second_attempt_at = loop.time()
                 return _FakeGenerationStatus("task-1")
 
             await _create_artifact_with_retry(
                 studio_label="report [001-test.md]",
                 create_operation=create_operation,
+                studio_name="report",
                 retry_count=1,
                 backoff_seconds=0.01,
                 quota_cooldown=cooldown,
+                studio_quota_blocks={},
                 reporter=progress.append,
             )
             assert first_attempt_at is not None
@@ -1336,7 +1752,7 @@ class UploaderTests(TestCase):
         self.assertEqual(len(uploads), 1)
         self.assertEqual(len(studio_results), 1)
         self.assertEqual(studio_results[0].status, "pending")
-        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["version"], 4)
         self.assertEqual(state["notebook_id"], "nb1")
         self.assertEqual(state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["status"], "pending")
         self.assertEqual(

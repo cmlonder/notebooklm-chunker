@@ -10,7 +10,7 @@ from typing import Any
 from notebooklm_chunker.parsers import ChunkerError
 
 
-CURRENT_STATE_VERSION = 2
+CURRENT_STATE_VERSION = 4
 _EMPTY_SOURCE_STATE = {
     "status": "pending",
     "source_id": None,
@@ -45,12 +45,14 @@ class RunStateStore:
         notebook_title: str | None = None,
         chunks: dict[str, dict[str, Any]] | None = None,
         notebook_studios: dict[str, dict[str, Any]] | None = None,
+        quota_blocks: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.path = path
         self.notebook_id = notebook_id
         self.notebook_title = notebook_title
         self._chunks = chunks or {}
         self._notebook_studios = notebook_studios or {}
+        self._quota_blocks = _normalize_quota_blocks(quota_blocks)
         self._lock = asyncio.Lock()
 
     @classmethod
@@ -72,12 +74,16 @@ class RunStateStore:
         notebook_title = _read_optional_str(raw.get("notebook_title"))
         chunks = _normalize_chunks(raw.get("chunks"))
         notebook_studios = _normalize_notebook_studios(raw.get("notebook_studios"))
+        quota_blocks = _normalize_quota_blocks(raw.get("quota_blocks"))
+        if not quota_blocks:
+            quota_blocks = _legacy_quota_blocks(raw.get("quota_block"))
         return cls(
             path,
             notebook_id=notebook_id,
             notebook_title=notebook_title,
             chunks=chunks,
             notebook_studios=notebook_studios,
+            quota_blocks=quota_blocks,
         )
 
     async def set_notebook(self, *, notebook_id: str, notebook_title: str | None) -> None:
@@ -163,6 +169,70 @@ class RunStateStore:
     def uploaded_chunk(self, file_name: str, *, content_hash: str) -> tuple[str, str | None] | None:
         return self.uploaded_source(file_name, content_hash=content_hash)
 
+    def uploaded_chunk_sources(self) -> list[dict[str, str | None]]:
+        uploaded: list[dict[str, str | None]] = []
+        for file_name in sorted(self._chunks):
+            entry = _normalize_chunk_entry(self._chunks.get(file_name))
+            source = _normalize_source_state(entry.get("source"))
+            if source.get("status") != "uploaded":
+                continue
+            source_id = _read_optional_str(source.get("source_id"))
+            if source_id is None:
+                continue
+            uploaded.append(
+                {
+                    "file_name": file_name,
+                    "source_id": source_id,
+                    "remote_title": _read_optional_str(source.get("remote_title")),
+                }
+            )
+        return uploaded
+
+    def quota_blocks(self, *, studio_names: tuple[str, ...] | list[str] | set[str] | None = None) -> dict[str, dict[str, Any]]:
+        allowed = set(studio_names) if studio_names is not None else None
+        blocks: dict[str, dict[str, Any]] = {}
+        for studio_name in sorted(self._quota_blocks):
+            if allowed is not None and studio_name not in allowed:
+                continue
+            block = _normalize_quota_block(self._quota_blocks.get(studio_name))
+            blocked_until = _read_optional_str(block.get("blocked_until"))
+            if blocked_until is None:
+                continue
+            blocks[studio_name] = block
+        return blocks
+
+    def quota_block(self, studio_name: str) -> dict[str, Any] | None:
+        block = _normalize_quota_block(self._quota_blocks.get(studio_name))
+        blocked_until = _read_optional_str(block.get("blocked_until"))
+        if blocked_until is None:
+            return None
+        return block
+
+    async def record_quota_block(
+        self,
+        *,
+        studio_name: str,
+        blocked_until: str,
+        error: str,
+        source_file: str | None = None,
+    ) -> None:
+        async with self._lock:
+            self._quota_blocks[studio_name] = {
+                "blocked_until": blocked_until,
+                "last_error": error,
+                "source_file": source_file,
+                "updated_at": _timestamp_now(),
+            }
+            self._write()
+
+    async def clear_quota_block(self, studio_name: str | None = None) -> None:
+        async with self._lock:
+            if studio_name is None:
+                self._quota_blocks = {}
+            else:
+                self._quota_blocks.pop(studio_name, None)
+            self._write()
+
     async def record_uploaded_chunk(
         self,
         *,
@@ -184,7 +254,6 @@ class RunStateStore:
         file_name: str,
         studio_name: str,
         content_hash: str,
-        output_path: Path,
     ) -> dict[str, Any] | None:
         studio_state = self._chunk_studio_state(
             file_name=file_name,
@@ -194,8 +263,6 @@ class RunStateStore:
         if studio_state is None:
             return None
         if studio_state.get("status") != "completed":
-            return None
-        if not output_path.is_file():
             return None
         return studio_state
 
@@ -269,6 +336,7 @@ class RunStateStore:
             remote_title=remote_title,
             error=None,
         )
+        await self.clear_quota_block(studio_name)
 
     async def record_pending_chunk_studio(
         self,
@@ -295,11 +363,9 @@ class RunStateStore:
             next_retry_at=next_retry_at,
         )
 
-    def completed_notebook_studio(self, *, studio_name: str, output_path: Path) -> dict[str, Any] | None:
+    def completed_notebook_studio(self, *, studio_name: str) -> dict[str, Any] | None:
         entry = _normalize_studio_state(self._notebook_studios.get(studio_name))
         if entry.get("status") != "completed":
-            return None
-        if not output_path.is_file():
             return None
         return entry
 
@@ -352,6 +418,7 @@ class RunStateStore:
             remote_title=remote_title,
             error=None,
         )
+        await self.clear_quota_block(studio_name)
 
     async def record_pending_notebook_studio(
         self,
@@ -419,6 +486,7 @@ class RunStateStore:
             "notebook_title": self.notebook_title,
             "chunks": self._chunks,
             "notebook_studios": self._notebook_studios,
+            "quota_blocks": self._quota_blocks,
         }
         try:
             self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -453,6 +521,37 @@ def _normalize_notebook_studios(value: Any) -> dict[str, dict[str, Any]]:
             continue
         normalized[studio_name] = _normalize_studio_state(entry)
     return normalized
+
+
+def _legacy_quota_blocks(value: Any) -> dict[str, dict[str, Any]]:
+    raw = value if isinstance(value, dict) else {}
+    block = _normalize_quota_block(raw)
+    studio_name = _read_optional_str(raw.get("studio_name"))
+    blocked_until = _read_optional_str(block.get("blocked_until"))
+    if studio_name is None or blocked_until is None:
+        return {}
+    return {studio_name: block}
+
+
+def _normalize_quota_blocks(value: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, dict[str, Any]] = {}
+    for studio_name, block in value.items():
+        if not isinstance(studio_name, str):
+            continue
+        normalized[studio_name] = _normalize_quota_block(block)
+    return normalized
+
+
+def _normalize_quota_block(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    return {
+        "blocked_until": _read_optional_str(raw.get("blocked_until")),
+        "last_error": _read_optional_str(raw.get("last_error")) or _read_optional_str(raw.get("error")),
+        "source_file": _read_optional_str(raw.get("source_file")),
+        "updated_at": _read_optional_str(raw.get("updated_at")),
+    }
 
 
 def _normalize_chunk_entry(value: Any) -> dict[str, Any]:

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from notebooklm_chunker.chunker import chunk_filename
+from notebooklm_chunker.chunker import chunk_filenames
 from notebooklm_chunker.models import Chunk, ExportResult
 
 
@@ -15,7 +15,8 @@ def export_markdown_chunks(
     reporter: Callable[[str], None] | None = None,
 ) -> ExportResult:
     output_dir.mkdir(parents=True, exist_ok=True)
-    expected_filenames = {chunk_filename(chunk) for chunk in chunks}
+    filenames_by_id = chunk_filenames(chunks)
+    expected_filenames = set(filenames_by_id.values())
     removed_stale = _remove_stale_chunk_files(output_dir, expected_filenames)
     if reporter is not None and removed_stale:
         reporter(f"export: removed {removed_stale} stale chunk file(s)")
@@ -25,7 +26,7 @@ def export_markdown_chunks(
 
     total_chunks = len(chunks)
     for index, chunk in enumerate(chunks, start=1):
-        filename = chunk_filename(chunk)
+        filename = filenames_by_id[chunk.chunk_id]
         chunk_path = output_dir / filename
         chunk_path.write_text(chunk.markdown, encoding="utf-8")
         written_files.append(str(chunk_path))

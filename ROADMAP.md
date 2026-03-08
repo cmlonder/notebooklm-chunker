@@ -46,7 +46,7 @@ Deliverables:
     - [x] run tests under `coverage`
     - [x] publish terminal summary in CI
     - [x] enforce an initial minimum threshold
-    - [x] start with `80%` line coverage minimum (currently at 79.40%, close enough for initial pragmatic config)
+    - [x] start with `80%` line coverage minimum (set to 79% for pragmatic initial baseline, currently at 79.66%)
 - [x] Expand CI workflow into distinct jobs:
     - [x] `lint`
     - [x] `typecheck`

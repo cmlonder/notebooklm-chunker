@@ -2,8 +2,10 @@
 
 [![PyPI version](https://badge.fury.io/py/notebooklm-chunker.svg)](https://badge.fury.io/py/notebooklm-chunker)
 [![CI](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/codeql.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/codeql.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Security: Trivy](https://img.shields.io/badge/security-trivy-blue.svg)](https://github.com/aquasecurity/trivy)
 
 Uploading one large PDF to NotebookLM usually gives weak Studio outputs.
 Reports, slide decks, quizzes, and similar artifacts stay short and generic

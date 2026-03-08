@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-background-dark/80 backdrop-blur-xl px-6 md:px-12 py-3">
+<div class="flex items-center gap-3">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-xl">deployed_code</span>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold tracking-tight">NotebookLM Chunker</h2>
+</div>
+<nav class="hidden md:flex flex-1 justify-center">
+<div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl">
+<a class="px-4 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">Source</a>
+<a class="px-4 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">Structure</a>
+<a class="px-4 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors" href="#">Sync</a>
+<a class="px-4 py-1.5 text-sm font-semibold bg-white dark:bg-slate-700 text-primary shadow-sm rounded-lg" href="#">Studio</a>
+</div>
+</nav>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm">
+<div class="size-6 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xs">person</span>
+</div>
+<span class="text-xs font-medium text-slate-700 dark:text-slate-300">Alex Rivers</span>
+</div>
+</div>
+</header>
+<main class="flex-1 max-w-6xl mx-auto w-full px-6 py-12 md:px-12">
+<div class="mb-12">
+<h1 class="text-4xl md:text-5xl font-black tracking-tight text-slate-900 dark:text-slate-100 mb-3">Knowledge Studio</h1>
+<p class="text-lg text-slate-500 dark:text-slate-400">Generate AI-powered insights from your synced chunks.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<div class="group relative flex flex-col bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+<div class="aspect-video w-full bg-gradient-to-br from-primary/10 to-primary/30 flex items-center justify-center" data-alt="Abstract gradient background with waveform overlay">
+<span class="material-symbols-outlined text-6xl text-primary opacity-80 group-hover:scale-110 transition-transform">waves</span>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">Audio Deep Dive</h3>
+<span class="material-symbols-outlined text-primary">play_circle</span>
+</div>
+<div class="flex items-center gap-2 mb-4">
+<div class="size-2 rounded-full bg-emerald-500"></div>
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400">Status: Ready to generate</p>
+</div>
+<button class="w-full py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+                            Generate Audio
+                        </button>
+</div>
+</div>
+<div class="group relative flex flex-col bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+<div class="aspect-video w-full bg-gradient-to-br from-indigo-500/10 to-indigo-500/30 flex items-center justify-center" data-alt="Abstract layered rectangles representing flashcards">
+<span class="material-symbols-outlined text-6xl text-indigo-500 opacity-80 group-hover:scale-110 transition-transform">style</span>
+</div>
+<div class="p-6">
+<div class="flex justify-between items-start mb-2">
+<h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">Flashcard Deck</h3>
+<div class="flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                                Ready
+                            </div>
+</div>
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">Status: Finished • 42 Cards</p>
+<div class="flex gap-2">
+<button class="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                                View Deck
+                            </button>
+<button class="px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+</div>
+</div>
+<div class="group relative flex flex-col bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+<div class="aspect-video w-full bg-gradient-to-br from-slate-400/10 to-slate-400/30 flex items-center justify-center" data-alt="Faded document icon behind a glass effect">
+<span class="material-symbols-outlined text-6xl text-slate-400 opacity-50">description</span>
+</div>
+<div class="absolute inset-0 z-10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md flex flex-col items-center justify-center text-center p-6">
+<div class="mb-4">
+<span class="material-symbols-outlined text-4xl text-slate-700 dark:text-slate-200">lock_clock</span>
+</div>
+<h4 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">Quota hit</h4>
+<p class="text-sm text-slate-600 dark:text-slate-300 mb-6">Daily generation limit reached.</p>
+<div class="flex gap-3 w-full">
+<div class="flex-1 flex flex-col items-center p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/40 dark:border-slate-700/40 shadow-sm">
+<p class="text-2xl font-black text-primary tracking-tighter">04</p>
+<p class="text-[10px] font-bold uppercase text-slate-500">Min</p>
+</div>
+<div class="flex-1 flex flex-col items-center p-3 bg-white/60 dark:bg-slate-800/60 rounded-xl border border-white/40 dark:border-slate-700/40 shadow-sm">
+<p class="text-2xl font-black text-primary tracking-tighter">59</p>
+<p class="text-[10px] font-bold uppercase text-slate-500">Sec</p>
+</div>
+</div>
+<p class="mt-4 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Ready in 04:59</p>
+</div>
+<div class="p-6 opacity-40">
+<h3 class="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">Briefing Document</h3>
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">Status: Quota hit</p>
+<button class="w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-400 font-bold rounded-lg cursor-not-allowed">
+                            Generate Document
+                        </button>
+</div>
+</div>
+</div>
+<div class="mt-16 flex flex-col items-center justify-center gap-6 p-8 bg-primary/5 rounded-xl border border-primary/20">
+<div class="text-center">
+<h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Need more horsepower?</h2>
+<p class="text-slate-600 dark:text-slate-400">Unlock unlimited generations and higher quality models with NotebookLM Pro.</p>
+</div>
+<button class="px-8 py-3 bg-primary text-white font-bold rounded-full hover:bg-primary/90 transition-all shadow-xl shadow-primary/25 scale-100 hover:scale-105">
+                    Upgrade to Pro
+                </button>
+</div>
+</main>
+<footer class="px-6 py-8 border-t border-slate-200 dark:border-slate-800 text-center">
+<p class="text-xs font-medium text-slate-500 dark:text-slate-500 uppercase tracking-widest">NotebookLM Chunker • Studio Beta v0.8.2</p>
+</footer>
+</div>
+</body></html>

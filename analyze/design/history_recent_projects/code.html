@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NotebookLM Chunker - Recent Projects</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display">
+<div class="relative flex min-h-screen w-full flex-col">
+<!-- Header / Navigation -->
+<header class="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md px-6 md:px-20 py-4">
+<div class="flex items-center gap-10">
+<div class="flex items-center gap-3">
+<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white">
+<span class="material-symbols-outlined text-2xl">description</span>
+</div>
+<h2 class="text-xl font-bold tracking-tight">NotebookLM Chunker</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-xl">add_circle</span>
+                    New Project
+                </a>
+<a class="flex items-center gap-2 text-sm font-semibold text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-xl">history</span>
+                    History
+                </a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary">search</span>
+<input class="h-10 w-64 rounded-full border-none bg-slate-100 dark:bg-slate-800 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" placeholder="Search projects..." type="text"/>
+</div>
+<div class="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 overflow-hidden">
+<img class="h-full w-full object-cover" data-alt="User profile avatar smiling" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcKHfNBhVxjUCr2lYuAzrZMYxA5F9oH6Hppq8VzrrxdiwyGvmtN_CPqdzBsbWnP_RLH87PVsnpRQA6bhqgSGal8mIn3R7ubFsR3N0KhrctPrPHxrozJe55GagZKoUuYZnu49x8NdQNW-b9SzQUapiY1SJc2lfusB2gMWGCi4ZfzkuY82p3Mlswl_M_uTo4k9DDHaeSWn2UZW58s4y2NoG_ld7wn0xgnD4rRZ_JcXZq2sPcdEzHt-P3zCqtClKIjA7NhtK-BHWJKpk"/>
+</div>
+</div>
+</header>
+<main class="mx-auto w-full max-w-7xl px-6 md:px-20 py-12">
+<div class="mb-10 flex flex-col gap-2">
+<h1 class="text-4xl font-black tracking-tight text-slate-900 dark:text-white">Recent Projects</h1>
+<p class="text-lg text-slate-500">Manage and resume your document processing tasks with ease.</p>
+</div>
+<!-- Projects Table -->
+<div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Project Name</th>
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Date Modified</th>
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Status</th>
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400 text-right">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<!-- Project Row 1: Completed -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-8">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+<span class="material-symbols-outlined text-2xl">article</span>
+</div>
+<span class="text-base font-semibold text-slate-900 dark:text-white">Quarterly Report Analysis 2023</span>
+</div>
+</td>
+<td class="px-6 py-8">
+<span class="text-sm text-slate-500">Oct 24, 2023, 2:45 PM</span>
+</td>
+<td class="px-6 py-8">
+<div class="flex items-center gap-2">
+<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+<span class="text-sm font-medium text-emerald-600">Completed</span>
+</div>
+</td>
+<td class="px-6 py-8 text-right">
+<button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 transition-all shadow-sm">
+                                    Open in Studio
+                                </button>
+</td>
+</tr>
+<!-- Project Row 2: In Progress -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-8">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+<span class="material-symbols-outlined text-2xl">pending_actions</span>
+</div>
+<span class="text-base font-semibold text-slate-900 dark:text-white">Research Paper Digest - AI Ethics</span>
+</div>
+</td>
+<td class="px-6 py-8">
+<span class="text-sm text-slate-500">Oct 23, 2023, 11:12 AM</span>
+</td>
+<td class="px-6 py-8">
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+<span>Progressing</span>
+<span>45%</span>
+</div>
+<div class="h-1.5 w-48 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+<div class="h-full bg-primary rounded-full" style="width: 45%;"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-8 text-right">
+<button class="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                                    Resume Task
+                                </button>
+</td>
+</tr>
+<!-- Project Row 3: Completed -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-8">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+<span class="material-symbols-outlined text-2xl">gavel</span>
+</div>
+<span class="text-base font-semibold text-slate-900 dark:text-white">Legal Briefing - Case #402-B</span>
+</div>
+</td>
+<td class="px-6 py-8">
+<span class="text-sm text-slate-500">Oct 21, 2023, 09:30 AM</span>
+</td>
+<td class="px-6 py-8">
+<div class="flex items-center gap-2">
+<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+<span class="text-sm font-medium text-emerald-600">Completed</span>
+</div>
+</td>
+<td class="px-6 py-8 text-right">
+<button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white hover:bg-primary/90 transition-all shadow-sm">
+                                    Open in Studio
+                                </button>
+</td>
+</tr>
+<!-- Project Row 4: Skeleton / In Progress -->
+<tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+<td class="px-6 py-8">
+<div class="flex items-center gap-4">
+<div class="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400">
+<span class="material-symbols-outlined text-2xl">auto_stories</span>
+</div>
+<span class="text-base font-semibold text-slate-900 dark:text-white">Product Strategy 2024 Roadmap</span>
+</div>
+</td>
+<td class="px-6 py-8">
+<span class="text-sm text-slate-500">Oct 20, 2023, 5:10 PM</span>
+</td>
+<td class="px-6 py-8">
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+<span>Paused</span>
+<span>12%</span>
+</div>
+<div class="h-1.5 w-48 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+<div class="h-full bg-slate-300 dark:bg-slate-500 rounded-full" style="width: 12%;"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-8 text-right">
+<button class="inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                                    Resume Task
+                                </button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Footer / Pagination -->
+<div class="mt-8 flex items-center justify-between text-sm text-slate-500">
+<p>Showing 4 of 24 projects</p>
+<div class="flex items-center gap-2">
+<button class="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_left</span>
+</button>
+<button class="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 bg-primary text-white">1</button>
+<button class="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 transition-colors">2</button>
+<button class="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 transition-colors">3</button>
+<button class="flex h-8 w-8 items-center justify-center rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Floating Action Button for Mobile -->
+<div class="fixed bottom-8 right-8 md:hidden">
+<button class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg hover:scale-105 transition-transform active:scale-95">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+</div>
+</body></html>

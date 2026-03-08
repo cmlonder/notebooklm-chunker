@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007aff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "12px",
+                        "lg": "16px",
+                        "xl": "24px",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex min-h-screen flex-col">
+<header class="sticky top-0 z-50 glass border-b border-slate-200/50 dark:border-slate-800/50 px-6 py-4">
+<div class="max-w-6xl mx-auto flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="bg-primary text-white p-1.5 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-xl font-bold">folder_zip</span>
+</div>
+<h1 class="text-xl font-bold tracking-tight">NotebookLM Chunker</h1>
+</div>
+<nav class="hidden md:flex items-center gap-1 bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl">
+<a class="px-4 py-1.5 rounded-lg bg-white dark:bg-slate-700 shadow-sm text-sm font-semibold text-primary" href="#">Source</a>
+<a class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors" href="#">Structure</a>
+<a class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors" href="#">Sync</a>
+<a class="px-4 py-1.5 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors" href="#">Studio</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center size-10 rounded-full hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-300">settings</span>
+</button>
+<div class="size-10 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden ring-2 ring-white dark:ring-slate-900 shadow-sm">
+<img alt="User profile" data-alt="Minimalist geometric user profile avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPUYg4jEjD_jp56vVOuTNuZYch8fRhnPK2inFnGdDctAp-7DoZNyUa1MRIseDcZYBi6Gap71de63X00t-CmOIrFGQHvNgy-IpFsAgfR1PiGTP6g_LcFaaYE5Zm7heQ9dKNMTYeWAduXn5utNDncjHtg6h7msGJpXziTzHhwaHPE8HeaPfTvBwqFlnE3A4RttLMAVRWRsavNdYSakj32wWRm1cU1Z-oXYFP1y04EqQLRdKGZfZVGcIO8Wc7I0wELh0pkry2T6qKi4A"/>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-1 flex flex-col items-center justify-center p-6 sm:p-12">
+<div class="w-full max-w-4xl flex flex-col items-center">
+<div class="text-center mb-10">
+<h2 class="text-4xl font-bold tracking-tight mb-3">Add your knowledge</h2>
+<p class="text-slate-500 dark:text-slate-400 text-lg max-w-md mx-auto">
+                        Upload a PDF to start chunking your knowledge base. Files are processed locally.
+                    </p>
+</div>
+<div class="w-full aspect-[16/9] md:aspect-[21/9] glass rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center p-8 transition-all hover:border-primary/50 group cursor-pointer">
+<div class="flex flex-col items-center gap-6">
+<div class="size-20 bg-primary/10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110">
+<span class="material-symbols-outlined text-primary text-5xl font-light">add_circle</span>
+</div>
+<div class="text-center">
+<p class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-1">Drag your file here</p>
+<p class="text-sm text-slate-400 dark:text-slate-500">or click to browse from your computer</p>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-white font-semibold py-2.5 px-8 rounded-full shadow-lg shadow-primary/20 transition-all active:scale-95">
+                            Select PDF
+                        </button>
+</div>
+</div>
+<div class="mt-12 flex flex-col items-center gap-4">
+<div class="flex items-center gap-3 py-2 px-4 bg-white/50 dark:bg-slate-800/50 rounded-full border border-slate-200 dark:border-slate-700">
+<span class="material-symbols-outlined text-slate-400 text-sm">info</span>
+<p class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Once a file is added, a sleek file card and 'Analyze' button will appear.
+                        </p>
+</div>
+</div>
+</div>
+</main>
+<footer class="p-8 text-center">
+<div class="flex items-center justify-center gap-8 text-xs font-medium text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+<span>Privacy First</span>
+<span>•</span>
+<span>Local Processing</span>
+<span>•</span>
+<span>PDF Optimized</span>
+</div>
+</footer>
+</div>
+</body></html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>System Health - NotebookLM Chunker</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#007bff",
+              "background-light": "#f5f7f8",
+              "background-dark": "#0f1923",
+              "apple-green": "#34c759",
+              "apple-red": "#ff3b30",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md px-10 py-3 sticky top-0 z-50">
+<div class="flex items-center gap-3 text-slate-900 dark:text-slate-100">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-xl">auto_awesome_motion</span>
+</div>
+<h2 class="text-slate-900 dark:text-white text-lg font-bold leading-tight tracking-tight">NotebookLM Chunker</h2>
+</div>
+<div class="flex flex-1 justify-end gap-8">
+<nav class="flex items-center gap-8">
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-sm font-medium" href="#">Source</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-sm font-medium" href="#">Structure</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-sm font-medium" href="#">Sync</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors text-sm font-medium" href="#">Studio</a>
+</nav>
+<div class="flex items-center gap-3">
+<button class="flex size-10 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined">health_and_safety</span>
+</button>
+<div class="bg-slate-200 dark:bg-slate-700 rounded-full size-10 overflow-hidden border border-slate-300 dark:border-slate-600">
+<img class="w-full h-full object-cover" data-alt="User profile avatar placeholder" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9EfY2sa1BIdItE_erYnumQGamlczttldBUejk-zzP4-5enQMUorBHrvVqNE-F4HzLMm5mYasQfYchS6SDp6TEYgm4JrzXd1MNJJt0YhCQMftWCn9VO1hWQHRVh9rGCWRuKJixO1vKJg89OPw4K0WiZ6AvVP7VvZlel4HvrVlg1m5AQp75oA9J47qUeP772pQMa28xdgPAPaqMU3EOfyvBX0N4XIWwE7kziAJdOOKSD6p3NksL-qUhzaH4ywdr08Z0R2MHaHl5TDY"/>
+</div>
+</div>
+</div>
+</header>
+<main class="flex flex-1 justify-center py-8">
+<div class="layout-content-container flex flex-col max-w-[960px] flex-1 px-6">
+<div class="flex flex-wrap justify-between items-end gap-3 mb-8">
+<div>
+<p class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-widest mb-1">Diagnostics</p>
+<h1 class="text-slate-900 dark:text-white text-4xl font-extrabold leading-tight tracking-tight">System Health</h1>
+</div>
+<button class="bg-primary text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">refresh</span>
+                            Run Full Scan
+                        </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+<div class="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-5 shadow-sm">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined">settings_input_component</span>
+</div>
+<span class="px-2 py-1 bg-apple-green/10 text-apple-green text-[10px] font-bold uppercase rounded tracking-wider">Pass</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-slate-900 dark:text-white text-base font-bold">nblm Engine</h3>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Core services operational</p>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-5 shadow-sm">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined">person_pin</span>
+</div>
+<span class="px-2 py-1 bg-apple-green/10 text-apple-green text-[10px] font-bold uppercase rounded tracking-wider">Pass</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-slate-900 dark:text-white text-base font-bold">Google Auth</h3>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">OAuth2 token is valid</p>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl border-2 border-apple-red/30 bg-white dark:bg-slate-900/50 p-5 shadow-sm relative overflow-hidden">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-apple-red/10 rounded-lg text-apple-red">
+<span class="material-symbols-outlined">browser_updated</span>
+</div>
+<span class="px-2 py-1 bg-apple-red/10 text-apple-red text-[10px] font-bold uppercase rounded tracking-wider">Fail</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-slate-900 dark:text-white text-base font-bold">Playwright Driver</h3>
+<button class="mt-3 w-full bg-apple-red text-white py-1.5 rounded-lg text-xs font-bold hover:bg-apple-red/90 transition-colors">Install Driver</button>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-5 shadow-sm">
+<div class="flex justify-between items-start">
+<div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined">database</span>
+</div>
+<span class="px-2 py-1 bg-apple-green/10 text-apple-green text-[10px] font-bold uppercase rounded tracking-wider">Pass</span>
+</div>
+<div class="flex flex-col">
+<h3 class="text-slate-900 dark:text-white text-base font-bold">Local Storage</h3>
+<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">4.2 GB available</p>
+</div>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+<div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center">
+<h2 class="text-slate-900 dark:text-white text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">description</span>
+                                System Report
+                            </h2>
+<button class="text-primary text-sm font-semibold hover:underline flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">download</span>
+                                Export Logs
+                            </button>
+</div>
+<div class="p-0">
+<div class="grid grid-cols-[240px_1fr] divide-y divide-slate-100 dark:divide-slate-800">
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Software Version</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-mono">v1.2.4-stable (build 8829)</div>
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Binary Path</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-mono">/usr/local/bin/nblm-chunker-core</div>
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Auth Status</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+<div class="size-2 rounded-full bg-apple-green"></div>
+                                    Authenticated via Google Cloud (OAuth2)
+                                </div>
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Driver Status</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm flex items-center gap-2">
+<div class="size-2 rounded-full bg-apple-red"></div>
+<span class="text-apple-red font-semibold">Missing Driver Dependency</span>
+</div>
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Operating System</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm">macOS 14.5 (23F79) - Sonoma</div>
+<div class="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold bg-slate-50/50 dark:bg-slate-800/20">Uptime</div>
+<div class="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm">12 days, 4 hours, 12 minutes</div>
+</div>
+</div>
+</div>
+<div class="mt-8 p-6 rounded-xl bg-primary/5 border border-primary/20 flex items-start gap-4">
+<div class="p-2 bg-primary/10 rounded-lg text-primary">
+<span class="material-symbols-outlined">info</span>
+</div>
+<div>
+<h4 class="text-primary font-bold text-sm">Pro Tip</h4>
+<p class="text-primary/80 text-sm mt-1">You can automatically fix driver issues by running the "Install Driver" action above. This will download the appropriate Playwright binaries for your architecture.</p>
+</div>
+</div>
+</div>
+</main>
+<footer class="border-t border-slate-200 dark:border-slate-800 py-6 px-10">
+<div class="max-w-[960px] mx-auto flex justify-between items-center text-xs text-slate-400">
+<p>© 2024 NotebookLM Chunker. All rights reserved.</p>
+<div class="flex gap-4">
+<a class="hover:text-primary transition-colors" href="#">Documentation</a>
+<a class="hover:text-primary transition-colors" href="#">Support</a>
+<a class="hover:text-primary transition-colors" href="#">API Keys</a>
+</div>
+</div>
+</footer>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NotebookLM Chunker - Error Recovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                        "system-orange": "#ff9500",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .mac-blur {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .modal-shadow {
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen relative overflow-hidden">
+<!-- Background State (Blurred Sync Screen) -->
+<div class="absolute inset-0 z-0 flex flex-col blur-sm opacity-60 pointer-events-none">
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-10 py-4 bg-white/80 dark:bg-slate-900/80">
+<div class="flex items-center gap-3">
+<div class="text-primary">
+<span class="material-symbols-outlined text-3xl">book_2</span>
+</div>
+<h2 class="text-lg font-bold tracking-tight">NotebookLM Chunker</h2>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+</div>
+</header>
+<main class="max-w-4xl mx-auto w-full p-8 space-y-6">
+<div class="flex border-b border-slate-200 dark:border-slate-800 gap-8">
+<div class="pb-3 border-b-2 border-transparent text-slate-500 font-semibold text-sm">All Chunks</div>
+<div class="pb-3 border-b-2 border-primary text-primary font-semibold text-sm">Sync</div>
+<div class="pb-3 border-b-2 border-transparent text-slate-500 font-semibold text-sm">Trash</div>
+</div>
+<!-- Chunk List Items -->
+<div class="space-y-3">
+<!-- Healthy Chunk -->
+<div class="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<p class="font-medium">Chunk #4</p>
+<p class="text-xs text-slate-500">Synced 2 mins ago</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-green-500">check_circle</span>
+</div>
+<!-- Failed Chunk -->
+<div class="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-lg border-2 border-system-orange/30">
+<div class="flex items-center gap-4">
+<div class="p-2 bg-system-orange/10 rounded-lg text-system-orange">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<p class="font-medium text-slate-900 dark:text-slate-100">Chunk #5</p>
+<p class="text-xs text-system-orange font-medium">Failed to upload</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700">
+<span class="material-symbols-outlined text-base">magic_button</span>
+                            Smart Split
+                        </button>
+<span class="material-symbols-outlined text-system-orange">error</span>
+</div>
+</div>
+<!-- Another healthy chunk -->
+<div class="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800">
+<div class="flex items-center gap-4">
+<div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div>
+<p class="font-medium">Chunk #6</p>
+<p class="text-xs text-slate-500">Waiting...</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Overlay Layer -->
+<div class="absolute inset-0 z-10 flex items-center justify-center bg-black/5 dark:bg-black/20">
+<!-- Fix Modal -->
+<div class="w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl p-8 modal-shadow flex flex-col items-center text-center space-y-4 border border-slate-200 dark:border-slate-800">
+<div class="size-14 bg-system-orange/10 rounded-full flex items-center justify-center text-system-orange">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1">warning</span>
+</div>
+<div class="space-y-2">
+<h3 class="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Upload Interrupted</h3>
+<p class="text-slate-600 dark:text-slate-400 text-sm leading-relaxed px-2">
+                    We couldn't upload Chunk #5 due to a temporary connection issue. Should we try again?
+                </p>
+</div>
+<div class="flex flex-col w-full gap-2 pt-2">
+<button class="w-full py-2.5 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-colors">
+                    Try Again
+                </button>
+<button class="w-full py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    Cancel
+                </button>
+</div>
+</div>
+</div>
+<!-- Non-Intrusive Toast -->
+<div class="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
+<div class="bg-white/90 dark:bg-slate-800/90 mac-blur border border-slate-200 dark:border-slate-700 px-4 py-2.5 rounded-full shadow-lg flex items-center gap-3 animate-bounce">
+<div class="size-2 rounded-full bg-system-orange ring-4 ring-system-orange/20"></div>
+<p class="text-sm font-medium text-slate-700 dark:text-slate-200">Sync paused. 1 item needs attention.</p>
+<div class="h-4 w-[1px] bg-slate-300 dark:bg-slate-600 ml-1"></div>
+<button class="text-primary text-xs font-bold hover:underline">View</button>
+</div>
+</div>
+</body></html>

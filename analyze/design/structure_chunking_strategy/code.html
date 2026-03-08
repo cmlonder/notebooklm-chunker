@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NotebookLM Chunker - Structure</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #007bff;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200/60 bg-white/80 backdrop-blur-md px-6 md:px-20 py-4 sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-xl">auto_stories</span>
+</div>
+<h2 class="text-slate-900 text-lg font-bold leading-tight tracking-tight">NotebookLM Chunker</h2>
+</div>
+<nav class="hidden md:flex flex-1 justify-center gap-8">
+<div class="flex items-center gap-10">
+<a class="text-slate-500 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-lg">upload_file</span> Source
+                        </a>
+<a class="text-primary text-sm font-semibold flex items-center gap-1 relative after:content-[''] after:absolute after:-bottom-5 after:left-0 after:right-0 after:h-0.5 after:bg-primary" href="#">
+<span class="material-symbols-outlined text-lg">table_rows</span> Structure
+                        </a>
+<a class="text-slate-500 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-lg">sync</span> Sync
+                        </a>
+<a class="text-slate-500 text-sm font-medium hover:text-primary transition-colors flex items-center gap-1" href="#">
+<span class="material-symbols-outlined text-lg">auto_awesome</span> Studio
+                        </a>
+</div>
+</nav>
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center rounded-full size-10 bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all">
+<span class="material-symbols-outlined text-xl">settings</span>
+</button>
+<div class="bg-primary/10 p-0.5 rounded-full border border-primary/20">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-8" data-alt="User profile avatar circle" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAWVwuSixHFS24zJQ3GbGMQpc1-irDxocULLuxfRIrmtlOqbrYpIkC09pS9iJ4P4MhFZTOtZ-br9XSR10LwA395vhKZlhun9FXp3oUAocq5sQ28Z0R22MUsH7RPnSaUK7DqYgUNvQ-vS463oWKhqAa2zxUOmsiUsY9sIfUhcKjmboEecMALNzlmzmlJy-gS96ck8L46XbrkJA6ruE2VvRzrOGRtYGmyXtoOPYxB12ydo5zYcb22KNggRmzLRyPP-vM1E7Y3uiObBSo");'></div>
+</div>
+</div>
+</header>
+<main class="flex flex-1 justify-center py-10 px-6">
+<div class="layout-content-container flex flex-col max-w-[800px] flex-1 gap-8">
+<div class="flex flex-col gap-2">
+<div class="flex items-center gap-2 text-primary text-sm font-semibold uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm">step_into</span> Step 2 of 4
+                        </div>
+<h1 class="text-slate-900 text-4xl font-extrabold tracking-tight">Structure your content</h1>
+<p class="text-slate-500 text-lg">Define how your document is partitioned for the AI model.</p>
+</div>
+<div class="glass-card rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+<div class="flex gap-4 items-center">
+<div class="size-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">bolt</span>
+</div>
+<div class="flex flex-col">
+<p class="text-slate-900 text-lg font-bold leading-tight">Smart Mode</p>
+<p class="text-slate-500 text-sm">Automatically optimize chunking based on content density.</p>
+</div>
+</div>
+<label class="relative flex h-[32px] w-[56px] cursor-pointer items-center rounded-full border-none bg-primary p-1">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="h-6 w-6 rounded-full bg-white shadow-sm transition-all peer-checked:translate-x-6"></div>
+</label>
+</div>
+<div class="flex flex-col gap-6">
+<h2 class="text-slate-900 text-2xl font-bold tracking-tight px-1 flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-400">tune</span>
+                            Chunking Strategy
+                        </h2>
+<div class="glass-card rounded-2xl p-8 shadow-sm flex flex-col gap-10">
+<div class="flex flex-col gap-4">
+<label class="text-slate-700 font-semibold text-sm uppercase tracking-wide">Presets</label>
+<div class="grid grid-cols-3 p-1.5 bg-slate-100 rounded-xl">
+<button class="py-2.5 px-4 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700">Concise</button>
+<button class="py-2.5 px-4 rounded-lg text-sm font-bold bg-white text-primary shadow-sm border border-slate-200/50">Balanced</button>
+<button class="py-2.5 px-4 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-700">Detailed</button>
+</div>
+</div>
+<div class="flex flex-col gap-6">
+<div class="flex justify-between items-end">
+<label class="text-slate-700 font-semibold text-sm uppercase tracking-wide">Target Chunk Length</label>
+<span class="text-primary font-bold text-2xl">4.5 <span class="text-slate-400 text-sm font-medium">pages</span></span>
+</div>
+<div class="relative w-full h-2 bg-slate-200 rounded-full">
+<div class="absolute top-0 left-0 h-full bg-primary rounded-full w-[45%]"></div>
+<input class="absolute top-0 w-full h-full opacity-0 cursor-pointer z-10" max="10" min="1" step="0.5" type="range" value="4.5"/>
+</div>
+<div class="flex justify-between text-xs text-slate-400 font-medium px-1">
+<span>Single Page</span>
+<span>Whole Chapter</span>
+</div>
+</div>
+<div class="bg-primary/5 border border-primary/10 rounded-xl p-4 flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="text-primary/80 font-medium text-sm">This strategy will create approximately <span class="font-bold underline decoration-2 underline-offset-4">14 chunks</span> for your document.</p>
+</div>
+</div>
+</div>
+<div class="border-t border-slate-200 pt-4">
+<button class="group flex w-full items-center justify-between py-4 px-2 hover:bg-slate-50 rounded-lg transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">settings_input_component</span>
+<span class="text-slate-700 font-semibold">Advanced Parameters</span>
+</div>
+<span class="material-symbols-outlined text-slate-400">expand_more</span>
+</button>
+<div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6 px-2">
+<div class="flex flex-col gap-2">
+<label class="text-xs font-bold text-slate-400 uppercase">Words per Page (Avg)</label>
+<input class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" type="number" value="500"/>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-xs font-bold text-slate-400 uppercase">Overlap Margin (%)</label>
+<input class="w-full bg-white border border-slate-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" type="number" value="10"/>
+</div>
+</div>
+</div>
+<div class="flex justify-end pt-8 pb-12 border-t border-slate-200">
+<button class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-10 py-4 rounded-xl font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]">
+                            Continue to Sync
+                            <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>

@@ -44,7 +44,7 @@ For local development and contribution flow, see `DEVELOPMENT.md`.
 From PyPI:
 
 ```bash
-pip install "notebooklm-chunker[full]"
+pip install notebooklm-chunker
 python -m playwright install chromium
 nblm login
 ```
@@ -52,7 +52,7 @@ nblm login
 From a local checkout:
 
 ```bash
-python -m pip install "/ABS/PATH/notebooklm-chunker[full]"
+python -m pip install /ABS/PATH/notebooklm-chunker
 python -m playwright install chromium
 nblm login
 ```

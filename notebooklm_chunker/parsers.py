@@ -95,7 +95,7 @@ def parse_pdf(
         return pypdf_blocks
 
     raise UnsupportedDocumentError(
-        "PDF parsing requires PyMuPDF (`fitz`) or `pypdf`. Install `notebooklm-chunker[pdf]` for the easy path."
+        "PDF parsing requires PyMuPDF (`fitz`) or `pypdf`. Install `notebooklm-chunker` or add `pymupdf`."
     )
 
 
@@ -163,7 +163,7 @@ def _pdf_total_pages(path: Path) -> int:
         return pypdf_total_pages
 
     raise UnsupportedDocumentError(
-        "PDF parsing requires PyMuPDF (`fitz`) or `pypdf`. Install `notebooklm-chunker[pdf]` for the easy path."
+        "PDF parsing requires PyMuPDF (`fitz`) or `pypdf`. Install `notebooklm-chunker` or add `pymupdf`."
     )
 
 

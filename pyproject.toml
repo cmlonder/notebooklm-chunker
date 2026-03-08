@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing",
 ]
-dependencies = ["notebooklm-py>=0.3.3"]
+dependencies = ["notebooklm-py[browser]>=0.3.3", "pymupdf>=1.24.0"]
 
 [project.urls]
 Homepage = "https://github.com/cmlonder/notebooklm-chunker"
@@ -31,10 +31,7 @@ Repository = "https://github.com/cmlonder/notebooklm-chunker"
 Issues = "https://github.com/cmlonder/notebooklm-chunker/issues"
 
 [project.optional-dependencies]
-browser = ["notebooklm-py[browser]>=0.3.3"]
-pdf = ["pymupdf>=1.24.0"]
-full = ["notebooklm-py[browser]>=0.3.3", "pymupdf>=1.24.0"]
-dev = ["notebooklm-py[browser]>=0.3.3", "pymupdf>=1.24.0", "build>=1.2.2", "twine>=5.1.1"]
+dev = ["build>=1.2.2", "twine>=5.1.1"]
 
 [project.scripts]
 nblm = "notebooklm_chunker.cli:main"

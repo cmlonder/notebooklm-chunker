@@ -119,7 +119,7 @@ def run_doctor(
                 name="notebooklm-cli",
                 status="warn",
                 summary="`notebooklm` CLI was not found in PATH.",
-                hint='Install the browser extras, for example `pip install "notebooklm-chunker[full]"`.',
+                hint="Install `notebooklm-chunker` and run `python -m playwright install chromium`.",
             )
         )
 
@@ -200,7 +200,7 @@ def _playwright_check() -> DoctorCheck:
             name="playwright",
             status="warn",
             summary="Python Playwright package is not installed.",
-            hint='Install the browser extras, for example `pip install "notebooklm-chunker[full]"`.',
+            hint="Install `notebooklm-chunker` and run `python -m playwright install chromium`.",
         )
 
     version = _package_version("playwright")
@@ -251,14 +251,14 @@ def _pdf_parser_check(source_path: Path | None) -> DoctorCheck:
             name="pdf-parser",
             status="fail",
             summary="No PDF parser is installed for the configured PDF source.",
-            hint='Install the PDF extras, for example `pip install "notebooklm-chunker[pdf]"`.',
+            hint="Install `notebooklm-chunker` or add `pymupdf` manually.",
         )
 
     return DoctorCheck(
         name="pdf-parser",
         status="warn",
         summary="No PDF parser is installed.",
-        hint='Install the PDF extras if you want PDF support: `pip install "notebooklm-chunker[pdf]"`.',
+        hint="Install `notebooklm-chunker` or add `pymupdf` manually if you want PDF support.",
     )
 
 

@@ -192,7 +192,7 @@ not the editable install in your repo shell:
 python -m venv /tmp/nblm-test
 source /tmp/nblm-test/bin/activate
 python -m pip install --upgrade pip
-python -m pip install --force-reinstall "/ABS/PATH/notebooklm-chunker[full]"
+python -m pip install --force-reinstall /ABS/PATH/notebooklm-chunker
 which nblm
 nblm --version
 nblm --help
@@ -212,7 +212,7 @@ or your editable install:
 python -m venv /tmp/nblm-test
 source /tmp/nblm-test/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "notebooklm-chunker[full]"
+python -m pip install notebooklm-chunker
 which nblm
 nblm --version
 nblm --help

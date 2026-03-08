@@ -538,7 +538,7 @@ def run_notebooklm_login() -> None:
         subprocess.run(["notebooklm", "login"], check=True)
     except FileNotFoundError as exc:
         raise UploadError(
-            "The `notebooklm` CLI was not found. Install `notebooklm-chunker[full]` first."
+            "The `notebooklm` CLI was not found. Install `notebooklm-chunker` first."
         ) from exc
     except subprocess.CalledProcessError as exc:
         raise UploadError("`notebooklm login` failed.") from exc
@@ -2537,7 +2537,7 @@ def _load_notebooklm_client_class() -> Any:
         module = importlib.import_module("notebooklm")
     except ImportError as exc:
         raise UploadError(
-            "notebooklm-py is not installed. Run `pip install \"notebooklm-chunker[full]\"` first."
+            "notebooklm-py is not installed. Run `pip install notebooklm-chunker` first."
         ) from exc
 
     client_class = getattr(module, "NotebookLMClient", None)

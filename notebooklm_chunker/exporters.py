@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from notebooklm_chunker.chunker import chunk_filenames
 from notebooklm_chunker.models import Chunk, ExportResult

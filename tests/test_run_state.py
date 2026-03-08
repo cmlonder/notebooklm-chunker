@@ -22,17 +22,29 @@ class RunStateStoreTests(unittest.TestCase):
                         "chunks": {
                             "c010-summary.md": {
                                 "content_hash": "hash-10",
-                                "source": {"status": "uploaded", "source_id": "src-10", "remote_title": "C010 Summary"},
+                                "source": {
+                                    "status": "uploaded",
+                                    "source_id": "src-10",
+                                    "remote_title": "C010 Summary",
+                                },
                                 "studios": {},
                             },
                             "c002-intro.md": {
                                 "content_hash": "hash-2",
-                                "source": {"status": "uploaded", "source_id": "src-2", "remote_title": "C002 Intro"},
+                                "source": {
+                                    "status": "uploaded",
+                                    "source_id": "src-2",
+                                    "remote_title": "C002 Intro",
+                                },
                                 "studios": {},
                             },
                             "c005-pending.md": {
                                 "content_hash": "hash-5",
-                                "source": {"status": "pending", "source_id": None, "remote_title": None},
+                                "source": {
+                                    "status": "pending",
+                                    "source_id": None,
+                                    "remote_title": None,
+                                },
                                 "studios": {},
                             },
                         },
@@ -50,7 +62,11 @@ class RunStateStoreTests(unittest.TestCase):
             state.uploaded_chunk_sources(),
             [
                 {"file_name": "c002-intro.md", "source_id": "src-2", "remote_title": "C002 Intro"},
-                {"file_name": "c010-summary.md", "source_id": "src-10", "remote_title": "C010 Summary"},
+                {
+                    "file_name": "c010-summary.md",
+                    "source_id": "src-10",
+                    "remote_title": "C010 Summary",
+                },
             ],
         )
 

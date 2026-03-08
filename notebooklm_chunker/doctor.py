@@ -137,9 +137,7 @@ def run_doctor(
         for check in checks
     )
     live_run_ready = local_chunking_ready and all(
-        check.status == "ok"
-        for check in checks
-        if check.name in {"notebooklm-cli", "auth"}
+        check.status == "ok" for check in checks if check.name in {"notebooklm-cli", "auth"}
     )
     return DoctorReport(
         checks=tuple(checks),

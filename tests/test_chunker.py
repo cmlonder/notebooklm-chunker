@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-from notebooklm_chunker.chunker import build_sections, chunk_document, chunk_filename, chunk_filenames
+from notebooklm_chunker.chunker import (
+    build_sections,
+    chunk_document,
+    chunk_filename,
+    chunk_filenames,
+)
 from notebooklm_chunker.models import Block, Chunk, ChunkingSettings
 
 
@@ -18,7 +23,10 @@ class ChunkerTests(TestCase):
 
         sections = build_sections(blocks, "book")
 
-        self.assertEqual([section.heading_path for section in sections], [("Chapter 1",), ("Chapter 1", "Section 1.1")])
+        self.assertEqual(
+            [section.heading_path for section in sections],
+            [("Chapter 1",), ("Chapter 1", "Section 1.1")],
+        )
 
     def test_chunk_document_prefers_heading_boundaries_near_target_pages(self) -> None:
         blocks = []
@@ -33,7 +41,9 @@ class ChunkerTests(TestCase):
         chunks = chunk_document(
             blocks,
             Path("book.pdf"),
-            settings=ChunkingSettings(target_pages=3.0, min_pages=2.5, max_pages=4.0, words_per_page=250),
+            settings=ChunkingSettings(
+                target_pages=3.0, min_pages=2.5, max_pages=4.0, words_per_page=250
+            ),
         )
 
         self.assertEqual(len(chunks), 2)
@@ -44,12 +54,17 @@ class ChunkerTests(TestCase):
 
     def test_chunk_document_splits_large_sections(self) -> None:
         text = " ".join(["word"] * 1200)
-        blocks = [Block(kind="heading", text="Chapter 1", level=1), Block(kind="paragraph", text=text)]
+        blocks = [
+            Block(kind="heading", text="Chapter 1", level=1),
+            Block(kind="paragraph", text=text),
+        ]
 
         chunks = chunk_document(
             blocks,
             Path("book.md"),
-            settings=ChunkingSettings(target_pages=0.75, min_pages=0.5, max_pages=1.0, words_per_page=500),
+            settings=ChunkingSettings(
+                target_pages=0.75, min_pages=0.5, max_pages=1.0, words_per_page=500
+            ),
         )
 
         self.assertGreaterEqual(len(chunks), 2)
@@ -64,7 +79,9 @@ class ChunkerTests(TestCase):
         chunks = chunk_document(
             blocks,
             Path("book.pdf"),
-            settings=ChunkingSettings(target_pages=1.0, min_pages=0.5, max_pages=2.0, words_per_page=250),
+            settings=ChunkingSettings(
+                target_pages=1.0, min_pages=0.5, max_pages=2.0, words_per_page=250
+            ),
         )
 
         self.assertEqual(chunks[0].primary_heading, "26 Domain-Driven Design Quickly")

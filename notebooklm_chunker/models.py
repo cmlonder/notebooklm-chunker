@@ -26,7 +26,7 @@ class Section:
     def to_markdown(self) -> str:
         heading_lines: list[str] = []
         for index, heading in enumerate(self.heading_path, start=1):
-            heading_lines.append(f'{"#" * min(index, 6)} {heading}')
+            heading_lines.append(f"{'#' * min(index, 6)} {heading}")
             heading_lines.append("")
         heading_lines.append(self.body.strip())
         return "\n".join(line for line in heading_lines if line is not None).strip() + "\n"

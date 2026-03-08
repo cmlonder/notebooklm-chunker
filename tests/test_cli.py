@@ -3,16 +3,15 @@ from __future__ import annotations
 import io
 import tempfile
 import textwrap
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
-from contextlib import redirect_stderr
-from datetime import UTC, datetime, timedelta
 
-from notebooklm_chunker.models import Block
 from notebooklm_chunker.cli import main
 from notebooklm_chunker.doctor import DoctorCheck, DoctorReport
+from notebooklm_chunker.models import Block
 
 
 class CliTests(TestCase):
@@ -131,7 +130,9 @@ class CliTests(TestCase):
             source.write_text("# Chapter 1\n\nBody\n", encoding="utf-8")
             chunks_dir = root / "chunks"
             chunks_dir.mkdir()
-            blocked_until = (datetime.now(UTC) + timedelta(hours=12)).isoformat().replace("+00:00", "Z")
+            blocked_until = (
+                (datetime.now(UTC) + timedelta(hours=12)).isoformat().replace("+00:00", "Z")
+            )
             (chunks_dir / ".nblm-run-state.json").write_text(
                 textwrap.dedent(
                     f"""
@@ -195,7 +196,7 @@ class CliTests(TestCase):
         self.assertIn("Config file:", stdout.getvalue())
 
     def test_login_command_runs_notebooklm_login(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory():
             stdout = io.StringIO()
             with patch("notebooklm_chunker.cli.run_notebooklm_login") as mocked_login:
                 with redirect_stdout(stdout):
@@ -261,10 +262,19 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 0)
         mocked_uploader.upload_directory.assert_called_once()
-        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["max_parallel_chunks"], 1)
-        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["studio_wait_timeout_seconds"], 7200.0)
-        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"], 30.0)
-        self.assertEqual(mocked_uploader.upload_directory.call_args.kwargs["rename_remote_titles"], False)
+        self.assertEqual(
+            mocked_uploader.upload_directory.call_args.kwargs["max_parallel_chunks"], 1
+        )
+        self.assertEqual(
+            mocked_uploader.upload_directory.call_args.kwargs["studio_wait_timeout_seconds"], 7200.0
+        )
+        self.assertEqual(
+            mocked_uploader.upload_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"],
+            30.0,
+        )
+        self.assertEqual(
+            mocked_uploader.upload_directory.call_args.kwargs["rename_remote_titles"], False
+        )
 
     def test_studios_command_uses_saved_run_state_for_per_chunk_jobs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -344,7 +354,9 @@ class CliTests(TestCase):
 
             stdout = io.StringIO()
             with redirect_stdout(stdout):
-                exit_code = main(["prepare", str(source), "--config", str(config_path), "-o", str(output_dir)])
+                exit_code = main(
+                    ["prepare", str(source), "--config", str(config_path), "-o", str(output_dir)]
+                )
 
             manifest_exists = (output_dir / "manifest.json").exists()
 
@@ -420,21 +432,27 @@ class CliTests(TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "notebooklm_chunker.cli.inspect_pdf_page_selection",
-                return_value=type(
-                    "Selection",
-                    (),
-                    {
-                        "total_pages": 420,
-                        "included_pages": tuple(range(9, 399)),
-                        "skipped_pages": tuple(list(range(1, 9)) + list(range(399, 421))),
-                    },
-                )(),
-            ), patch(
-                "notebooklm_chunker.cli.parse_document",
-                return_value=[Block(kind="heading", text="Chapter 1", level=1, page=3), Block(kind="paragraph", text="Body", page=3)],
-            ) as mocked_parse:
+            with (
+                patch(
+                    "notebooklm_chunker.cli.inspect_pdf_page_selection",
+                    return_value=type(
+                        "Selection",
+                        (),
+                        {
+                            "total_pages": 420,
+                            "included_pages": tuple(range(9, 399)),
+                            "skipped_pages": tuple(list(range(1, 9)) + list(range(399, 421))),
+                        },
+                    )(),
+                ),
+                patch(
+                    "notebooklm_chunker.cli.parse_document",
+                    return_value=[
+                        Block(kind="heading", text="Chapter 1", level=1, page=3),
+                        Block(kind="paragraph", text="Body", page=3),
+                    ],
+                ) as mocked_parse,
+            ):
                 stdout = io.StringIO()
                 with redirect_stdout(stdout):
                     exit_code = main(["prepare", "--config", str(config_path)])
@@ -470,21 +488,29 @@ class CliTests(TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "notebooklm_chunker.cli.inspect_pdf_page_selection",
-                return_value=type(
-                    "Selection",
-                    (),
-                    {
-                        "total_pages": 420,
-                        "included_pages": tuple(list(range(10, 21)) + list(range(21, 40)) + list(range(41, 421))),
-                        "skipped_pages": tuple(list(range(1, 10)) + list(range(40, 41))),
-                    },
-                )(),
-            ), patch(
-                "notebooklm_chunker.cli.parse_document",
-                return_value=[Block(kind="heading", text="Chapter 1", level=1, page=3), Block(kind="paragraph", text="Body", page=3)],
-            ) as mocked_parse:
+            with (
+                patch(
+                    "notebooklm_chunker.cli.inspect_pdf_page_selection",
+                    return_value=type(
+                        "Selection",
+                        (),
+                        {
+                            "total_pages": 420,
+                            "included_pages": tuple(
+                                list(range(10, 21)) + list(range(21, 40)) + list(range(41, 421))
+                            ),
+                            "skipped_pages": tuple(list(range(1, 10)) + list(range(40, 41))),
+                        },
+                    )(),
+                ),
+                patch(
+                    "notebooklm_chunker.cli.parse_document",
+                    return_value=[
+                        Block(kind="heading", text="Chapter 1", level=1, page=3),
+                        Block(kind="paragraph", text="Body", page=3),
+                    ],
+                ) as mocked_parse,
+            ):
                 stdout = io.StringIO()
                 with redirect_stdout(stdout):
                     exit_code = main(
@@ -530,20 +556,26 @@ class CliTests(TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "notebooklm_chunker.cli.inspect_pdf_page_selection",
-                return_value=type(
-                    "Selection",
-                    (),
-                    {
-                        "total_pages": 420,
-                        "included_pages": tuple(range(9, 399)),
-                        "skipped_pages": tuple(list(range(1, 9)) + list(range(399, 421))),
-                    },
-                )(),
-            ), patch(
-                "notebooklm_chunker.cli.parse_document",
-                return_value=[Block(kind="heading", text="Foreword", level=1, page=9), Block(kind="paragraph", text="Body", page=9)],
+            with (
+                patch(
+                    "notebooklm_chunker.cli.inspect_pdf_page_selection",
+                    return_value=type(
+                        "Selection",
+                        (),
+                        {
+                            "total_pages": 420,
+                            "included_pages": tuple(range(9, 399)),
+                            "skipped_pages": tuple(list(range(1, 9)) + list(range(399, 421))),
+                        },
+                    )(),
+                ),
+                patch(
+                    "notebooklm_chunker.cli.parse_document",
+                    return_value=[
+                        Block(kind="heading", text="Foreword", level=1, page=9),
+                        Block(kind="paragraph", text="Body", page=9),
+                    ],
+                ),
             ):
                 stdout = io.StringIO()
                 with redirect_stdout(stdout):
@@ -604,7 +636,11 @@ class CliTests(TestCase):
                 mocked_uploader.ingest_directory.return_value = (
                     "nb1",
                     [],
-                    [type("StudioResult", (), {"studio": "audio", "output_path": "/tmp/audio.mp4"})()],
+                    [
+                        type(
+                            "StudioResult", (), {"studio": "audio", "output_path": "/tmp/audio.mp4"}
+                        )()
+                    ],
                 )
                 stdout = io.StringIO()
                 with redirect_stdout(stdout):
@@ -612,14 +648,31 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 0)
         mocked_uploader.ingest_directory.assert_called_once()
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 5)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_heavy_studios"], 2)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_wait_timeout_seconds"], 5400.0)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_create_retries"], 3)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_create_backoff_seconds"], 2.0)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"], 45.0)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["rename_remote_titles"], True)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["download_outputs"], False)
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 5
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_heavy_studios"], 2
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["studio_wait_timeout_seconds"], 5400.0
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["studio_create_retries"], 3
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["studio_create_backoff_seconds"], 2.0
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["studio_rate_limit_cooldown_seconds"],
+            45.0,
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["rename_remote_titles"], True
+        )
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["download_outputs"], False
+        )
         self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["resume"], False)
         self.assertIn("Generated studios: 1", stdout.getvalue())
         self.assertIn("audio: /tmp/audio.mp4", stdout.getvalue())
@@ -666,7 +719,9 @@ class CliTests(TestCase):
                     )
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 7)
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 7
+        )
 
     def test_resume_command_sets_resume_mode(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -743,4 +798,6 @@ class CliTests(TestCase):
                     )
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 7)
+        self.assertEqual(
+            mocked_uploader.ingest_directory.call_args.kwargs["max_parallel_chunks"], 7
+        )

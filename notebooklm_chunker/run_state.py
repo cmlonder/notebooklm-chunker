@@ -9,7 +9,6 @@ from typing import Any
 
 from notebooklm_chunker.parsers import ChunkerError
 
-
 CURRENT_STATE_VERSION = 4
 _EMPTY_SOURCE_STATE = {
     "status": "pending",
@@ -56,7 +55,7 @@ class RunStateStore:
         self._lock = asyncio.Lock()
 
     @classmethod
-    def load(cls, path: Path) -> "RunStateStore":
+    def load(cls, path: Path) -> RunStateStore:
         if not path.is_file():
             return cls(path)
 
@@ -93,7 +92,9 @@ class RunStateStore:
                 self.notebook_title = notebook_title
             self._write()
 
-    def uploaded_source(self, file_name: str, *, content_hash: str) -> tuple[str, str | None] | None:
+    def uploaded_source(
+        self, file_name: str, *, content_hash: str
+    ) -> tuple[str, str | None] | None:
         entry = self._matching_chunk(file_name, content_hash=content_hash)
         if entry is None:
             return None
@@ -188,7 +189,9 @@ class RunStateStore:
             )
         return uploaded
 
-    def quota_blocks(self, *, studio_names: tuple[str, ...] | list[str] | set[str] | None = None) -> dict[str, dict[str, Any]]:
+    def quota_blocks(
+        self, *, studio_names: tuple[str, ...] | list[str] | set[str] | None = None
+    ) -> dict[str, dict[str, Any]]:
         allowed = set(studio_names) if studio_names is not None else None
         blocks: dict[str, dict[str, Any]] = {}
         for studio_name in sorted(self._quota_blocks):
@@ -489,7 +492,9 @@ class RunStateStore:
             "quota_blocks": self._quota_blocks,
         }
         try:
-            self.path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            self.path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
         except OSError as exc:
             raise RunStateError(f"Could not write resume state file {self.path}: {exc}") from exc
 
@@ -548,7 +553,8 @@ def _normalize_quota_block(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
     return {
         "blocked_until": _read_optional_str(raw.get("blocked_until")),
-        "last_error": _read_optional_str(raw.get("last_error")) or _read_optional_str(raw.get("error")),
+        "last_error": _read_optional_str(raw.get("last_error"))
+        or _read_optional_str(raw.get("error")),
         "source_file": _read_optional_str(raw.get("source_file")),
         "updated_at": _read_optional_str(raw.get("updated_at")),
     }
@@ -593,7 +599,8 @@ def _normalize_source_state(value: Any) -> dict[str, Any]:
         "source_id": source_id,
         "remote_title": _read_optional_str(raw.get("remote_title")),
         "attempts": _read_non_negative_int(raw.get("attempts")),
-        "last_error": _read_optional_str(raw.get("last_error")) or _read_optional_str(raw.get("error")),
+        "last_error": _read_optional_str(raw.get("last_error"))
+        or _read_optional_str(raw.get("error")),
         "updated_at": _read_optional_str(raw.get("updated_at")),
     }
 
@@ -606,7 +613,9 @@ def _normalize_studio_state(value: Any) -> dict[str, Any]:
     output_path = _read_optional_str(raw.get("output_path"))
     remote_title = _read_optional_str(raw.get("remote_title"))
     attempts = _read_non_negative_int(raw.get("attempts"))
-    if attempts == 0 and any(item is not None for item in (task_id, artifact_id, output_path, remote_title)):
+    if attempts == 0 and any(
+        item is not None for item in (task_id, artifact_id, output_path, remote_title)
+    ):
         attempts = 1
     return {
         "status": status,
@@ -615,7 +624,8 @@ def _normalize_studio_state(value: Any) -> dict[str, Any]:
         "output_path": output_path,
         "remote_title": remote_title,
         "attempts": attempts,
-        "last_error": _read_optional_str(raw.get("last_error")) or _read_optional_str(raw.get("error")),
+        "last_error": _read_optional_str(raw.get("last_error"))
+        or _read_optional_str(raw.get("error")),
         "next_retry_at": _read_optional_str(raw.get("next_retry_at")),
         "updated_at": _read_optional_str(raw.get("updated_at")),
     }

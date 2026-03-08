@@ -7,10 +7,11 @@ import os
 import re
 import shutil
 import subprocess
-from datetime import UTC, datetime, timedelta
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from notebooklm_chunker.config import StudioConfig, StudiosConfig
 from notebooklm_chunker.parsers import ChunkerError
@@ -324,7 +325,9 @@ class NotebookLMPyUploader:
         studio_wait_timeout_seconds = _normalize_wait_timeout(studio_wait_timeout_seconds)
         studio_create_retries = _normalize_create_retries(studio_create_retries)
         studio_create_backoff_seconds = _normalize_create_backoff(studio_create_backoff_seconds)
-        studio_rate_limit_cooldown_seconds = _normalize_quota_cooldown(studio_rate_limit_cooldown_seconds)
+        studio_rate_limit_cooldown_seconds = _normalize_quota_cooldown(
+            studio_rate_limit_cooldown_seconds
+        )
         client_class = _load_notebooklm_client_class()
         rpc_module = _load_notebooklm_rpc_module()
         run_state = _open_run_state(directory / RUN_STATE_BASENAME, resume=resume)
@@ -344,14 +347,22 @@ class NotebookLMPyUploader:
                     resume_state_path=run_state.path if resume else None,
                     reporter=reporter,
                 )
-                await run_state.set_notebook(notebook_id=resolved_notebook_id, notebook_title=notebook_title)
+                await run_state.set_notebook(
+                    notebook_id=resolved_notebook_id, notebook_title=notebook_title
+                )
                 per_chunk_studios, aggregate_studios = _partition_studios(studios)
                 per_chunk_job_count = len(per_chunk_studios.enabled_items()) * len(markdown_files)
                 aggregate_job_count = len(aggregate_studios.enabled_items())
                 if per_chunk_job_count:
-                    _emit(reporter, f"studio: {per_chunk_job_count} per-chunk job(s) will start as uploads complete")
+                    _emit(
+                        reporter,
+                        f"studio: {per_chunk_job_count} per-chunk job(s) will start as uploads complete",
+                    )
                 if aggregate_job_count:
-                    _emit(reporter, f"studio: {aggregate_job_count} notebook-level job(s) will start after uploads")
+                    _emit(
+                        reporter,
+                        f"studio: {aggregate_job_count} notebook-level job(s) will start after uploads",
+                    )
                 if max_parallel_chunks > 1 and len(markdown_files) > 1:
                     _emit(
                         reporter,
@@ -362,7 +373,9 @@ class NotebookLMPyUploader:
                     max_parallel_heavy_studios=max_parallel_heavy_studios,
                     reporter=reporter,
                 )
-                studio_locks = _build_remote_rename_locks(studios, rename_remote_titles=rename_remote_titles)
+                studio_locks = _build_remote_rename_locks(
+                    studios, rename_remote_titles=rename_remote_titles
+                )
                 studio_semaphores = _build_studio_execution_semaphores(
                     studios,
                     max_parallel_heavy_studios=max_parallel_heavy_studios,
@@ -445,7 +458,9 @@ class NotebookLMPyUploader:
         max_parallel_heavy_studios = _normalize_parallelism(max_parallel_heavy_studios)
         studio_create_retries = _normalize_create_retries(studio_create_retries)
         studio_create_backoff_seconds = _normalize_create_backoff(studio_create_backoff_seconds)
-        studio_rate_limit_cooldown_seconds = _normalize_quota_cooldown(studio_rate_limit_cooldown_seconds)
+        studio_rate_limit_cooldown_seconds = _normalize_quota_cooldown(
+            studio_rate_limit_cooldown_seconds
+        )
         client_class = _load_notebooklm_client_class()
         rpc_module = _load_notebooklm_rpc_module()
         create_quota_cooldown = CreateQuotaCooldown(studio_rate_limit_cooldown_seconds)
@@ -507,7 +522,9 @@ class NotebookLMPyUploader:
                     studio_output_dir=studio_output_dir,
                     uploaded_sources=uploaded_sources,
                     source_ids=source_ids,
-                    studio_locks=_build_remote_rename_locks(studios, rename_remote_titles=rename_remote_titles),
+                    studio_locks=_build_remote_rename_locks(
+                        studios, rename_remote_titles=rename_remote_titles
+                    ),
                     studio_semaphores=_build_studio_execution_semaphores(
                         studios,
                         max_parallel_heavy_studios=max_parallel_heavy_studios,
@@ -681,7 +698,9 @@ async def _upload_markdown_files(
 ) -> list[UploadResult]:
     total_files = len(markdown_files)
     if max_parallel_chunks > 1 and total_files > 1:
-        _emit(reporter, f"runtime: processing up to {max_parallel_chunks} chunk upload(s) in parallel")
+        _emit(
+            reporter, f"runtime: processing up to {max_parallel_chunks} chunk upload(s) in parallel"
+        )
 
     async def upload_one(index: int, path: Path) -> UploadResult:
         return await _upload_markdown_file(
@@ -746,7 +765,7 @@ async def _run_chunk_pipelines(
             current_studio_name: str,
             current_studio_config: StudioConfig,
             current_queue: asyncio.Queue[UploadResult | None],
-        ) -> Callable[[], Awaitable[list[StudioResult]]]:
+        ) -> Callable[[], Coroutine[Any, Any, list[StudioResult]]]:
             async def worker() -> list[StudioResult]:
                 results: list[StudioResult] = []
                 while True:
@@ -781,7 +800,9 @@ async def _run_chunk_pipelines(
                                 download_outputs=download_outputs,
                                 studio_quota_blocks=blocked_studios,
                                 reporter=reporter,
-                                job_index=job_indices[(current_studio_name, Path(uploaded_item.file_path).name)],
+                                job_index=job_indices[
+                                    (current_studio_name, Path(uploaded_item.file_path).name)
+                                ],
                                 job_total=job_total,
                             )
                         )
@@ -836,7 +857,9 @@ async def _run_chunk_pipelines(
     return uploaded, studio_results
 
 
-async def _gather_studio_results(studio_tasks: list[asyncio.Task[list[StudioResult]]]) -> list[StudioResult]:
+async def _gather_studio_results(
+    studio_tasks: list[asyncio.Task[list[StudioResult]]],
+) -> list[StudioResult]:
     if not studio_tasks:
         return []
     try:
@@ -921,8 +944,8 @@ async def _upload_markdown_file(
             )
         raise
 
-    source_id = _read_attr(source, "id")
-    if source_id is None:
+    uploaded_source_id = _read_attr(source, "id")
+    if uploaded_source_id is None:
         error = f"NotebookLM did not return a source ID after uploading {path.name}."
         if run_state is not None:
             await run_state.record_source_failed(
@@ -936,22 +959,22 @@ async def _upload_markdown_file(
         await run_state.record_source_uploaded(
             file_name=path.name,
             content_hash=content_hash,
-            source_id=source_id,
+            source_id=uploaded_source_id,
             remote_title=None,
         )
 
     _emit(
         reporter,
         f"upload: {index}/{total_files} {path.name}"
-        + (f" -> {source_id}" if source_id else ""),
+        + (f" -> {uploaded_source_id}" if uploaded_source_id else ""),
     )
     remote_title = None
-    if source_id is not None and rename_remote_titles:
+    if rename_remote_titles:
         remote_title = _remote_source_title(path)
         await _rename_source(
             client,
             notebook_id=notebook_id,
-            source_id=source_id,
+            source_id=uploaded_source_id,
             remote_title=remote_title,
             reporter=reporter,
         )
@@ -959,12 +982,12 @@ async def _upload_markdown_file(
         await run_state.record_source_uploaded(
             file_name=path.name,
             content_hash=content_hash,
-            source_id=source_id,
+            source_id=uploaded_source_id,
             remote_title=remote_title,
         )
     return UploadResult(
         file_path=str(path),
-        source_id=source_id,
+        source_id=uploaded_source_id,
         remote_title=remote_title,
     )
 
@@ -1019,7 +1042,13 @@ async def _run_enabled_studios(
     blocked_studios: dict[str, str] = {}
     if total_jobs and announce_queue:
         _emit(reporter, f"studio: {total_jobs} generation job(s) queued")
-    for index, (studio_name, studio_config, job_source_ids, source_file, source_remote_title) in enumerate(jobs, start=1):
+    for index, (
+        studio_name,
+        studio_config,
+        job_source_ids,
+        source_file,
+        source_remote_title,
+    ) in enumerate(jobs, start=1):
         if studio_name in blocked_studios:
             continue
         try:
@@ -1089,7 +1118,11 @@ async def _run_single_studio(
     if create_semaphore is not None:
         semaphore = None
     lock = None
-    if rename_remote_titles and source_file is not None and _supports_remote_artifact_rename(studio_name):
+    if (
+        rename_remote_titles
+        and source_file is not None
+        and _supports_remote_artifact_rename(studio_name)
+    ):
         lock = (studio_locks or {}).get(studio_name)
     if semaphore is not None and lock is not None:
         async with semaphore:
@@ -1231,17 +1264,23 @@ async def _run_single_studio_locked(
         source_file=source_file,
     )
     if resumed is not None:
-        _emit(reporter, f"studio: resume {job_index}/{job_total} {studio_attempt_label} -> {output_path}")
+        _emit(
+            reporter,
+            f"studio: resume {job_index}/{job_total} {studio_attempt_label} -> {output_path}",
+        )
         return resumed
     _emit(reporter, f"studio: start {job_index}/{job_total} {studio_attempt_label}")
     remote_title = None
     if rename_remote_titles:
-        remote_title = _remote_artifact_title(studio_name, source_file, source_remote_title=source_remote_title)
+        remote_title = _remote_artifact_title(
+            studio_name, source_file, source_remote_title=source_remote_title
+        )
     known_artifact_ids: set[str] | None = None
     if remote_title is not None:
         known_artifact_ids = await _list_artifact_ids_for_studio(client, notebook_id, studio_name)
 
     if studio_name == "audio":
+
         async def create_audio() -> Any:
             return await client.artifacts.generate_audio(
                 notebook_id,
@@ -1263,7 +1302,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_audio(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_audio(
+            return await client.artifacts.download_audio(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1295,6 +1334,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "video":
+
         async def create_video() -> Any:
             return await client.artifacts.generate_video(
                 notebook_id,
@@ -1316,7 +1356,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_video(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_video(
+            return await client.artifacts.download_video(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1354,18 +1394,23 @@ async def _run_single_studio_locked(
             _REPORT_FORMAT_TO_MEMBER,
             studio_config.format or "study-guide",
         )
+
         async def create_report() -> Any:
             return await client.artifacts.generate_report(
                 notebook_id,
                 source_ids=source_ids,
                 language=studio_config.language or "en",
                 report_format=report_format,
-                custom_prompt=studio_config.prompt if (studio_config.format or "study-guide") == "custom" else None,
-                extra_instructions=studio_config.prompt if (studio_config.format or "study-guide") != "custom" else None,
+                custom_prompt=studio_config.prompt
+                if (studio_config.format or "study-guide") == "custom"
+                else None,
+                extra_instructions=studio_config.prompt
+                if (studio_config.format or "study-guide") != "custom"
+                else None,
             )
 
         async def download_report(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_report(
+            return await client.artifacts.download_report(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1397,6 +1442,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "slide_deck":
+
         async def create_slide_deck() -> Any:
             return await client.artifacts.generate_slide_deck(
                 notebook_id,
@@ -1420,7 +1466,7 @@ async def _run_single_studio_locked(
         download_format = studio_config.download_format or "pdf"
 
         async def download_slide_deck(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_slide_deck(
+            return await client.artifacts.download_slide_deck(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1453,6 +1499,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "quiz":
+
         async def create_quiz() -> Any:
             return await client.artifacts.generate_quiz(
                 notebook_id,
@@ -1473,7 +1520,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_quiz(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_quiz(
+            return await client.artifacts.download_quiz(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1506,6 +1553,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "flashcards":
+
         async def create_flashcards() -> Any:
             return await client.artifacts.generate_flashcards(
                 notebook_id,
@@ -1526,7 +1574,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_flashcards(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_flashcards(
+            return await client.artifacts.download_flashcards(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1559,6 +1607,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "infographic":
+
         async def create_infographic() -> Any:
             return await client.artifacts.generate_infographic(
                 notebook_id,
@@ -1580,7 +1629,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_infographic(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_infographic(
+            return await client.artifacts.download_infographic(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1612,6 +1661,7 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "data_table":
+
         async def create_data_table() -> Any:
             return await client.artifacts.generate_data_table(
                 notebook_id,
@@ -1621,7 +1671,7 @@ async def _run_single_studio_locked(
             )
 
         async def download_data_table(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_data_table(
+            return await client.artifacts.download_data_table(  # type: ignore[no-any-return]
                 notebook_id,
                 str(resolved_output_path),
                 artifact_id=artifact_id,
@@ -1674,8 +1724,13 @@ async def _run_single_studio_locked(
             remote_title=None,
         )
         destination = downloaded or "remote artifact only"
-        _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}")
-        return StudioResult("mind_map", note_id, downloaded, source_file=source_file, remote_title=None)
+        _emit(
+            reporter,
+            f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}",
+        )
+        return StudioResult(
+            "mind_map", note_id, downloaded, source_file=source_file, remote_title=None
+        )
 
     raise UploadError(f"Unsupported studio type: {studio_name}")
 
@@ -1710,7 +1765,9 @@ async def _run_artifact_studio_job(
         studio_name=studio_name,
         source_file=source_file,
     )
-    pending_task_id = _dict_optional_str(pending_state.get("task_id")) if pending_state is not None else None
+    pending_task_id = (
+        _dict_optional_str(pending_state.get("task_id")) if pending_state is not None else None
+    )
 
     if pending_task_id:
         _emit(reporter, f"studio: continue {job_index}/{job_total} {studio_attempt_label}")
@@ -1719,7 +1776,9 @@ async def _run_artifact_studio_job(
         try:
             status = await _create_artifact_with_retry(
                 studio_label=studio_attempt_label,
-                create_operation=_limit_create_operation(create_operation, create_semaphore=create_semaphore),
+                create_operation=_limit_create_operation(
+                    create_operation, create_semaphore=create_semaphore
+                ),
                 studio_name=studio_name,
                 retry_count=studio_create_retries,
                 backoff_seconds=studio_create_backoff_seconds,
@@ -1746,7 +1805,9 @@ async def _run_artifact_studio_job(
                     studio_name=studio_name,
                     source_file=source_file,
                 )
-            _emit(reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}")
+            _emit(
+                reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}"
+            )
             raise
         except UploadError as exc:
             if run_state is None:
@@ -1761,7 +1822,10 @@ async def _run_artifact_studio_job(
                 error=str(exc),
                 status="create_failed",
             )
-            _emit(reporter, f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}")
+            _emit(
+                reporter,
+                f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}",
+            )
             return _pending_studio_result(
                 studio_name=studio_name,
                 source_file=source_file,
@@ -1780,7 +1844,9 @@ async def _run_artifact_studio_job(
         )
 
     try:
-        status = await _wait_for_completion(client, notebook_id, status, wait_label, studio_wait_timeout_seconds)
+        status = await _wait_for_completion(
+            client, notebook_id, status, wait_label, studio_wait_timeout_seconds
+        )
     except QuotaExceededError as exc:
         if run_state is None:
             raise
@@ -1816,7 +1882,10 @@ async def _run_artifact_studio_job(
             error=str(exc),
             status="pending",
         )
-        _emit(reporter, f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}")
+        _emit(
+            reporter,
+            f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}",
+        )
         return _pending_studio_result(
             studio_name=studio_name,
             source_file=source_file,
@@ -1850,8 +1919,13 @@ async def _run_artifact_studio_job(
         remote_title=remote_title,
     )
     destination = downloaded or "remote artifact only"
-    _emit(reporter, f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}")
-    return StudioResult(studio_name, artifact_id, downloaded, source_file=source_file, remote_title=remote_title)
+    _emit(
+        reporter,
+        f"studio: done  {job_index}/{job_total} {_studio_label(studio_name, source_file)} -> {destination}",
+    )
+    return StudioResult(
+        studio_name, artifact_id, downloaded, source_file=source_file, remote_title=remote_title
+    )
 
 
 def _limit_create_operation(
@@ -1947,7 +2021,10 @@ async def _create_artifact_with_retry(
             task_id = _read_attr(status, "task_id")
             if task_id:
                 if attempt > 1:
-                    _emit(reporter, f"studio: recovered {studio_label} create on attempt {attempt}/{max_attempts}")
+                    _emit(
+                        reporter,
+                        f"studio: recovered {studio_label} create on attempt {attempt}/{max_attempts}",
+                    )
                 return status
             last_error = _describe_create_failure(studio_label, status)
             rate_limited = _is_rate_limited_status(status)
@@ -1962,7 +2039,10 @@ async def _create_artifact_with_retry(
                 blocked_until=blocked_until,
             )
 
-        _emit(reporter, f"studio: create failure {studio_label} attempt {attempt}/{max_attempts}: {last_error}")
+        _emit(
+            reporter,
+            f"studio: create failure {studio_label} attempt {attempt}/{max_attempts}: {last_error}",
+        )
 
         if attempt == max_attempts:
             break
@@ -2031,7 +2111,11 @@ def _looks_like_rate_limit_message(message: str | None) -> bool:
     if message is None:
         return False
     normalized = message.lower()
-    return "rate limit" in normalized or "quota exceeded" in normalized or "too many requests" in normalized
+    return (
+        "rate limit" in normalized
+        or "quota exceeded" in normalized
+        or "too many requests" in normalized
+    )
 
 
 def _looks_like_quota_exhausted_message(message: str | None) -> bool:
@@ -2068,9 +2152,7 @@ def _raise_for_relevant_quota_blocks(run_state: RunStateStore, *, studios: Studi
         default=None,
     )
     retry_hint = (
-        f" Try `nblm resume` again after {latest_block}."
-        if latest_block is not None
-        else ""
+        f" Try `nblm resume` again after {latest_block}." if latest_block is not None else ""
     )
     raise UploadError(
         "Daily NotebookLM quota appears exhausted for: "
@@ -2089,7 +2171,9 @@ def _describe_missing_notebook(
     parts = [f'Notebook "{notebook_id}" is not available in the current NotebookLM session.']
     if details:
         parts.append(f"Details: {details}.")
-    parts.append("It may have been deleted, moved, or your current auth session may no longer have access.")
+    parts.append(
+        "It may have been deleted, moved, or your current auth session may no longer have access."
+    )
     if resume_state_path is not None:
         parts.append(f"Delete {resume_state_path.name} to start a fresh run.")
     return " ".join(parts)
@@ -2135,7 +2219,9 @@ async def _maybe_rename_artifact(
         return
     rename_method = getattr(client.artifacts, "rename", None)
     if rename_method is None:
-        raise UploadError("notebooklm-py does not expose `client.artifacts.rename` in this version.")
+        raise UploadError(
+            "notebooklm-py does not expose `client.artifacts.rename` in this version."
+        )
     await rename_method(notebook_id, artifact_id, remote_title)
     _emit(reporter, f'studio: renamed {artifact_id} -> "{remote_title}"')
 
@@ -2216,7 +2302,9 @@ def _resolve_state_notebook_id(
             f"Saved state in {run_state.path.name} points to a different notebook ID. "
             f"Reuse notebook {resumed_notebook_id}, or replace that state file if you want to target another notebook."
         )
-    _emit(reporter, f"{mode_label}: using notebook {resumed_notebook_id} from {run_state.path.name}")
+    _emit(
+        reporter, f"{mode_label}: using notebook {resumed_notebook_id} from {run_state.path.name}"
+    )
     return resumed_notebook_id
 
 
@@ -2247,12 +2335,12 @@ def _open_run_state(path: Path, *, resume: bool) -> RunStateStore:
 def _uploaded_sources_from_run_state(run_state: RunStateStore) -> list[UploadResult]:
     return [
         UploadResult(
-            file_path=entry["file_name"],
+            file_path=entry["file_name"] or "",
             source_id=entry["source_id"],
             remote_title=entry["remote_title"],
         )
         for entry in run_state.uploaded_chunk_sources()
-        if entry["source_id"] is not None
+        if entry["source_id"] is not None and entry["file_name"] is not None
     ]
 
 
@@ -2504,7 +2592,9 @@ def _resolve_output_path(
                 source_file=source_file,
                 configured_output_path=configured,
             )
-        base_dir = (studio_output_dir or (Path.cwd() / "nblm-studio")).resolve() / studio_name.replace("_", "-")
+        base_dir = (
+            studio_output_dir or (Path.cwd() / "nblm-studio")
+        ).resolve() / studio_name.replace("_", "-")
         return base_dir / _per_chunk_output_filename(
             studio_name,
             studio_config,
@@ -2550,7 +2640,9 @@ def _load_notebooklm_rpc_module() -> Any:
     try:
         return importlib.import_module("notebooklm.rpc")
     except ImportError as exc:
-        raise UploadError("notebooklm-py is installed but `notebooklm.rpc` could not be imported.") from exc
+        raise UploadError(
+            "notebooklm-py is installed but `notebooklm.rpc` could not be imported."
+        ) from exc
 
 
 def _read_attr(value: Any, name: str) -> str | None:
@@ -2689,7 +2781,10 @@ def _emit_heavy_studio_parallelism(
         )
         if limit is None:
             continue
-        _emit(reporter, f"runtime: {_studio_label(studio_name, None)} jobs limited to {limit} in parallel")
+        _emit(
+            reporter,
+            f"runtime: {_studio_label(studio_name, None)} jobs limited to {limit} in parallel",
+        )
 
 
 def _has_heavy_studio_jobs(studios: StudiosConfig) -> bool:
@@ -2804,7 +2899,9 @@ def _partition_studios(studios: StudiosConfig) -> tuple[StudiosConfig, StudiosCo
     ):
         config = getattr(studios, name)
         per_chunk_kwargs[name] = config if config.enabled and config.per_chunk else StudioConfig()
-        aggregate_kwargs[name] = config if config.enabled and not config.per_chunk else StudioConfig()
+        aggregate_kwargs[name] = (
+            config if config.enabled and not config.per_chunk else StudioConfig()
+        )
     return StudiosConfig(**per_chunk_kwargs), StudiosConfig(**aggregate_kwargs)
 
 

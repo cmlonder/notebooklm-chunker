@@ -36,7 +36,9 @@ class ParserTests(TestCase):
 
             blocks = parse_document(source)
 
-        self.assertEqual([block.kind for block in blocks], ["heading", "paragraph", "heading", "paragraph"])
+        self.assertEqual(
+            [block.kind for block in blocks], ["heading", "paragraph", "heading", "paragraph"]
+        )
         self.assertEqual(blocks[0].text, "Chapter 1")
         self.assertEqual(blocks[2].level, 2)
 

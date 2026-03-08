@@ -14,8 +14,8 @@ from notebooklm_chunker.models import ChunkingSettings, ExportResult
 from notebooklm_chunker.parsers import ChunkerError, inspect_pdf_page_selection, parse_document
 from notebooklm_chunker.run_state import RunStateStore
 from notebooklm_chunker.uploaders.notebooklm_py import (
-    NotebookLMPyUploader,
     RUN_STATE_BASENAME,
+    NotebookLMPyUploader,
     StudioResult,
     run_notebooklm_login,
     run_notebooklm_logout,
@@ -30,7 +30,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    login_parser = subparsers.add_parser("login", help="Run `notebooklm login` for notebooklm-py authentication.")
+    login_parser = subparsers.add_parser(
+        "login", help="Run `notebooklm login` for notebooklm-py authentication."
+    )
     login_parser.set_defaults(handler=_handle_login)
 
     logout_parser = subparsers.add_parser(
@@ -46,25 +48,45 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_argument(doctor_parser)
     doctor_parser.set_defaults(handler=_handle_doctor)
 
-    init_parser = subparsers.add_parser("init", help="Write a workflow config file with chunking and Studio settings.")
-    init_parser.add_argument("-o", "--output", default="nblm.toml", help="Where to write the config file.")
-    init_parser.add_argument("--target-pages", type=float, default=3.0, help="Default target estimated pages per chunk.")
-    init_parser.add_argument("--min-pages", type=float, default=2.5, help="Default minimum estimated pages per chunk.")
-    init_parser.add_argument("--max-pages", type=float, default=4.0, help="Default maximum estimated pages per chunk.")
-    init_parser.add_argument("--words-per-page", type=int, default=500, help="Default word heuristic for one page.")
-    init_parser.add_argument("--force", action="store_true", help="Overwrite an existing config file.")
+    init_parser = subparsers.add_parser(
+        "init", help="Write a workflow config file with chunking and Studio settings."
+    )
+    init_parser.add_argument(
+        "-o", "--output", default="nblm.toml", help="Where to write the config file."
+    )
+    init_parser.add_argument(
+        "--target-pages", type=float, default=3.0, help="Default target estimated pages per chunk."
+    )
+    init_parser.add_argument(
+        "--min-pages", type=float, default=2.5, help="Default minimum estimated pages per chunk."
+    )
+    init_parser.add_argument(
+        "--max-pages", type=float, default=4.0, help="Default maximum estimated pages per chunk."
+    )
+    init_parser.add_argument(
+        "--words-per-page", type=int, default=500, help="Default word heuristic for one page."
+    )
+    init_parser.add_argument(
+        "--force", action="store_true", help="Overwrite an existing config file."
+    )
     init_parser.set_defaults(handler=_handle_init)
 
-    prepare_parser = subparsers.add_parser("prepare", help="Parse a document and export Markdown chunks.")
+    prepare_parser = subparsers.add_parser(
+        "prepare", help="Parse a document and export Markdown chunks."
+    )
     _add_config_argument(prepare_parser)
     _add_prepare_arguments(prepare_parser)
     prepare_parser.set_defaults(handler=_handle_prepare)
 
     upload_parser = subparsers.add_parser("upload", help="Upload existing chunks to NotebookLM.")
     _add_config_argument(upload_parser)
-    upload_parser.add_argument("directory", nargs="?", help="Directory that contains exported Markdown chunks.")
+    upload_parser.add_argument(
+        "directory", nargs="?", help="Directory that contains exported Markdown chunks."
+    )
     upload_parser.add_argument("--notebook-id", help="Existing notebook ID to upload into.")
-    upload_parser.add_argument("--notebook-title", help="Notebook title to create when notebook ID is not provided.")
+    upload_parser.add_argument(
+        "--notebook-title", help="Notebook title to create when notebook ID is not provided."
+    )
     upload_parser.add_argument(
         "--max-parallel-chunks",
         type=int,
@@ -78,7 +100,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate enabled Studio outputs for an existing notebook or a saved run state.",
     )
     _add_config_argument(studios_parser)
-    studios_parser.add_argument("--notebook-id", help="Notebook ID to run Studio generation against.")
+    studios_parser.add_argument(
+        "--notebook-id", help="Notebook ID to run Studio generation against."
+    )
     studios_parser.add_argument(
         "-o",
         "--output-dir",
@@ -93,7 +117,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_argument(run_parser)
     _add_prepare_arguments(run_parser)
     run_parser.add_argument("--notebook-id", help="Existing notebook ID to upload into.")
-    run_parser.add_argument("--notebook-title", help="Notebook title to create when notebook ID is not provided.")
+    run_parser.add_argument(
+        "--notebook-title", help="Notebook title to create when notebook ID is not provided."
+    )
     run_parser.add_argument(
         "--max-parallel-chunks",
         type=int,
@@ -108,7 +134,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_config_argument(resume_parser)
     _add_prepare_arguments(resume_parser)
-    resume_parser.add_argument("--notebook-id", help="Resume against an explicit notebook ID from the saved run state.")
+    resume_parser.add_argument(
+        "--notebook-id", help="Resume against an explicit notebook ID from the saved run state."
+    )
     resume_parser.add_argument(
         "--max-parallel-chunks",
         type=int,
@@ -130,16 +158,26 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _add_prepare_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("input", nargs="?", help="Source document path. Falls back to `source.path` in config.")
+    parser.add_argument(
+        "input", nargs="?", help="Source document path. Falls back to `source.path` in config."
+    )
     parser.add_argument(
         "-o",
         "--output-dir",
         help="Chunk output directory. Defaults to `chunking.output_dir` or <input-stem>-chunks.",
     )
-    parser.add_argument("--target-pages", type=float, default=None, help="Target estimated pages per chunk.")
-    parser.add_argument("--min-pages", type=float, default=None, help="Minimum estimated pages per chunk.")
-    parser.add_argument("--max-pages", type=float, default=None, help="Maximum estimated pages per chunk.")
-    parser.add_argument("--words-per-page", type=int, default=None, help="Word heuristic for one page.")
+    parser.add_argument(
+        "--target-pages", type=float, default=None, help="Target estimated pages per chunk."
+    )
+    parser.add_argument(
+        "--min-pages", type=float, default=None, help="Minimum estimated pages per chunk."
+    )
+    parser.add_argument(
+        "--max-pages", type=float, default=None, help="Maximum estimated pages per chunk."
+    )
+    parser.add_argument(
+        "--words-per-page", type=int, default=None, help="Word heuristic for one page."
+    )
     parser.add_argument(
         "-y",
         "--yes",
@@ -299,7 +337,9 @@ def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
     _require_file(input_path, label="Input file")
     output_dir = _resolve_chunk_output_dir(args.output_dir, input_path, config)
     if not resume:
-        _confirm_chunk_output_overwrite(output_dir, assume_yes=getattr(args, "yes", False), action_label="run")
+        _confirm_chunk_output_overwrite(
+            output_dir, assume_yes=getattr(args, "yes", False), action_label="run"
+        )
     else:
         _confirm_quota_block_if_needed(
             output_dir / RUN_STATE_BASENAME,
@@ -320,9 +360,13 @@ def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
     notebook_id, uploaded, studios = uploader.ingest_directory(
         output_dir,
         notebook_id=args.notebook_id or config.notebook.id,
-        notebook_title=getattr(args, "notebook_title", None) or config.notebook.title or input_path.stem,
+        notebook_title=getattr(args, "notebook_title", None)
+        or config.notebook.title
+        or input_path.stem,
         studios=config.studios,
-        studio_output_dir=_resolve_studio_output_dir(None, config=config, chunk_output_dir=output_dir),
+        studio_output_dir=_resolve_studio_output_dir(
+            None, config=config, chunk_output_dir=output_dir
+        ),
         max_parallel_chunks=_resolve_max_parallel_chunks(args, config),
         max_parallel_heavy_studios=_resolve_max_parallel_heavy_studios(config),
         studio_wait_timeout_seconds=_resolve_studio_wait_timeout_seconds(config),
@@ -369,7 +413,9 @@ def _prepare_document(
     page_count = len({block.page for block in blocks if block.page is not None})
     heading_count = sum(1 for block in blocks if block.kind == "heading")
     paragraph_count = sum(1 for block in blocks if block.kind == "paragraph")
-    summary = f"parse: {len(blocks)} block(s), {heading_count} heading(s), {paragraph_count} paragraph(s)"
+    summary = (
+        f"parse: {len(blocks)} block(s), {heading_count} heading(s), {paragraph_count} paragraph(s)"
+    )
     if page_count:
         summary += f", {page_count} page(s)"
     _emit_prepare_log(reporter, summary)
@@ -408,9 +454,7 @@ def _resolve_chunking_settings(args: argparse.Namespace, config: AppConfig) -> C
     min_pages = args.min_pages if args.min_pages is not None else config.chunking.min_pages or 2.5
     max_pages = args.max_pages if args.max_pages is not None else config.chunking.max_pages or 4.0
     target_pages = (
-        args.target_pages
-        if args.target_pages is not None
-        else config.chunking.target_pages
+        args.target_pages if args.target_pages is not None else config.chunking.target_pages
     )
     if target_pages is None:
         target_pages = round((min_pages + max_pages) / 2, 2)
@@ -539,13 +583,17 @@ def _resolve_run_state_path(config: AppConfig) -> Path | None:
         if candidate.is_file():
             return candidate
     if config.source.path:
-        candidate = _resolve_chunk_output_dir(None, Path(config.source.path), config) / RUN_STATE_BASENAME
+        candidate = (
+            _resolve_chunk_output_dir(None, Path(config.source.path), config) / RUN_STATE_BASENAME
+        )
         if candidate.is_file():
             return candidate
     return None
 
 
-def _confirm_chunk_output_overwrite(output_dir: Path, *, assume_yes: bool, action_label: str) -> None:
+def _confirm_chunk_output_overwrite(
+    output_dir: Path, *, assume_yes: bool, action_label: str
+) -> None:
     if assume_yes or not output_dir.exists() or not output_dir.is_dir():
         return
     try:
@@ -578,7 +626,9 @@ def _confirm_quota_block_if_needed(
 ) -> None:
     if assume_yes or run_state_path is None or not run_state_path.is_file():
         return
-    quota_blocks = RunStateStore.load(run_state_path).quota_blocks(studio_names=studio_names or None)
+    quota_blocks = RunStateStore.load(run_state_path).quota_blocks(
+        studio_names=studio_names or None
+    )
     if not quota_blocks:
         return
     active_blocks: list[tuple[str, datetime, dict[str, object]]] = []
@@ -613,7 +663,9 @@ def _confirm_quota_block_if_needed(
             "Re-run later or pass `--yes` to try anyway."
         ) from exc
     if answer.strip().lower() not in {"y", "yes"}:
-        raise ChunkerError("Aborted because one or more NotebookLM Studio quotas are likely still blocked.")
+        raise ChunkerError(
+            "Aborted because one or more NotebookLM Studio quotas are likely still blocked."
+        )
 
 
 def _parse_zulu_timestamp(value: str | None) -> datetime | None:

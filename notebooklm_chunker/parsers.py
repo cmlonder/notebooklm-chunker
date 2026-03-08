@@ -120,7 +120,7 @@ def _parse_pdf_with_fitz(
     skip_ranges: tuple[str, ...],
 ) -> list[Block] | None:
     try:
-        import fitz  # type: ignore
+        import fitz
     except ImportError:
         return None
 
@@ -141,7 +141,7 @@ def _parse_pdf_with_pypdf(
     skip_ranges: tuple[str, ...],
 ) -> list[Block] | None:
     try:
-        from pypdf import PdfReader  # type: ignore
+        from pypdf import PdfReader
     except ImportError:
         return None
 
@@ -169,7 +169,7 @@ def _pdf_total_pages(path: Path) -> int:
 
 def _pdf_total_pages_with_fitz(path: Path) -> int | None:
     try:
-        import fitz  # type: ignore
+        import fitz
     except ImportError:
         return None
 
@@ -182,7 +182,7 @@ def _pdf_total_pages_with_fitz(path: Path) -> int | None:
 
 def _pdf_total_pages_with_pypdf(path: Path) -> int | None:
     try:
-        from pypdf import PdfReader  # type: ignore
+        from pypdf import PdfReader
     except ImportError:
         return None
 
@@ -242,7 +242,9 @@ def _blocks_from_pdf_pages(page_entries: list[tuple[int, list[str]]]) -> list[Bl
     return blocks
 
 
-def _clean_pdf_page_entries(page_entries: list[tuple[int, list[str]]]) -> list[tuple[int, list[str]]]:
+def _clean_pdf_page_entries(
+    page_entries: list[tuple[int, list[str]]],
+) -> list[tuple[int, list[str]]]:
     if not page_entries:
         return []
 
@@ -331,7 +333,9 @@ def _blocks_from_markdown_lines(lines: list[str]) -> list[Block]:
         if match:
             flush_paragraph()
             blocks.append(
-                Block(kind="heading", text=_normalize_space(match.group(2)), level=len(match.group(1)))
+                Block(
+                    kind="heading", text=_normalize_space(match.group(2)), level=len(match.group(1))
+                )
             )
             index += 1
             continue
@@ -410,7 +414,9 @@ def _blocks_from_text(lines: list[str], page: int | None = None) -> list[Block]:
         if _looks_like_heading(current, next_line):
             flush_paragraph()
             normalized = current.title() if current.isupper() else current
-            blocks.append(Block(kind="heading", text=_normalize_space(normalized), level=2, page=page))
+            blocks.append(
+                Block(kind="heading", text=_normalize_space(normalized), level=2, page=page)
+            )
             index += 1
             continue
 
@@ -542,6 +548,5 @@ def _ordered_epub_documents(archive: zipfile.ZipFile) -> list[str]:
     return sorted(
         name
         for name in archive.namelist()
-        if name.lower().endswith((".xhtml", ".html", ".htm"))
-        and not name.startswith("__MACOSX/")
+        if name.lower().endswith((".xhtml", ".html", ".htm")) and not name.startswith("__MACOSX/")
     )

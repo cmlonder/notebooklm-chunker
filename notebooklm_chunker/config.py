@@ -8,7 +8,6 @@ from typing import Any
 
 from notebooklm_chunker.parsers import ChunkerError
 
-
 DEFAULT_CONFIG_BASENAMES = ("nblm.toml", ".nblm.toml", "pyproject.toml")
 
 _AUDIO_FORMATS = ("deep-dive", "brief", "critique", "debate")
@@ -298,7 +297,9 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
     )
 
 
-def resolve_config_path(explicit_path: Path | None = None, *, start_dir: Path | None = None) -> Path | None:
+def resolve_config_path(
+    explicit_path: Path | None = None, *, start_dir: Path | None = None
+) -> Path | None:
     if explicit_path is not None:
         return explicit_path.expanduser().resolve()
 
@@ -351,7 +352,7 @@ def write_config_template(
             "",
             "[chunking]",
             "# Markdown chunks, manifest.json, and .nblm-run-state.json are written here.",
-            '# `{source_stem}` expands from `source.path`. Example: `book.pdf` -> `book`.',
+            "# `{source_stem}` expands from `source.path`. Example: `book.pdf` -> `book`.",
             'output_dir = "./output/{source_stem}/chunks"',
             "# Preferred chunk size in approximate pages.",
             f"target_pages = {target_pages}",
@@ -443,8 +444,12 @@ def _load_studio_config(
         per_chunk=_optional_bool(raw.get("per_chunk"), f"{label}.per_chunk"),
         max_parallel=_optional_positive_int(raw.get("max_parallel"), f"{label}.max_parallel"),
         prompt=_optional_str(raw.get("prompt"), f"{label}.prompt"),
-        output_path=_optional_template_path(raw.get("output_path"), f"{label}.output_path", base_dir, source_path),
-        output_dir=_optional_template_path(raw.get("output_dir"), f"{label}.output_dir", base_dir, source_path),
+        output_path=_optional_template_path(
+            raw.get("output_path"), f"{label}.output_path", base_dir, source_path
+        ),
+        output_dir=_optional_template_path(
+            raw.get("output_dir"), f"{label}.output_dir", base_dir, source_path
+        ),
         language=_optional_str(raw.get("language"), f"{label}.language"),
         format=_optional_choice(raw.get("format"), f"{label}.format", allowed_formats),
         length=_optional_choice(raw.get("length"), f"{label}.length", allowed_lengths),
@@ -569,7 +574,9 @@ def _optional_template_path(
     text = _optional_str(value, label)
     if text is None:
         return None
-    return str(_resolve_relative_path(_expand_source_path_placeholders(text, label, source_path), base_dir))
+    return str(
+        _resolve_relative_path(_expand_source_path_placeholders(text, label, source_path), base_dir)
+    )
 
 
 def _optional_str(value: Any, label: str) -> str | None:

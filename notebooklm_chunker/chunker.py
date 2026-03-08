@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from notebooklm_chunker.models import Block, Chunk, ChunkingSettings, Section
 from notebooklm_chunker.parsers import ChunkerError
@@ -65,7 +65,9 @@ def chunk_document(
     resolved_settings = settings or ChunkingSettings()
     _validate_settings(resolved_settings)
 
-    sections = build_sections(blocks, source_path.stem.replace("_", " ").strip() or source_path.stem)
+    sections = build_sections(
+        blocks, source_path.stem.replace("_", " ").strip() or source_path.stem
+    )
     if not sections:
         return []
 
@@ -102,7 +104,10 @@ def _split_oversized_sections(
 ) -> list[Section]:
     normalized: list[Section] = []
     for section in sections:
-        if _section_pages(section, settings) <= settings.max_pages and section.word_count <= settings.max_words:
+        if (
+            _section_pages(section, settings) <= settings.max_pages
+            and section.word_count <= settings.max_words
+        ):
             normalized.append(section)
             continue
 
@@ -140,7 +145,9 @@ def _split_body(body: str, settings: ChunkingSettings) -> list[str]:
     ranges = _choose_ranges(
         len(fragments),
         settings,
-        range_pages_fn=lambda start, end: (prefix_words[end] - prefix_words[start]) / settings.words_per_page,
+        range_pages_fn=lambda start, end: (
+            (prefix_words[end] - prefix_words[start]) / settings.words_per_page
+        ),
     )
     return ["\n\n".join(fragments[start:end]) for start, end in ranges]
 
@@ -150,15 +157,12 @@ def _split_paragraph(paragraph: str, max_words: int) -> list[str]:
         return [paragraph]
 
     sentences = [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+", paragraph)
-        if sentence.strip()
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", paragraph) if sentence.strip()
     ]
     if len(sentences) == 1:
         words = paragraph.split()
         return [
-            " ".join(words[index : index + max_words])
-            for index in range(0, len(words), max_words)
+            " ".join(words[index : index + max_words]) for index in range(0, len(words), max_words)
         ]
 
     parts: list[str] = []
@@ -224,7 +228,9 @@ def _choose_ranges(
                 next_breaks[start] = end
 
     if next_breaks[0] == -1:
-        raise ChunkerError("Unable to split the document into chunks with the current chunking settings.")
+        raise ChunkerError(
+            "Unable to split the document into chunks with the current chunking settings."
+        )
 
     ranges: list[tuple[int, int]] = []
     cursor = 0
@@ -289,8 +295,12 @@ def _finalize_chunk(
 ) -> Chunk:
     markdown = "\n\n".join(section.to_markdown().strip() for section in sections).strip() + "\n"
     word_count = len(markdown.split())
-    start_page = next((section.start_page for section in sections if section.start_page is not None), None)
-    end_page = next((section.end_page for section in reversed(sections) if section.end_page is not None), None)
+    start_page = next(
+        (section.start_page for section in sections if section.start_page is not None), None
+    )
+    end_page = next(
+        (section.end_page for section in reversed(sections) if section.end_page is not None), None
+    )
     return Chunk(
         chunk_id=chunk_id,
         source_file=source_path.name,
@@ -320,7 +330,9 @@ def chunk_filenames(chunks: list[Chunk]) -> dict[int, str]:
         slug_counts[slug] = slug_counts.get(slug, 0) + 1
 
     return {
-        chunk.chunk_id: chunk_filename(chunk, include_page_span=(slug_counts[_chunk_slug(chunk)] > 1))
+        chunk.chunk_id: chunk_filename(
+            chunk, include_page_span=(slug_counts[_chunk_slug(chunk)] > 1)
+        )
         for chunk in chunks
     }
 
@@ -335,7 +347,9 @@ def _chunk_primary_heading(sections: list[Section], source_path: Path) -> str:
 
 
 def _chunk_slug(chunk: Chunk) -> str:
-    slug_source = chunk.primary_heading or (chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem)
+    slug_source = chunk.primary_heading or (
+        chunk.heading_path[-1] if chunk.heading_path else Path(chunk.source_file).stem
+    )
     cleaned = _strip_heading_numbering(slug_source)
     return re.sub(r"[^a-z0-9]+", "-", cleaned.lower()).strip("-") or "chunk"
 

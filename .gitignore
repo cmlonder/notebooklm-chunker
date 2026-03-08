@@ -18,3 +18,10 @@ quiz.toml
 output/
 per-chunk-report-and-slides.toml
 havacılık.pdf
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover

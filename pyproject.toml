@@ -19,6 +19,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Education",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing",
@@ -31,10 +32,72 @@ Repository = "https://github.com/cmlonder/notebooklm-chunker"
 Issues = "https://github.com/cmlonder/notebooklm-chunker/issues"
 
 [project.optional-dependencies]
-dev = ["build>=1.2.2", "twine>=5.1.1"]
+dev = [
+    "build>=1.2.2",
+    "twine>=5.1.1",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "coverage>=7.6.0",
+]
 
 [project.scripts]
 nblm = "notebooklm_chunker.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["notebooklm_chunker*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["notebooklm_chunker"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "notebooklm.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "fitz.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pypdf.*"
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["notebooklm_chunker"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 80.0

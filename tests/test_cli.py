@@ -23,7 +23,7 @@ class CliTests(TestCase):
                 main(["--version"])
 
         self.assertEqual(exit_context.exception.code, 0)
-        self.assertIn("nblm 0.2.0", stdout.getvalue())
+        self.assertIn("nblm 0.2.1", stdout.getvalue())
 
     def test_prepare_command_exports_chunks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

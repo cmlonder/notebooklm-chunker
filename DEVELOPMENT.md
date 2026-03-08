@@ -175,7 +175,7 @@ Typical release flow:
 python -m unittest discover -s tests -v
 python -m build
 python -m twine check dist/*
-git tag v0.2.0
+git tag v0.2.1
 git push origin main --tags
 ```
 

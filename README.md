@@ -49,6 +49,14 @@ python -m playwright install chromium
 nblm login
 ```
 
+With `pipx`:
+
+```bash
+pipx install notebooklm-chunker
+python -m playwright install chromium
+nblm login
+```
+
 From a local checkout:
 
 ```bash
@@ -248,7 +256,7 @@ Use `--yes` when you want to skip that confirmation.
 
 ## Workflow File
 
-This is the practical full workflow shape:
+Start with a small workflow like this:
 
 ```toml
 [source]
@@ -267,22 +275,13 @@ output_dir = "./output/{source_stem}/chunks"
 target_pages = 3.0
 min_pages = 2.5
 max_pages = 4.0
-words_per_page = 500
 
 [runtime]
 max_parallel_chunks = 3
-max_parallel_heavy_studios = 1
-studio_wait_timeout_seconds = 7200
-studio_create_retries = 5
-studio_create_backoff_seconds = 5.0
-studio_rate_limit_cooldown_seconds = 30.0
-rename_remote_titles = false
-download_outputs = true
 
 [studios.report]
 enabled = true
 per_chunk = true
-max_parallel = 3
 output_dir = "./output/{source_stem}/reports"
 language = "en"
 format = "study-guide"
@@ -294,7 +293,6 @@ Explain the main ideas, terminology, and design tradeoffs.
 [studios.slide_deck]
 enabled = true
 per_chunk = true
-max_parallel = 3
 output_dir = "./output/{source_stem}/slides"
 language = "en"
 format = "detailed"
@@ -305,6 +303,9 @@ Build a teaching deck for this chunk.
 Keep the section order and make each slide carry one clear idea.
 """
 ```
+
+Only add the advanced runtime and per-Studio overrides if you actually need
+them. Most workflows can start with the config above.
 
 ## Studio Parameters
 
@@ -359,20 +360,17 @@ Notes:
 
 - `max_parallel_chunks` controls how many source uploads run at once
 - per-chunk Studio jobs run on their own queues after each source upload finishes
-- `max_parallel_heavy_studios` is the generic fallback for heavier Studio types such as `audio`, `video`, `slide_deck`, and `infographic`
-- `studios.<name>.max_parallel` overrides that fallback per Studio type
 - good starting point for long books: `max_parallel_chunks = 3`
 - values like `5` can hit NotebookLM quota or rate-limit errors faster
+- if you need finer control, `studios.<name>.max_parallel` overrides one Studio type
+- `runtime.max_parallel_heavy_studios` is the fallback for heavier Studio types such as `audio`, `video`, `slide_deck`, and `infographic`
 
 ### Retry And Backoff
 
 - failed NotebookLM `CREATE_ARTIFACT` calls retry automatically
 - quota or rate-limit errors trigger a shared cooldown before more Studio create requests are sent
 - quota exhaustion is tracked per Studio type, so a blocked `report` queue does not automatically block `quiz` or `slide_deck`
-- tune this with:
-  - `runtime.studio_create_retries`
-  - `runtime.studio_create_backoff_seconds`
-  - `runtime.studio_rate_limit_cooldown_seconds`
+- only tune `runtime.studio_create_retries`, `runtime.studio_create_backoff_seconds`, and `runtime.studio_rate_limit_cooldown_seconds` if the defaults do not fit your workload
 
 ### Optional Local Downloads
 
@@ -385,6 +383,18 @@ Notes:
 - by default, NotebookLM keeps its own auto-generated source and artifact titles
 - set `runtime.rename_remote_titles = true` if you want NotebookLM titles to follow chunk headings
 - tradeoff: the related Studio type becomes more serialized so renames stay correct
+
+### Advanced Runtime Options
+
+You can ignore these at first:
+
+- `runtime.max_parallel_heavy_studios`: fallback concurrency for heavier Studio types
+- `runtime.studio_wait_timeout_seconds`: how long local waits allow a Studio job to finish
+- `runtime.studio_create_retries`: how many times `CREATE_ARTIFACT` is retried
+- `runtime.studio_create_backoff_seconds`: base delay for retry backoff
+- `runtime.studio_rate_limit_cooldown_seconds`: shared cooldown after NotebookLM quota or rate-limit errors
+- `runtime.download_outputs`: keep or skip local Studio downloads
+- `runtime.rename_remote_titles`: rename remote NotebookLM source and artifact titles
 
 ## Examples
 

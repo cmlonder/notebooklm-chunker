@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
   selectPDF: () => ipcRenderer.invoke('select-pdf'),
   selectOutputDir: () => ipcRenderer.invoke('select-output-dir'),
+  readFile: (path) => ipcRenderer.invoke('read-file', path),
+  readDir: (path) => ipcRenderer.invoke('read-dir', path),
   
   // CLI operations
   checkNBLM: () => ipcRenderer.invoke('check-nblm'),

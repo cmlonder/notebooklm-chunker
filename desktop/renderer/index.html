@@ -1,203 +1,159 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NotebookLM Chunker</title>
-  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#007aff",
+            "background-light": "#f5f7f8",
+            "background-dark": "#0f1923",
+          },
+          fontFamily: {
+            "display": ["Inter", "system-ui", "-apple-system", "sans-serif"]
+          },
+          borderRadius: { "DEFAULT": "12px", "lg": "16px", "xl": "24px", "full": "9999px" },
+        },
+      },
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: column; }
+    .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+    .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    .vibrant-bg { background: radial-gradient(circle at top left, #e0f2fe 0%, #ffffff 40%), radial-gradient(circle at bottom right, #eff6ff 0%, #f8fafc 100%); }
+    .view { display: none; width: 100%; flex: 1; min-height: 0; }
+    .view.active { display: flex; }
+    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; margin-top: -9px; }
+    input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: transparent; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+  </style>
 </head>
-<body>
-  <div class="app">
-    <!-- Header -->
-    <header class="header">
-      <div class="header-content">
-        <h1>📚 NotebookLM Chunker</h1>
-        <div class="header-actions">
-          <span class="version" id="version">v0.1.0</span>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-slate-100 overflow-hidden">
+  
+  <header id="master-header" class="shrink-0 z-50 glass px-6 py-4 hidden fade-in text-left">
+    <div class="max-w-6xl mx-auto flex items-center justify-between w-full">
+      <div class="flex items-center gap-3">
+        <div class="bg-primary text-white p-1.5 rounded-lg flex items-center justify-center">
+          <span class="material-symbols-outlined !text-xl">folder_zip</span>
+        </div>
+        <h1 class="text-xl font-bold tracking-tight">NotebookLM Chunker</h1>
+      </div>
+      <nav class="hidden md:flex items-center gap-1 bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl">
+        <a data-nav="source" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('source')">Source</a>
+        <a data-nav="structure" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('structure')">Structure</a>
+        <a data-nav="refinement" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('refinement')">Refine</a>
+        <a data-nav="sync" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('sync')">Sync</a>
+        <a data-nav="studio" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('studio')">Studio</a>
+      </nav>
+      <div class="size-10 rounded-full bg-slate-200 overflow-hidden border border-primary/20">
+        <img id="user-avatar" alt="Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPUYg4jEjD_jp56vVOuTNuZYch8fRhnPK2inFnGdDctAp-7DoZNyUa1MRIseDcZYBi6Gap71de63X00t-CmOIrFGQHvNgy-IpFsAgfR1PiGTP6g_LcFaaYE5Zm7heQ9dKNMTYeWAduXn5utNDncjHtg6h7msGJpXziTzHhwaHPE8HeaPfTvBwqFlnE3A4RttLMAVRWRsavNdYSakj32wWRm1cU1Z-oXYFP1y04EqQLRdKGZfZVGcIO8Wc7I0wELh0pkry2T6qKi4A"/>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content" class="flex-1 relative overflow-hidden flex flex-col min-h-0">
+    <!-- STORY 0: AUTH -->
+    <div id="auth-view" class="view active flex-col items-center justify-center w-full vibrant-bg p-6 relative">
+      <div class="relative z-10 w-full max-w-[520px] glass-panel rounded-xl shadow-2xl p-8 md:p-12 flex flex-col items-center text-center fade-in">
+        <div class="mb-8 flex items-center justify-center w-20 h-20 bg-primary/10 rounded-xl text-primary"><span class="material-symbols-outlined !text-5xl">auto_stories</span></div>
+        <h1 class="text-slate-900 text-4xl font-bold tracking-tight mb-4">Welcome</h1>
+        <button id="login-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-lg shadow-lg active:scale-95 transition-all">Sign in to NotebookLM</button>
+      </div>
+    </div>
+
+    <!-- STORY 1: SOURCE -->
+    <div id="source-view" class="view flex-col items-center justify-center p-6 sm:p-12 fade-in overflow-y-auto">
+      <div class="w-full max-w-4xl flex flex-col items-center gap-10">
+        <div class="text-center"><h2 class="text-4xl font-bold tracking-tight mb-3">Add your knowledge</h2><p class="text-slate-500 text-lg">Upload a PDF to start. Files are processed locally.</p></div>
+        <div id="drop-zone" class="w-full aspect-[21/9] glass-panel rounded-3xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center p-8 hover:border-primary/50 group cursor-pointer transition-all">
+          <span class="material-symbols-outlined text-primary !text-5xl mb-4 group-hover:scale-110 transition-transform">add_circle</span>
+          <p class="text-xl font-semibold">Drag your file here</p>
+        </div>
+        <div id="selected-state" class="hidden w-full glass-panel rounded-3xl p-8 flex items-center gap-6 text-left">
+          <div class="bg-primary/10 text-primary p-4 rounded-2xl"><span class="material-symbols-outlined !text-3xl">description</span></div>
+          <div class="flex-1 overflow-hidden"><h3 id="selected-file-name" class="text-lg font-bold truncate">filename.pdf</h3><p class="text-sm text-slate-500">Ready to analyze</p></div>
+          <button onclick="switchView('structure')" class="bg-primary text-white font-bold py-3 px-10 rounded-xl shadow-lg active:scale-95">Analyze</button>
         </div>
       </div>
-    </header>
+    </div>
 
-    <!-- Main Content -->
-    <main class="main">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <nav class="nav">
-          <button class="nav-item active" data-view="prepare">
-            <span class="icon">📄</span>
-            <span>Prepare</span>
-          </button>
-          <button class="nav-item" data-view="run">
-            <span class="icon">🚀</span>
-            <span>Run</span>
-          </button>
-          <button class="nav-item" data-view="settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-          </button>
-          <button class="nav-item" data-view="about">
-            <span class="icon">ℹ️</span>
-            <span>About</span>
-          </button>
-        </nav>
+    <!-- STORY 2: STRUCTURE -->
+    <div id="structure-view" class="view flex-col items-center p-6 sm:p-12 fade-in overflow-y-auto">
+      <div class="max-w-[800px] w-full flex flex-col gap-8 py-10">
+        <div class="text-left">
+          <div class="text-primary text-sm font-semibold uppercase mb-2 tracking-widest">Step 2 of 5</div>
+          <h1 class="text-4xl font-extrabold tracking-tight">How should we split?</h1>
+        </div>
+
+        <!-- Strategy -->
+        <div class="glass-panel rounded-3xl p-8 shadow-sm flex flex-col gap-10">
+          <div class="flex flex-col gap-6">
+            <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Number of Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> <span class="text-slate-400 text-sm font-medium">chunks</span></span></div>
+            <div class="relative w-full h-2 bg-slate-200 rounded-full"><div id="slider-track" class="absolute h-full bg-primary rounded-full" style="width: 30%;"></div><input id="target-count-slider" class="absolute top-0 w-full h-full opacity-0 cursor-pointer" max="50" min="1" type="range" value="15"/></div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-6 border-t border-slate-100 pt-8">
+            <div class="text-left"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Min Pages</label><input id="min-pages" type="number" step="0.1" value="1.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+            <div class="text-left"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Max Pages</label><input id="max-pages" type="number" step="0.1" value="15.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+          </div>
+
+          <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3 text-left">
+            <span class="material-symbols-outlined text-primary">info</span>
+            <p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Each chunk: ~<span id="calc-pages-display" class="font-bold">?</span> pages.</p>
+          </div>
+        </div>
+
+        <!-- Advanced ALWAYS VISIBLE -->
+        <div class="text-left space-y-4">
+          <h3 class="text-xl font-bold flex items-center gap-2"><span class="material-symbols-outlined text-slate-400">settings_input_component</span> Advanced Settings</h3>
+          <div class="glass-panel rounded-3xl p-8 grid grid-cols-2 gap-6">
+            <div><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Words per Page</label><input id="words-per-page" type="number" value="500" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+            <div><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Overlap Margin (%)</label><input id="overlap-margin" type="number" value="10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+            <div class="col-span-2"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Skip Page Ranges</label><input id="skip-ranges" type="text" placeholder="e.g. 1-10, 50" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+          </div>
+        </div>
+
+        <button onclick="switchView('refinement')" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all">Continue to Refine</button>
+      </div>
+    </div>
+
+    <!-- STORY 3: REFINEMENT -->
+    <div id="refinement-view" class="view flex-row w-full h-full fade-in overflow-hidden">
+      <aside class="w-[320px] border-r border-slate-200 bg-white flex flex-col shrink-0">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center text-left"><h3 class="font-bold">The Catalog</h3></div>
+        <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+        <div class="p-4 border-t border-slate-200 bg-slate-50"><button onclick="switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm">Sync to NotebookLM</button></div>
       </aside>
+      <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
+        <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-md text-sm font-medium"><span id="current-chunk-title">Select a chunk</span></div>
+        <div id="editor-surface" class="flex-1 overflow-y-auto pt-12 pb-32"><div class="max-w-[800px] mx-auto px-12 md:px-20"><div id="markdown-content" class="prose prose-slate max-w-none"></div></div></div>
+        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full px-6 py-3 shadow-xl z-20"><button onclick="switchView('sync')" class="bg-primary text-white px-6 py-2 rounded-full font-bold text-sm">Continue to Sync</button></div>
+      </main>
+    </div>
 
-      <!-- Content Area -->
-      <div class="content">
-        <!-- Prepare View -->
-        <div class="view active" id="prepare-view">
-          <h2>Prepare Document</h2>
-          
-          <div class="card">
-            <h3>Source Document</h3>
-            <div class="file-selector">
-              <button class="btn btn-primary" id="select-pdf-btn">
-                📁 Select PDF File
-              </button>
-              <div class="file-info" id="pdf-info" style="display: none;">
-                <span class="file-name" id="pdf-name"></span>
-                <button class="btn-icon" id="clear-pdf-btn">✕</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Chunking Settings</h3>
-            <div class="form-group">
-              <label>Target Pages per Chunk</label>
-              <input type="number" id="target-pages" value="3.0" step="0.5" min="1" max="10">
-            </div>
-            <div class="form-group">
-              <label>Min Pages</label>
-              <input type="number" id="min-pages" value="2.5" step="0.5" min="1" max="10">
-            </div>
-            <div class="form-group">
-              <label>Max Pages</label>
-              <input type="number" id="max-pages" value="4.0" step="0.5" min="1" max="10">
-            </div>
-            <div class="form-group">
-              <label>Output Directory</label>
-              <div class="file-selector">
-                <button class="btn" id="select-output-btn">
-                  📁 Select Directory
-                </button>
-                <span class="file-path" id="output-path">./chunks</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Studio Outputs</h3>
-            <div class="checkbox-group">
-              <label class="checkbox">
-                <input type="checkbox" id="studio-report" checked>
-                <span>📊 Report</span>
-              </label>
-              <label class="checkbox">
-                <input type="checkbox" id="studio-slides" checked>
-                <span>📽️ Slide Deck</span>
-              </label>
-              <label class="checkbox">
-                <input type="checkbox" id="studio-quiz">
-                <span>❓ Quiz</span>
-              </label>
-              <label class="checkbox">
-                <input type="checkbox" id="studio-audio">
-                <span>🎧 Audio</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn btn-large btn-primary" id="run-btn" disabled>
-              🚀 Run Workflow
-            </button>
-          </div>
-        </div>
-
-        <!-- Run View -->
-        <div class="view" id="run-view">
-          <h2>Running Workflow</h2>
-          
-          <div class="card">
-            <div class="progress-container">
-              <div class="progress-bar">
-                <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
-              </div>
-              <div class="progress-text" id="progress-text">Ready to start...</div>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Output Log</h3>
-            <div class="terminal" id="terminal">
-              <div class="terminal-line">Waiting for process to start...</div>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn btn-danger" id="stop-btn">
-              ⏹️ Stop Process
-            </button>
-            <button class="btn" id="back-btn">
-              ← Back to Prepare
-            </button>
-          </div>
-        </div>
-
-        <!-- Settings View -->
-        <div class="view" id="settings-view">
-          <h2>Settings</h2>
-          
-          <div class="card">
-            <h3>CLI Status</h3>
-            <div class="status-item">
-              <span>nblm CLI:</span>
-              <span class="status" id="cli-status">Checking...</span>
-            </div>
-          </div>
-
-          <div class="card">
-            <h3>Preferences</h3>
-            <div class="form-group">
-              <label class="checkbox">
-                <input type="checkbox" id="auto-open-results">
-                <span>Auto-open results folder</span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label class="checkbox">
-                <input type="checkbox" id="show-notifications">
-                <span>Show notifications</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- About View -->
-        <div class="view" id="about-view">
-          <h2>About</h2>
-          
-          <div class="card">
-            <h3>NotebookLM Chunker</h3>
-            <p>Desktop application for splitting long documents into NotebookLM-ready chunks.</p>
-            <p><strong>Version:</strong> <span id="about-version">0.1.0</span></p>
-            <p><strong>License:</strong> MIT</p>
-            <p><strong>Author:</strong> cmlonder</p>
-          </div>
-
-          <div class="card">
-            <h3>Links</h3>
-            <div class="links">
-              <a href="#" class="link">📖 Documentation</a>
-              <a href="#" class="link">🐛 Report Issue</a>
-              <a href="#" class="link">⭐ Star on GitHub</a>
-            </div>
-          </div>
-        </div>
+    <!-- STORY 4: SYNC -->
+    <div id="sync-view" class="view flex-col items-center w-full p-6 sm:p-12 fade-in overflow-y-auto">
+      <div class="w-full max-w-4xl flex flex-col gap-8 py-10 text-left">
+        <h1 class="text-4xl font-extrabold tracking-tight">Sync to NotebookLM</h1>
+        <div class="space-y-4"><label class="text-sm font-bold uppercase text-slate-400">Target Notebook</label><select id="notebook-selector" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-sm outline-none focus:ring-2 focus:ring-primary/20"><option value="">+ Create New Notebook</option></select><input id="new-notebook-title" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-sm" type="text" placeholder="Notebook Title..."/></div>
+        <div class="glass-panel rounded-3xl overflow-hidden shadow-sm"><div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center"><h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Sync Progress (<span id="sync-count-total">0</span>)</h3></div><div id="sync-chunk-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto"></div></div>
+        <button id="start-sync-btn" onclick="runSync()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all">Upload to NotebookLM</button>
       </div>
-    </main>
-  </div>
+    </div>
+  </main>
 
   <script src="app.js"></script>
 </body>

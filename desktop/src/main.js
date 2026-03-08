@@ -109,14 +109,25 @@ ipcMain.handle('check-nblm', async () => {
 });
 
 // Run nblm command
-ipcMain.handle('run-nblm', async (event, { command, args, config }) => {
+ipcMain.handle('run-nblm', async (event, { command, args = [], config }) => {
   return new Promise((resolve, reject) => {
-    // Create temporary config file
-    const tempConfigPath = path.join(app.getPath('temp'), 'nblm-temp.toml');
-    fs.writeFileSync(tempConfigPath, config);
+    let tempConfigPath = null;
+    let spawnArgs = [command, ...args];
+
+    // Handle configuration if provided
+    if (config) {
+      tempConfigPath = path.join(app.getPath('temp'), `nblm-temp-${Date.now()}.toml`);
+      try {
+        fs.writeFileSync(tempConfigPath, config);
+        spawnArgs.push('--config', tempConfigPath);
+      } catch (err) {
+        return reject({ success: false, error: `Failed to create config: ${err.message}` });
+      }
+    }
 
     // Spawn nblm process
-    pythonProcess = spawn('nblm', [command, '--config', tempConfigPath, ...args]);
+    console.log(`[Main] Executing: nblm ${spawnArgs.join(' ')}`);
+    pythonProcess = spawn('nblm', spawnArgs);
 
     let output = '';
     let errorOutput = '';
@@ -124,30 +135,27 @@ ipcMain.handle('run-nblm', async (event, { command, args, config }) => {
     pythonProcess.stdout.on('data', (data) => {
       const text = data.toString();
       output += text;
+      process.stdout.write(`[nblm STDOUT] ${text}`); // Pipe to terminal
       
-      // Send progress updates to renderer
-      mainWindow.webContents.send('nblm-output', {
-        type: 'stdout',
-        data: text
-      });
+      mainWindow.webContents.send('nblm-output', { type: 'stdout', data: text });
     });
 
     pythonProcess.stderr.on('data', (data) => {
       const text = data.toString();
       errorOutput += text;
+      process.stderr.write(`[nblm STDERR] ${text}`); // Pipe to terminal
       
-      mainWindow.webContents.send('nblm-output', {
-        type: 'stderr',
-        data: text
-      });
+      mainWindow.webContents.send('nblm-output', { type: 'stderr', data: text });
     });
 
     pythonProcess.on('close', (code) => {
-      // Clean up temp config
-      try {
-        fs.unlinkSync(tempConfigPath);
-      } catch (e) {
-        // Ignore cleanup errors
+      // Clean up temp config if it exists
+      if (tempConfigPath && fs.existsSync(tempConfigPath)) {
+        try {
+          fs.unlinkSync(tempConfigPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
       }
 
       pythonProcess = null;
@@ -159,7 +167,8 @@ ipcMain.handle('run-nblm', async (event, { command, args, config }) => {
           exitCode: code
         });
       } else {
-        reject({
+        // Resolve instead of reject to avoid loud Electron console logs
+        resolve({
           success: false,
           error: errorOutput || output,
           exitCode: code
@@ -189,4 +198,22 @@ ipcMain.handle('stop-nblm', async () => {
 // Get app version
 ipcMain.handle('get-version', async () => {
   return app.getVersion();
+});
+
+// Read file content
+ipcMain.handle('read-file', async (event, filePath) => {
+  try {
+    return { success: true, content: fs.readFileSync(filePath, 'utf-8') };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Read directory content
+ipcMain.handle('read-dir', async (event, dirPath) => {
+  try {
+    return { success: true, files: fs.readdirSync(dirPath) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });

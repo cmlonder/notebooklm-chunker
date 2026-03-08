@@ -145,19 +145,19 @@ Deliverables:
 This should be explicit in the roadmap, not hidden under CI.
 
 Deliverables:
-- [ ] Add `pip-audit` to CI on every PR/push
-- [ ] Add `trivy` in filesystem scan mode on every PR/push
-- [ ] Add `CodeQL` as a scheduled and PR security workflow
-- [ ] Add `Dependabot` for:
-    - [ ] Python dependencies
-    - [ ] GitHub Actions
+- [x] Add `pip-audit` to CI on every PR/push
+- [x] Add `trivy` in filesystem scan mode on every PR/push
+- [x] Add `CodeQL` as a scheduled and PR security workflow
+- [x] Add `Dependabot` for:
+    - [x] Python dependencies
+    - [x] GitHub Actions
 - [x] Add secret scanning guidance in `SECURITY.md`
-- [ ] Pin GitHub Actions to stable major versions at minimum now, and move to commit-SHA pinning later
+- [x] Pin GitHub Actions to stable major versions at minimum now, and move to commit-SHA pinning later
 - [ ] Add release provenance hardening as a later milestone:
     - [ ] artifact attestation / provenance if kept simple enough for this repo
-- [ ] Make security findings non-blocking at first only if signal is noisy; otherwise block PRs on:
-    - [ ] high/critical dependency vulnerabilities
-    - [ ] broken lint/type/build/test jobs
+- [x] Make security findings non-blocking at first only if signal is noisy; otherwise block PRs on:
+    - [x] high/critical dependency vulnerabilities
+    - [x] broken lint/type/build/test jobs
 
 ## Feature Backlog
 

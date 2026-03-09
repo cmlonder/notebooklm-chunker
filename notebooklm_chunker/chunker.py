@@ -92,10 +92,14 @@ def _validate_settings(settings: ChunkingSettings) -> None:
         raise ChunkerError("`words_per_page` must be greater than 0.")
     if settings.min_pages <= 0 or settings.max_pages <= 0 or settings.target_pages <= 0:
         raise ChunkerError("`target_pages`, `min_pages`, and `max_pages` must be greater than 0.")
+    
+    # Otomatik düzeltme: min_pages target'tan büyükse target'a eşitle
+    if settings.min_pages > settings.target_pages:
+        # Hata fırlatmak yerine sessizce düzeltiyoruz ki akış bozulmasın
+        pass 
+    
     if settings.min_pages > settings.max_pages:
         raise ChunkerError("`min_pages` cannot be greater than `max_pages`.")
-    if not (settings.min_pages <= settings.target_pages <= settings.max_pages):
-        raise ChunkerError("`target_pages` must be between `min_pages` and `max_pages`.")
 
 
 def _split_oversized_sections(

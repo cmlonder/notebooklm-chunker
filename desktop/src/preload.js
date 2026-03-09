@@ -8,14 +8,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectOutputDir: () => ipcRenderer.invoke('select-output-dir'),
   readFile: (path) => ipcRenderer.invoke('read-file', path),
   readDir: (path) => ipcRenderer.invoke('read-dir', path),
+  dirExists: (path) => ipcRenderer.invoke('dir-exists', path),
+  listProjects: (rootPath) => ipcRenderer.invoke('list-projects', rootPath),
+  getAppPaths: () => ipcRenderer.invoke('get-app-paths'),
   
   // CLI operations
   checkNBLM: () => ipcRenderer.invoke('check-nblm'),
   runNBLM: (options) => ipcRenderer.invoke('run-nblm', options),
+  sendNBLMInput: (input) => ipcRenderer.invoke('send-nblm-input', input),
   stopNBLM: () => ipcRenderer.invoke('stop-nblm'),
   
   // App info
   getVersion: () => ipcRenderer.invoke('get-version'),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
   
   // Listen to output
   onNBLMOutput: (callback) => {

@@ -10,150 +10,164 @@
   <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#007aff",
-            "background-light": "#f5f7f8",
-            "background-dark": "#0f1923",
-          },
-          fontFamily: {
-            "display": ["Inter", "system-ui", "-apple-system", "sans-serif"]
-          },
-          borderRadius: { "DEFAULT": "12px", "lg": "16px", "xl": "24px", "full": "9999px" },
-        },
-      },
+      theme: { extend: { colors: { "primary": "#007aff" }, fontFamily: { "display": ["Inter", "sans-serif"] } } }
     }
   </script>
   <style>
-    body { font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: column; }
-    .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+    body { font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: row; overflow: hidden; }
+    .sidebar-glass { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(20px); border-right: 1px solid rgba(0, 0, 0, 0.05); }
+    .header-glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
     .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.3); }
-    .vibrant-bg { background: radial-gradient(circle at top left, #e0f2fe 0%, #ffffff 40%), radial-gradient(circle at bottom right, #eff6ff 0%, #f8fafc 100%); }
-    .view { display: none; width: 100%; flex: 1; min-height: 0; }
+    .view { display: none; width: 100%; flex-direction: column; overflow-y: auto; }
     .view.active { display: flex; }
-    .fade-in { animation: fadeIn 0.4s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; margin-top: -9px; }
-    input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: transparent; }
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    input[type="range"] { height: 40px; }
   </style>
 </head>
-<body class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-slate-100 overflow-hidden">
+<body class="bg-slate-50 font-display antialiased text-slate-900 overflow-hidden text-left">
   
-  <header id="master-header" class="shrink-0 z-50 glass px-6 py-4 hidden fade-in text-left">
-    <div class="max-w-6xl mx-auto flex items-center justify-between w-full">
-      <div class="flex items-center gap-3">
-        <div class="bg-primary text-white p-1.5 rounded-lg flex items-center justify-center">
-          <span class="material-symbols-outlined !text-xl">folder_zip</span>
-        </div>
-        <h1 class="text-xl font-bold tracking-tight">NotebookLM Chunker</h1>
-      </div>
-      <nav class="hidden md:flex items-center gap-1 bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl">
-        <a data-nav="source" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('source')">Source</a>
-        <a data-nav="structure" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('structure')">Structure</a>
-        <a data-nav="refinement" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('refinement')">Refine</a>
-        <a data-nav="sync" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('sync')">Sync</a>
-        <a data-nav="studio" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer" onclick="switchView('studio')">Studio</a>
-      </nav>
-      <div class="size-10 rounded-full bg-slate-200 overflow-hidden border border-primary/20">
-        <img id="user-avatar" alt="Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPUYg4jEjD_jp56vVOuTNuZYch8fRhnPK2inFnGdDctAp-7DoZNyUa1MRIseDcZYBi6Gap71de63X00t-CmOIrFGQHvNgy-IpFsAgfR1PiGTP6g_LcFaaYE5Zm7heQ9dKNMTYeWAduXn5utNDncjHtg6h7msGJpXziTzHhwaHPE8HeaPfTvBwqFlnE3A4RttLMAVRWRsavNdYSakj32wWRm1cU1Z-oXYFP1y04EqQLRdKGZfZVGcIO8Wc7I0wELh0pkry2T6qKi4A"/>
-      </div>
+  <aside id="main-sidebar" class="hidden shrink-0 w-[260px] sidebar-glass flex flex-col p-4 z-50">
+    <div class="flex items-center gap-3 px-2 py-4 mb-6">
+      <div class="bg-primary text-white p-1.5 rounded-lg flex items-center justify-center shadow-md"><span class="material-symbols-outlined !text-xl font-bold">folder_zip</span></div>
+      <h1 class="text-lg font-bold tracking-tight">Chunker</h1>
     </div>
-  </header>
-
-  <main id="main-content" class="flex-1 relative overflow-hidden flex flex-col min-h-0">
-    <!-- STORY 0: AUTH -->
-    <div id="auth-view" class="view active flex-col items-center justify-center w-full vibrant-bg p-6 relative">
-      <div class="relative z-10 w-full max-w-[520px] glass-panel rounded-xl shadow-2xl p-8 md:p-12 flex flex-col items-center text-center fade-in">
-        <div class="mb-8 flex items-center justify-center w-20 h-20 bg-primary/10 rounded-xl text-primary"><span class="material-symbols-outlined !text-5xl">auto_stories</span></div>
-        <h1 class="text-slate-900 text-4xl font-bold tracking-tight mb-4">Welcome</h1>
-        <button id="login-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-4 rounded-lg shadow-lg active:scale-95 transition-all">Sign in to NotebookLM</button>
-      </div>
+    <button onclick="window.startNewProject()" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-8 transition-all active:scale-95">
+      <span class="material-symbols-outlined !text-xl">add_box</span><span>New Project</span>
+    </button>
+    <nav class="flex-1 space-y-1">
+      <a data-sidebar="dashboard" onclick="window.switchView('dashboard')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">dashboard</span> Dashboard</a>
+    </nav>
+    <div class="pt-4 border-t border-slate-100 p-2">
+      <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">User</p>
+      <p class="text-sm font-bold text-slate-900" id="user-name-display">Cemal Önder</p>
     </div>
+  </aside>
 
-    <!-- STORY 1: SOURCE -->
-    <div id="source-view" class="view flex-col items-center justify-center p-6 sm:p-12 fade-in overflow-y-auto">
-      <div class="w-full max-w-4xl flex flex-col items-center gap-10">
-        <div class="text-center"><h2 class="text-4xl font-bold tracking-tight mb-3">Add your knowledge</h2><p class="text-slate-500 text-lg">Upload a PDF to start. Files are processed locally.</p></div>
-        <div id="drop-zone" class="w-full aspect-[21/9] glass-panel rounded-3xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center p-8 hover:border-primary/50 group cursor-pointer transition-all">
-          <span class="material-symbols-outlined text-primary !text-5xl mb-4 group-hover:scale-110 transition-transform">add_circle</span>
-          <p class="text-xl font-semibold">Drag your file here</p>
-        </div>
-        <div id="selected-state" class="hidden w-full glass-panel rounded-3xl p-8 flex items-center gap-6 text-left">
-          <div class="bg-primary/10 text-primary p-4 rounded-2xl"><span class="material-symbols-outlined !text-3xl">description</span></div>
-          <div class="flex-1 overflow-hidden"><h3 id="selected-file-name" class="text-lg font-bold truncate">filename.pdf</h3><p class="text-sm text-slate-500">Ready to analyze</p></div>
-          <button onclick="switchView('structure')" class="bg-primary text-white font-bold py-3 px-10 rounded-xl shadow-lg active:scale-95">Analyze</button>
+  <div class="flex-1 flex flex-col min-w-0 relative">
+    <header id="wizard-header" class="hidden shrink-0 z-40 header-glass px-6 py-3 fade-in">
+      <div class="max-w-4xl mx-auto flex items-center justify-center">
+        <nav class="flex items-center gap-1 bg-slate-200/50 p-1 rounded-xl">
+          <a data-nav="source" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('source')">Source</a>
+          <a data-nav="structure" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('structure')">Structure</a>
+          <a data-nav="sources" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('sources')">Sources</a>
+          <a data-nav="sync" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('sync')">Sync</a>
+          <a data-nav="studio" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('studio')">Studio</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="view-container" class="flex-1 relative flex flex-col min-h-0 overflow-hidden">
+      <div id="auth-view" class="view active flex items-center justify-center w-full h-full p-6">
+        <div class="w-full max-w-[400px] glass-panel rounded-3xl shadow-2xl p-12 text-center fade-in">
+          <div class="mb-8 flex items-center justify-center size-16 bg-primary/10 rounded-2xl text-primary mx-auto"><span class="material-symbols-outlined !text-4xl">auto_stories</span></div>
+          <h1 class="text-2xl font-bold mb-6">NotebookLM Chunker</h1>
+          <button id="login-btn" onclick="window.login()" class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Sign in to NotebookLM</button>
+          <button id="confirm-login-btn" onclick="window.confirmLogin()" class="hidden w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">I've Logged In</button>
         </div>
       </div>
-    </div>
 
-    <!-- STORY 2: STRUCTURE -->
-    <div id="structure-view" class="view flex-col items-center p-6 sm:p-12 fade-in overflow-y-auto">
-      <div class="max-w-[800px] w-full flex flex-col gap-8 py-10">
-        <div class="text-left">
-          <div class="text-primary text-sm font-semibold uppercase mb-2 tracking-widest">Step 2 of 5</div>
-          <h1 class="text-4xl font-extrabold tracking-tight">How should we split?</h1>
+      <div id="dashboard-view" class="view p-8 sm:p-12 fade-in">
+        <div class="max-w-5xl mx-auto w-full space-y-10">
+          <div class="flex justify-between items-end"><div class="text-left"><h1 class="text-4xl font-extrabold tracking-tight mb-2">Dashboard</h1><p class="text-slate-500 text-lg">Your local projects.</p></div><button onclick="window.fetchLocalProjects()" class="p-2 hover:bg-slate-100 rounded-full transition-all"><span class="material-symbols-outlined">refresh</span></button></div>
+          <div id="recent-projects-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </div>
+      </div>
 
-        <!-- Strategy -->
-        <div class="glass-panel rounded-3xl p-8 shadow-sm flex flex-col gap-10">
-          <div class="flex flex-col gap-6">
-            <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Number of Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> <span class="text-slate-400 text-sm font-medium">chunks</span></span></div>
-            <div class="relative w-full h-2 bg-slate-200 rounded-full"><div id="slider-track" class="absolute h-full bg-primary rounded-full" style="width: 30%;"></div><input id="target-count-slider" class="absolute top-0 w-full h-full opacity-0 cursor-pointer" max="50" min="1" type="range" value="15"/></div>
+      <div id="source-view" class="view p-8 sm:p-12 fade-in">
+        <div class="max-w-4xl mx-auto w-full flex flex-col items-center gap-10">
+          <div class="text-center"><h2 class="text-4xl font-bold tracking-tight mb-3">Add your knowledge</h2><p class="text-slate-500 text-lg">Upload a PDF to start chunking.</p></div>
+          <div id="drop-zone" onclick="window.triggerFileSelect()" class="w-full aspect-[21/9] glass-panel rounded-3xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center p-8 hover:border-primary/50 cursor-pointer transition-all">
+            <span class="material-symbols-outlined text-primary !text-5xl mb-4">add_circle</span>
+            <p class="text-xl font-semibold">Click or Drag PDF</p>
           </div>
-          
-          <div class="grid grid-cols-2 gap-6 border-t border-slate-100 pt-8">
-            <div class="text-left"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Min Pages</label><input id="min-pages" type="number" step="0.1" value="1.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
-            <div class="text-left"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Max Pages</label><input id="max-pages" type="number" step="0.1" value="15.0" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+          <div id="selected-state" class="hidden w-full glass-panel rounded-3xl p-8 flex items-center gap-6">
+            <div class="bg-primary/10 text-primary p-4 rounded-2xl"><span class="material-symbols-outlined !text-xl">description</span></div>
+            <div class="flex-1 overflow-hidden"><h3 id="selected-file-name" class="text-lg font-bold truncate">filename.pdf</h3><p class="text-sm text-slate-500">Document selected</p></div>
+            <div class="flex gap-3"><button onclick="window.startNewProject()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-sm hover:bg-slate-50">Change</button><button onclick="window.startStructurePhase()" class="bg-primary text-white font-bold py-3 px-10 rounded-xl shadow-lg active:scale-95">Analyze</button></div>
           </div>
 
-          <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3 text-left">
-            <span class="material-symbols-outlined text-primary">info</span>
-            <p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Each chunk: ~<span id="calc-pages-display" class="font-bold">?</span> pages.</p>
+          <div id="duplicate-state" class="hidden w-full glass-panel rounded-3xl p-8 border-2 border-primary/20 flex flex-col gap-6 fade-in">
+            <div class="flex items-center gap-6">
+              <div class="bg-primary text-white p-4 rounded-2xl shadow-lg"><span class="material-symbols-outlined !text-3xl">library_books</span></div>
+              <div class="flex-1 text-left"><h3 class="text-xl font-extrabold text-slate-900">Existing Versions Found</h3><p class="text-slate-500">We found multiple catalogs for this document. Choose an action:</p></div>
+            </div>
+            
+            <!-- Mevcut Versiyonlar Listesi -->
+            <div id="existing-versions-list" class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+              <!-- JS ile dolacak -->
+            </div>
+
+            <div class="pt-4 border-t border-slate-100">
+              <button onclick="window.startNewVersion()" class="w-full p-4 bg-white border border-dashed border-primary/40 rounded-2xl hover:bg-primary/5 text-primary font-bold flex items-center justify-center gap-2 transition-all group">
+                <span class="material-symbols-outlined group-hover:rotate-90 transition-transform">add_circle</span>
+                Create Fresh Version (Auto-numbered)
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Advanced ALWAYS VISIBLE -->
-        <div class="text-left space-y-4">
-          <h3 class="text-xl font-bold flex items-center gap-2"><span class="material-symbols-outlined text-slate-400">settings_input_component</span> Advanced Settings</h3>
-          <div class="glass-panel rounded-3xl p-8 grid grid-cols-2 gap-6">
-            <div><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Words per Page</label><input id="words-per-page" type="number" value="500" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
-            <div><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Overlap Margin (%)</label><input id="overlap-margin" type="number" value="10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
-            <div class="col-span-2"><label class="text-xs font-bold text-slate-400 uppercase block mb-2">Skip Page Ranges</label><input id="skip-ranges" type="text" placeholder="e.g. 1-10, 50" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20"/></div>
+      <div id="structure-view" class="view items-center p-8 sm:p-12 fade-in">
+        <div class="max-w-[800px] w-full flex flex-col gap-8 py-10">
+          <h1 class="text-4xl font-extrabold tracking-tight text-left">Partition Strategy</h1>
+          <div class="glass-panel rounded-3xl p-8 shadow-sm flex flex-col gap-10">
+            <div class="flex flex-col gap-6 text-left">
+              <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Number of Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> chunks</span></div>
+              <div class="relative w-full h-10 flex items-center">
+                <div class="absolute w-full h-2 bg-slate-200 rounded-full"></div>
+                <div id="slider-track" class="absolute h-2 bg-primary rounded-full" style="width: 30%;"></div>
+                <input id="target-count-slider" oninput="window.updateSlider(this.value)" class="absolute w-full opacity-0 cursor-pointer z-10" max="50" min="1" type="range" value="15"/>
+              </div>
+            </div>
+            <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3">
+              <span class="material-symbols-outlined text-primary">info</span>
+              <p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Target: ~<span id="calc-pages-display" class="font-bold">?</span> p/chunk.</p>
+            </div>
+          </div>
+          <button onclick="window.forceRefine()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Process</button>
+        </div>
+      </div>
+
+      <div id="sources-view" class="view flex-row h-full fade-in overflow-hidden">
+        <aside class="w-[300px] border-r border-slate-200 bg-white flex flex-col shrink-0">
+          <div class="p-4 border-b border-slate-100 font-bold">Catalog</div>
+          <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
+          <div class="p-4 border-t border-slate-200 bg-slate-50"><button onclick="window.switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm">Continue to Sync</button></div>
+        </aside>
+        <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
+          <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-md text-sm">
+            <div class="flex items-center gap-2"><span class="text-slate-400">Title:</span><span id="current-chunk-title" contenteditable="true" oninput="window.handleTitleEdit()" class="text-slate-900 font-bold border-b border-dashed border-slate-300 outline-none px-1">Select a chunk</span></div>
+            <span class="text-slate-400 text-xs italic">Saved</span>
+          </div>
+          <div id="editor-surface" class="flex-1 overflow-y-auto p-12 md:p-20"><div id="markdown-content" class="prose prose-slate max-w-none outline-none"></div></div>
+          <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full px-6 py-3 shadow-xl z-20"><button onclick="window.switchView('sync')" class="bg-primary text-white px-8 py-2 rounded-full font-bold text-sm">Ready to Sync</button></div>
+        </main>
+      </div>
+
+      <div id="sync-view" class="view items-center p-8 sm:p-12 fade-in">
+        <div class="max-w-4xl w-full flex flex-col gap-8 py-10">
+          <h1 class="text-4xl font-extrabold tracking-tight">Sync to NotebookLM</h1>
+          <p id="active-notebook-info" class="text-primary font-bold text-sm hidden text-left">Syncing to: <span id="active-notebook-name">...</span></p>
+          <div id="notebook-settings-panel" class="glass-panel p-6 rounded-3xl border border-slate-100 space-y-4 w-full text-left"><h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Notebook Settings</h3><input id="new-notebook-title" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" type="text" placeholder="Notebook Title..."/></div>
+          <div id="sync-main-panel" class="space-y-6 w-full">
+            <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100 w-full"><div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center"><h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Status (<span id="sync-count-total">0</span>)</h3></div><div id="sync-chunk-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto text-left"></div></div>
+            <button id="start-sync-btn" onclick="window.runSync()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Upload Changes</button>
           </div>
         </div>
-
-        <button onclick="switchView('refinement')" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all">Continue to Refine</button>
       </div>
-    </div>
+    </main>
+  </div>
 
-    <!-- STORY 3: REFINEMENT -->
-    <div id="refinement-view" class="view flex-row w-full h-full fade-in overflow-hidden">
-      <aside class="w-[320px] border-r border-slate-200 bg-white flex flex-col shrink-0">
-        <div class="p-4 border-b border-slate-100 flex justify-between items-center text-left"><h3 class="font-bold">The Catalog</h3></div>
-        <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
-        <div class="p-4 border-t border-slate-200 bg-slate-50"><button onclick="switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm">Sync to NotebookLM</button></div>
-      </aside>
-      <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
-        <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-md text-sm font-medium"><span id="current-chunk-title">Select a chunk</span></div>
-        <div id="editor-surface" class="flex-1 overflow-y-auto pt-12 pb-32"><div class="max-w-[800px] mx-auto px-12 md:px-20"><div id="markdown-content" class="prose prose-slate max-w-none"></div></div></div>
-        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full px-6 py-3 shadow-xl z-20"><button onclick="switchView('sync')" class="bg-primary text-white px-6 py-2 rounded-full font-bold text-sm">Continue to Sync</button></div>
-      </main>
+  <div id="loading-overlay" class="hidden fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/95 backdrop-blur-md fade-in text-center">
+    <div class="flex flex-col items-center gap-8 w-full max-w-sm px-6">
+      <p id="loading-msg" class="text-2xl font-bold text-slate-900 tracking-tight">Processing...</p>
+      <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div id="progress-bar-fill" class="h-full bg-primary transition-all duration-300 w-0"></div></div>
+      <p id="loading-log" class="text-xs text-slate-400 truncate w-full italic"></p>
     </div>
-
-    <!-- STORY 4: SYNC -->
-    <div id="sync-view" class="view flex-col items-center w-full p-6 sm:p-12 fade-in overflow-y-auto">
-      <div class="w-full max-w-4xl flex flex-col gap-8 py-10 text-left">
-        <h1 class="text-4xl font-extrabold tracking-tight">Sync to NotebookLM</h1>
-        <div class="space-y-4"><label class="text-sm font-bold uppercase text-slate-400">Target Notebook</label><select id="notebook-selector" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-sm outline-none focus:ring-2 focus:ring-primary/20"><option value="">+ Create New Notebook</option></select><input id="new-notebook-title" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 shadow-sm" type="text" placeholder="Notebook Title..."/></div>
-        <div class="glass-panel rounded-3xl overflow-hidden shadow-sm"><div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center"><h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Sync Progress (<span id="sync-count-total">0</span>)</h3></div><div id="sync-chunk-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto"></div></div>
-        <button id="start-sync-btn" onclick="runSync()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all">Upload to NotebookLM</button>
-      </div>
-    </div>
-  </main>
+  </div>
 
   <script src="app.js"></script>
 </body>

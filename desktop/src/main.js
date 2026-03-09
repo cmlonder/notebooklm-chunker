@@ -8,212 +8,98 @@ let pythonProcess = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
-    },
-    titleBarStyle: 'hiddenInset',
-    backgroundColor: '#1e1e1e'
+    width: 1200, height: 800, minWidth: 800, minHeight: 600,
+    webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
+    titleBarStyle: 'hiddenInset', backgroundColor: '#1e1e1e'
   });
-
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
-
-  // Dev mode
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
-  }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-    if (pythonProcess) {
-      pythonProcess.kill();
-    }
-  });
+  if (process.argv.includes('--dev')) { mainWindow.webContents.openDevTools(); }
+  mainWindow.on('closed', () => { mainWindow = null; if (pythonProcess) pythonProcess.kill(); });
 }
 
 app.whenReady().then(createWindow);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 // IPC Handlers
-
-// Select PDF file
 ipcMain.handle('select-pdf', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile'],
-    filters: [
-      { name: 'PDF Files', extensions: ['pdf'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  });
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    return {
-      success: true,
-      path: result.filePaths[0],
-      name: path.basename(result.filePaths[0])
-    };
-  }
-
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'PDF Files', extensions: ['pdf'] }] });
+  if (!result.canceled && result.filePaths.length > 0) return { success: true, path: result.filePaths[0], name: path.basename(result.filePaths[0]) };
   return { success: false };
 });
 
-// Select output directory
-ipcMain.handle('select-output-dir', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory', 'createDirectory']
-  });
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    return {
-      success: true,
-      path: result.filePaths[0]
-    };
-  }
-
-  return { success: false };
+ipcMain.handle('dir-exists', async (event, path) => {
+  return fs.existsSync(path);
 });
 
-// Check if nblm CLI is available
-ipcMain.handle('check-nblm', async () => {
-  return new Promise((resolve) => {
-    const process = spawn('nblm', ['--version']);
-    
-    process.on('error', () => {
-      resolve({ available: false, error: 'nblm CLI not found' });
-    });
-
-    process.on('close', (code) => {
-      if (code === 0) {
-        resolve({ available: true });
-      } else {
-        resolve({ available: false, error: 'nblm CLI error' });
-      }
-    });
-  });
+ipcMain.handle('get-app-paths', () => {
+  return {
+    userData: app.getPath('userData'),
+    documents: app.getPath('documents'),
+    projects: path.join(app.getPath('documents'), 'NotebookLM-Chunker')
+  };
 });
 
-// Run nblm command
+ipcMain.handle('list-projects', async (event, rootPath) => {
+  if (!fs.existsSync(rootPath)) return [];
+  const dirs = fs.readdirSync(rootPath, { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory() && dirent.name.includes('-chunks'))
+    .map(dirent => ({
+      name: dirent.name.replace(/-chunks(-\d+)?$/, ''),
+      path: path.join(rootPath, dirent.name),
+      rawName: dirent.name // Versiyonu ayırt etmek için orijinal adı da tutalım
+    }));
+  return dirs;
+});
+
+
 ipcMain.handle('run-nblm', async (event, { command, args = [], config }) => {
+  if (pythonProcess) { pythonProcess.kill(); pythonProcess = null; await new Promise(r => setTimeout(r, 200)); }
   return new Promise((resolve, reject) => {
     let tempConfigPath = null;
     let spawnArgs = [command, ...args];
-
-    // Handle configuration if provided
     if (config) {
       tempConfigPath = path.join(app.getPath('temp'), `nblm-temp-${Date.now()}.toml`);
-      try {
-        fs.writeFileSync(tempConfigPath, config);
-        spawnArgs.push('--config', tempConfigPath);
-      } catch (err) {
-        return reject({ success: false, error: `Failed to create config: ${err.message}` });
-      }
+      fs.writeFileSync(tempConfigPath, config);
+      spawnArgs.push('--config', tempConfigPath);
     }
-
-    // Spawn nblm process
-    console.log(`[Main] Executing: nblm ${spawnArgs.join(' ')}`);
-    pythonProcess = spawn('nblm', spawnArgs);
-
-    let output = '';
-    let errorOutput = '';
-
+    if (command === 'internal-write-file') {
+      try { fs.writeFileSync(args[0], args[1], 'utf-8'); return resolve({ success: true }); }
+      catch (err) { return resolve({ success: false, error: err.message }); }
+    }
+    const projectRoot = path.resolve(__dirname, '../..');
+    const env = { ...process.env, PYTHONPATH: projectRoot, PATH: `${path.join(projectRoot, '.venv/bin')}${path.delimiter}${process.env.PATH}` };
+    pythonProcess = spawn('nblm', spawnArgs, { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let output = '', errorOutput = '';
     pythonProcess.stdout.on('data', (data) => {
-      const text = data.toString();
-      output += text;
-      process.stdout.write(`[nblm STDOUT] ${text}`); // Pipe to terminal
-      
+      const text = data.toString(); output += text;
+      process.stdout.write(`[nblm STDOUT] ${text}`);
       mainWindow.webContents.send('nblm-output', { type: 'stdout', data: text });
     });
-
     pythonProcess.stderr.on('data', (data) => {
-      const text = data.toString();
-      errorOutput += text;
-      process.stderr.write(`[nblm STDERR] ${text}`); // Pipe to terminal
-      
+      const text = data.toString(); errorOutput += text;
+      process.stderr.write(`[nblm STDERR] ${text}`);
       mainWindow.webContents.send('nblm-output', { type: 'stderr', data: text });
     });
-
     pythonProcess.on('close', (code) => {
-      // Clean up temp config if it exists
-      if (tempConfigPath && fs.existsSync(tempConfigPath)) {
-        try {
-          fs.unlinkSync(tempConfigPath);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-
+      if (tempConfigPath && fs.existsSync(tempConfigPath)) { try { fs.unlinkSync(tempConfigPath); } catch (e) {} }
       pythonProcess = null;
-
-      if (code === 0) {
-        resolve({
-          success: true,
-          output: output,
-          exitCode: code
-        });
-      } else {
-        // Resolve instead of reject to avoid loud Electron console logs
-        resolve({
-          success: false,
-          error: errorOutput || output,
-          exitCode: code
-        });
-      }
+      resolve({ success: code === 0, output: output, error: errorOutput, exitCode: code });
     });
-
-    pythonProcess.on('error', (error) => {
-      reject({
-        success: false,
-        error: error.message
-      });
-    });
+    pythonProcess.on('error', (error) => { pythonProcess = null; resolve({ success: false, error: error.message }); });
   });
 });
 
-// Stop running process
-ipcMain.handle('stop-nblm', async () => {
-  if (pythonProcess) {
-    pythonProcess.kill();
-    pythonProcess = null;
-    return { success: true };
-  }
-  return { success: false, error: 'No process running' };
+ipcMain.handle('send-nblm-input', async (event, input) => {
+  if (pythonProcess && pythonProcess.stdin) { pythonProcess.stdin.write(input); return { success: true }; }
+  return { success: false, error: 'No process' };
 });
 
-// Get app version
-ipcMain.handle('get-version', async () => {
-  return app.getVersion();
-});
-
-// Read file content
-ipcMain.handle('read-file', async (event, filePath) => {
-  try {
-    return { success: true, content: fs.readFileSync(filePath, 'utf-8') };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
-
-// Read directory content
-ipcMain.handle('read-dir', async (event, dirPath) => {
-  try {
-    return { success: true, files: fs.readdirSync(dirPath) };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+ipcMain.handle('get-version', async () => app.getVersion());
+ipcMain.handle('read-file', async (event, filePath) => { try { return { success: true, content: fs.readFileSync(filePath, 'utf-8') }; } catch (err) { return { success: false, error: err.message }; } });
+ipcMain.handle('read-dir', async (event, dirPath) => { try { return { success: true, files: fs.readdirSync(dirPath) }; } catch (err) { return { success: false, error: err.message }; } });
+ipcMain.handle('stop-nblm', async () => { if (pythonProcess) { pythonProcess.kill(); pythonProcess = null; } return { success: true }; });
+ipcMain.handle('open-external', async (event, url) => {
+  const { shell } = require('electron');
+  await shell.openExternal(url);
+  return { success: true };
 });

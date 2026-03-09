@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NotebookLM Chunker - Command Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007bff",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#0f1923",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-sidebar {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(0, 123, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased font-display">
+<div class="flex h-screen overflow-hidden">
+<!-- Sidebar -->
+<aside class="glass-sidebar w-72 flex flex-col h-full sticky top-0 z-50">
+<div class="p-6 flex flex-col h-full">
+<!-- Brand & New Project -->
+<div class="mb-8">
+<div class="flex items-center gap-3 mb-8 px-2">
+<div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-xl">auto_stories</span>
+</div>
+<h1 class="font-bold text-lg tracking-tight">Chunker LM</h1>
+</div>
+<button class="w-full bg-primary hover:bg-primary/90 text-white rounded-xl py-3 px-4 flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 font-semibold text-sm">
+<span class="material-symbols-outlined text-xl">add_box</span>
+                        New Project
+                    </button>
+</div>
+<!-- Navigation -->
+<nav class="flex-1 space-y-1">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mb-2">Main Menu</p>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/10 text-primary font-semibold text-sm group" href="#">
+<span class="material-symbols-outlined text-[22px] transition-transform group-hover:scale-110">dashboard</span>
+                        Dashboard
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm group" href="#">
+<span class="material-symbols-outlined text-[22px] transition-transform group-hover:scale-110">library_books</span>
+                        My Library
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm group" href="#">
+<span class="material-symbols-outlined text-[22px] transition-transform group-hover:scale-110">palette</span>
+                        Studio Gallery
+                    </a>
+</nav>
+<!-- Bottom Sidebar -->
+<div class="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm group" href="#">
+<span class="material-symbols-outlined text-[22px]">health_and_safety</span>
+                        System Health
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm group" href="#">
+<span class="material-symbols-outlined text-[22px]">settings</span>
+                        Settings
+                    </a>
+<div class="mt-4 pt-4 flex items-center gap-3 px-3">
+<div class="relative">
+<img alt="User Avatar" class="w-10 h-10 rounded-full border-2 border-white dark:border-slate-700 shadow-sm" data-alt="User profile picture of Cemal" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhLfol9sYIhStQfbr7t35s7leSW0XRDmSsXtCAWBH9p4Ck4jzRsKHSB3L0W0FJCdU4--Vk717I7VLkEv9UXJxxNzgCaAAli4NhrjhNMa_Xx2mEQti_sYAyGLIhioIqmPHrnbSqQjM0U-F2sT0a98nsDn8lihzaorliRm-_90orbMRCewV0jZKo4RyOBCcvvS__M6L92MYMHCb4_DICHKnbQycVfKL1YaKd_8O80-4Quf_-0RUkn8VRgo61h4HqWUs5bsUbq2d7u6Y"/>
+<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold truncate">Cemal Arslan</span>
+<span class="text-[10px] font-medium text-slate-400">Pro Plan</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto bg-white/50 dark:bg-background-dark/50">
+<!-- Header Section -->
+<div class="max-w-6xl mx-auto px-8 pt-12 pb-6">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+<div>
+<h2 class="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Welcome back, Cemal</h2>
+<p class="text-slate-500 mt-2 font-medium">Manage your notebooks and chunks seamlessly.</p>
+</div>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors">search</span>
+</div>
+<input class="pl-11 pr-6 py-3 bg-slate-100 dark:bg-slate-800 border-none rounded-xl w-full md:w-80 text-sm focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none" placeholder="Search your library..." type="text"/>
+</div>
+</div>
+<!-- Quick Stats -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center gap-3 mb-4">
+<div class="p-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+<span class="material-symbols-outlined">data_object</span>
+</div>
+<span class="text-sm font-semibold text-slate-500">Total Chunks Created</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-3xl font-bold">1,284</h3>
+<span class="text-xs font-bold text-green-500 flex items-center">+12% <span class="material-symbols-outlined text-sm">trending_up</span></span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center gap-3 mb-4">
+<div class="p-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+<span class="material-symbols-outlined">sync</span>
+</div>
+<span class="text-sm font-semibold text-slate-500">Notebooks Synced</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-3xl font-bold">42</h3>
+<span class="text-xs font-bold text-slate-400">Stable</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+<div class="flex items-center gap-3 mb-4">
+<div class="p-2 bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
+<span class="material-symbols-outlined">timer</span>
+</div>
+<span class="text-sm font-semibold text-slate-500">Studio Hours</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-3xl font-bold">12.5h</h3>
+<span class="text-xs font-bold text-green-500 flex items-center">+2.4h <span class="material-symbols-outlined text-sm">trending_up</span></span>
+</div>
+</div>
+</div>
+<!-- Recent Projects List -->
+<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden">
+<div class="p-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+<h4 class="font-bold text-lg">Recent Projects</h4>
+<button class="text-primary text-sm font-bold hover:underline">View All</button>
+</div>
+<div class="divide-y divide-slate-100 dark:divide-slate-700">
+<!-- Project Item 1 -->
+<div class="p-5 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<div class="w-12 h-12 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<h5 class="font-bold text-sm truncate">AI Ethics Framework Report 2024</h5>
+<p class="text-xs text-slate-400 mt-0.5">Modified 2 hours ago</p>
+</div>
+<div class="hidden md:block w-48 mx-4">
+<div class="flex justify-between mb-1">
+<span class="text-[10px] font-bold text-slate-500 uppercase">Processing</span>
+<span class="text-[10px] font-bold text-primary">82%</span>
+</div>
+<div class="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 82%"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-bold rounded-full uppercase tracking-wider">Refined</span>
+<button class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Project Item 2 -->
+<div class="p-5 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<div class="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">description</span>
+</div>
+<div class="flex-1 min-w-0">
+<h5 class="font-bold text-sm truncate">Legal Brief Case #402 - Final Draft</h5>
+<p class="text-xs text-slate-400 mt-0.5">Modified yesterday</p>
+</div>
+<div class="hidden md:block w-48 mx-4">
+<div class="flex justify-between mb-1">
+<span class="text-[10px] font-bold text-slate-500 uppercase">Ready</span>
+<span class="text-[10px] font-bold text-green-500">100%</span>
+</div>
+<div class="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-green-500 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-bold rounded-full uppercase tracking-wider">Studio Ready</span>
+<button class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Project Item 3 -->
+<div class="p-5 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<div class="w-12 h-12 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-500 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">article</span>
+</div>
+<div class="flex-1 min-w-0">
+<h5 class="font-bold text-sm truncate">Market Research: Consumer Tech Trends</h5>
+<p class="text-xs text-slate-400 mt-0.5">Modified 3 days ago</p>
+</div>
+<div class="hidden md:block w-48 mx-4">
+<div class="flex justify-between mb-1">
+<span class="text-[10px] font-bold text-slate-500 uppercase">Synced</span>
+<span class="text-[10px] font-bold text-slate-400">45%</span>
+</div>
+<div class="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-slate-400 rounded-full" style="width: 45%"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded-full uppercase tracking-wider">Synced</span>
+<button class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Project Item 4 -->
+<div class="p-5 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<div class="w-12 h-12 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<h5 class="font-bold text-sm truncate">Medical Research - Oncology Notes</h5>
+<p class="text-xs text-slate-400 mt-0.5">Modified 1 week ago</p>
+</div>
+<div class="hidden md:block w-48 mx-4">
+<div class="flex justify-between mb-1">
+<span class="text-[10px] font-bold text-slate-500 uppercase">Synced</span>
+<span class="text-[10px] font-bold text-slate-400">100%</span>
+</div>
+<div class="h-1.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-slate-400 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="px-3 py-1 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-[10px] font-bold rounded-full uppercase tracking-wider">Synced</span>
+<button class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

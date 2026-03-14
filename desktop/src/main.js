@@ -165,14 +165,28 @@ function runNextStudioJob(projectPath) {
     });
   };
 
-  proc.stdout.on('data', handleOutput('stdout'));
-  proc.stderr.on('data', handleOutput('stderr'));
+  let combinedOutput = '';
+  const captureAndHandle = (channel) => (chunk) => {
+    combinedOutput += chunk.toString();
+    handleOutput(channel)(chunk);
+  };
+  proc.stdout.on('data', captureAndHandle('stdout'));
+  proc.stderr.on('data', captureAndHandle('stderr'));
   proc.on('close', (code) => {
     try {
       if (fs.existsSync(tempConfigPath)) fs.unlinkSync(tempConfigPath);
     } catch (error) {}
     setActiveStudioWorkers(projectPath, activeStudioWorkers(projectPath) - 1);
-    if (code === 0) {
+    const quotaExhausted = /quota.exhausted/i.test(combinedOutput);
+    const zeroGenerated = /Generated studios:\s*0/i.test(combinedOutput);
+    if (code === 0 && (quotaExhausted || zeroGenerated)) {
+      const reason = quotaExhausted ? 'Quota exhausted' : 'No studios generated';
+      updateStudioQueueJob(projectPath, nextJob.id, {
+        status: 'failed',
+        progress: 100,
+        message: `${reason} — retry later`,
+      });
+    } else if (code === 0) {
       updateStudioQueueJob(projectPath, nextJob.id, {
         status: 'submitted',
         progress: 100,

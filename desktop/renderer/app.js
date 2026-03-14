@@ -45,6 +45,8 @@ const appState = {
   deletingStudioArtifacts: false,
   studioArtifactsTab: "report",
   studioArtifactsSearchQuery: "",
+  studioQueueTab: "all",
+  studioQueueSearchQuery: "",
   promptStudioTab: "report",
   promptSearchQuery: "",
   selectedPromptIds: new Set(),
@@ -2815,68 +2817,91 @@ async function clearSubmittedStudioJobs() {
   showToast(`${result.removed} submitted job${result.removed === 1 ? "" : "s"} cleared.`);
 }
 
+function selectStudioQueueTab(tab) {
+  appState.studioQueueTab = tab;
+  prepareStudioView();
+}
+
+function handleStudioQueueSearch(value) {
+  appState.studioQueueSearchQuery = String(value || "");
+  prepareStudioView();
+}
+
+function filteredQueueJobs(backgroundJobs) {
+  const tab = appState.studioQueueTab || "all";
+  const query = appState.studioQueueSearchQuery.trim().toLowerCase();
+  return backgroundJobs.filter((job) => {
+    if (tab !== "all" && job.studioName !== tab) return false;
+    if (query) {
+      const text = `${job.displayLabel || job.label || ""} ${job.sourceSummary || ""} ${job.message || ""} ${job.status || ""}`.toLowerCase();
+      if (!text.includes(query)) return false;
+    }
+    return true;
+  });
+}
+
+function renderQueueJobRow(job) {
+  const tone = job.status === "failed"
+    ? "queue-progress-bar is-failed"
+    : job.status === "submitted"
+    ? "queue-progress-bar is-complete"
+    : job.status === "running"
+    ? "queue-progress-bar is-running"
+    : "queue-progress-bar";
+  const logLines = job.status === "failed" ? 6 : 3;
+  const logPreview = Array.isArray(job.logs) && job.logs.length > 0
+    ? `<div class="queue-log-preview ${job.status === "failed" ? "is-error" : ""}">${job.logs.slice(-logLines).map((entry) => `<p>[${entry.channel}] ${entry.line}</p>`).join("")}</div>`
+    : "";
+  return `
+    <div class="flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+      <div class="min-w-0 flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary !text-lg">${studioIconNames[job.studioName] || "description"}</span>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-900 capitalize">${job.displayLabel || job.label}</p>
+          <p class="text-xs text-slate-400 truncate">${job.sourceSummary} · ${job.localRunName}</p>
+          <div class="queue-progress"><div class="${tone}" style="width: ${Number(job.progress || 0)}%"></div></div>
+          <p class="text-[11px] text-slate-400 mt-2">${job.message || job.status}</p>
+          ${logPreview}
+        </div>
+      </div>
+      <div class="flex flex-col items-end gap-2">
+        <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
+        <div class="flex items-center gap-1">
+          ${job.status === "failed" ? `<button onclick="window.retryStudioJob('${job.id}')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
+          ${job.status !== "running" ? `<button onclick="window.removeBackgroundStudioJob('${job.id}')" class="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Remove"><span class="material-symbols-outlined !text-sm">delete</span></button>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderStudioQueue(activeProject) {
   const queueList = document.getElementById("studio-queue-list");
+  const tabBar = document.getElementById("studio-queue-tab-bar");
+  const searchInput = document.getElementById("studio-queue-search");
   if (!queueList) return;
   const backgroundJobs = activeProject?.queueState?.jobs || [];
-  if (appState.studioQueue.length === 0 && backgroundJobs.length === 0) {
+  const allJobs = [...appState.studioQueue.map((item, index) => ({ ...item, _staged: true, _index: index, status: "staged" })), ...backgroundJobs];
+
+  // Render tab bar
+  if (tabBar) {
+    const queueTabs = ["all", ...promptStudioTypes];
+    tabBar.innerHTML = queueTabs.map((tab) => {
+      const count = tab === "all" ? allJobs.length : allJobs.filter((j) => j.studioName === tab).length;
+      if (tab !== "all" && count === 0) return "";
+      return `<button onclick="window.selectStudioQueueTab('${tab}')" class="${tab === appState.studioQueueTab ? "workspace-tab workspace-tab-active" : "workspace-tab"}">${tab === "all" ? "All" : tab.replace(/_/g, " ")} <span class="text-[10px] opacity-60">${count}</span></button>`;
+    }).join("");
+  }
+  if (searchInput) {
+    searchInput.value = appState.studioQueueSearchQuery;
+  }
+
+  if (allJobs.length === 0) {
     queueList.innerHTML = '<div class="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-400 italic">No queued Studio batches yet.</div>';
     return;
   }
-  const stagedRows = appState.studioQueue.map((item, index) => `
-    <div class="queue-row">
-      <div class="min-w-0 flex items-start gap-3">
-        <span class="material-symbols-outlined text-primary !text-lg">${studioIconNames[item.studioName] || "description"}</span>
-        <div class="min-w-0">
-          <p class="font-bold text-slate-900 capitalize">${item.displayLabel || item.label}</p>
-          <p class="text-xs text-slate-400 truncate">${item.sourceSummary} · ${item.localRunName}</p>
-          <div class="queue-progress"><div class="queue-progress-bar" style="width: 8%"></div></div>
-          <p class="text-[11px] text-slate-400 mt-2">Ready to enqueue</p>
-        </div>
-      </div>
-      <button onclick="window.removeStudioQueueItem(${index})" class="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
-        <span class="material-symbols-outlined !text-sm">delete</span>
-      </button>
-    </div>
-  `).join("");
-  const backgroundRows = backgroundJobs.map((job) => {
-    const tone = job.status === "failed"
-      ? "queue-progress-bar is-failed"
-      : job.status === "submitted"
-      ? "queue-progress-bar is-complete"
-      : job.status === "running"
-      ? "queue-progress-bar is-running"
-      : "queue-progress-bar";
-    const logLines = job.status === "failed" ? 6 : 3;
-    const logPreview = Array.isArray(job.logs) && job.logs.length > 0
-      ? `
-        <div class="queue-log-preview ${job.status === "failed" ? "is-error" : ""}">
-          ${job.logs.slice(-logLines).map((entry) => `<p>[${entry.channel}] ${entry.line}</p>`).join("")}
-        </div>
-      `
-      : "";
-    return `
-      <div class="queue-row">
-        <div class="min-w-0 flex items-start gap-3">
-          <span class="material-symbols-outlined text-primary !text-lg">${studioIconNames[job.studioName] || "description"}</span>
-          <div class="min-w-0">
-            <p class="font-bold text-slate-900 capitalize">${job.displayLabel || job.label}</p>
-            <p class="text-xs text-slate-400 truncate">${job.sourceSummary} · ${job.localRunName}</p>
-            <div class="queue-progress"><div class="${tone}" style="width: ${Number(job.progress || 0)}%"></div></div>
-            <p class="text-[11px] text-slate-400 mt-2">${job.message || job.status}</p>
-            ${logPreview}
-          </div>
-        </div>
-        <div class="flex flex-col items-end gap-2">
-          <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
-          <div class="flex items-center gap-1">
-            ${job.status === "failed" ? `<button onclick="window.retryStudioJob('${job.id}')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
-            ${job.status !== "running" ? `<button onclick="window.removeBackgroundStudioJob('${job.id}')" class="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Remove"><span class="material-symbols-outlined !text-sm">delete</span></button>` : ""}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
+
+  // Action buttons
   const failedCount = backgroundJobs.filter((job) => job.status === "failed").length;
   const submittedCount = backgroundJobs.filter((job) => job.status === "submitted").length;
   const actionButtons = [];
@@ -2887,9 +2912,49 @@ function renderStudioQueue(activeProject) {
     actionButtons.push(`<button onclick="window.retryAllFailedStudioJobs()" class="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-all" title="Retry ${failedCount} failed job${failedCount === 1 ? "" : "s"}"><span class="material-symbols-outlined !text-lg">refresh</span></button>`);
   }
   const topBar = actionButtons.length > 0
-    ? `<div class="flex items-center justify-between px-3 py-2 border-b border-slate-100"><p class="text-[11px] text-slate-400">Submitted jobs may keep processing inside NotebookLM after they leave this queue.</p><div class="flex items-center gap-1">${actionButtons.join("")}</div></div>`
+    ? `<div class="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 border border-slate-100"><p class="text-[11px] text-slate-400">Submitted jobs may keep processing inside NotebookLM after they leave this queue.</p><div class="flex items-center gap-1">${actionButtons.join("")}</div></div>`
     : "";
-  queueList.innerHTML = `${topBar}${stagedRows}${backgroundRows}`;
+
+  // Filter and render
+  const filteredBg = filteredQueueJobs(backgroundJobs);
+  const tab = appState.studioQueueTab || "all";
+  const query = appState.studioQueueSearchQuery.trim().toLowerCase();
+  const filteredStaged = appState.studioQueue
+    .map((item, index) => ({ ...item, _index: index }))
+    .filter((item) => {
+      if (tab !== "all" && item.studioName !== tab) return false;
+      if (query) {
+        const text = `${item.displayLabel || item.label || ""} ${item.sourceSummary || ""}`.toLowerCase();
+        if (!text.includes(query)) return false;
+      }
+      return true;
+    });
+
+  const stagedRows = filteredStaged.map((item) => `
+    <div class="flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+      <div class="min-w-0 flex items-start gap-3">
+        <span class="material-symbols-outlined text-primary !text-lg">${studioIconNames[item.studioName] || "description"}</span>
+        <div class="min-w-0">
+          <p class="font-bold text-slate-900 capitalize">${item.displayLabel || item.label}</p>
+          <p class="text-xs text-slate-400 truncate">${item.sourceSummary} · ${item.localRunName}</p>
+          <p class="text-[11px] text-amber-600 mt-2">Ready to enqueue</p>
+        </div>
+      </div>
+      <div class="flex flex-col items-end gap-2">
+        <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold uppercase">staged</span>
+        <button onclick="window.removeStudioQueueItem(${item._index})" class="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Remove"><span class="material-symbols-outlined !text-sm">delete</span></button>
+      </div>
+    </div>
+  `).join("");
+
+  const backgroundRows = filteredBg.map((job) => renderQueueJobRow(job)).join("");
+
+  const tabLabel = tab === "all" ? "" : tab.replace(/_/g, " ");
+  const emptyMessage = filteredBg.length === 0 && filteredStaged.length === 0
+    ? `<div class="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-400 italic">No ${tabLabel} jobs found${query ? " matching your filter" : ""}.</div>`
+    : "";
+
+  queueList.innerHTML = `${topBar}${stagedRows}${backgroundRows}${emptyMessage}`;
   applyOfflineIcons(queueList);
 }
 
@@ -3354,6 +3419,8 @@ Object.assign(window, {
   retryAllFailedStudioJobs,
   removeBackgroundStudioJob,
   clearSubmittedStudioJobs,
+  selectStudioQueueTab,
+  handleStudioQueueSearch,
   openNotebookLMSettings,
   saveNotebookLMSettings,
   switchNblmSettingsTab,

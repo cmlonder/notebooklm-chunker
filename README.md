@@ -24,37 +24,55 @@
 
 An Electron desktop client that wraps the `nblm` CLI into a full visual workflow — from PDF upload to NotebookLM Studio generation.
 
-### Screenshots
+### Partition Strategy
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/recent-chunks.png" width="100%" alt="Recent Chunks"><br><b>Recent Chunks</b><br><sub>Grid dashboard with status filter and search</sub></td>
-    <td align="center"><img src="docs/screenshots/structure.png" width="100%" alt="Structure"><br><b>Structure</b><br><sub>Min/max pages, skip pages, estimated chunk count</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/screenshots/sources.png" width="100%" alt="Sources"><br><b>Sources</b><br><sub>Chunk catalog with inline markdown editor</sub></td>
-    <td align="center"><img src="docs/screenshots/notebooklm-dashboard.png" width="100%" alt="NotebookLM Dashboard"><br><b>NotebookLM Dashboard</b><br><sub>Notebook workspace, synced sources, studio queue</sub></td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2"><img src="docs/screenshots/settings.png" width="50%" alt="Settings"><br><b>NotebookLM Settings</b><br><sub>Per-studio language, format, parallel processing</sub></td>
-  </tr>
-</table>
+Set min and max pages per chunk, skip pages from the beginning (preface, TOC) or end (index, bibliography), and see the estimated chunk count before processing. The chunker splits at heading boundaries to keep each source semantically coherent.
 
-### Features NotebookLM Doesn't Have
+<img src="docs/screenshots/structure.png" width="720" alt="Structure">
+
+### Sources
+
+Review, search, and edit generated chunks inline. Bulk select and delete, or refine titles and content before syncing.
+
+<img src="docs/screenshots/sources.png" width="720" alt="Sources">
+
+### NotebookLM Dashboard
+
+Browse all your NotebookLM notebooks in one place. Open a workspace to see synced sources, manage studio jobs, and track outputs.
+
+<img src="docs/screenshots/notebooklm-dashboard.png" width="720" alt="NotebookLM Dashboard">
+
+### Notebook Workspace
+
+Inspect synced sources for any notebook. Select sources individually or in bulk to build studio queue batches.
+
+<img src="docs/screenshots/notebooklm-detail.png" width="720" alt="Notebook Workspace">
+
+### Studio Queue
+
+Queue reports, slides, quizzes, flashcards, or audio jobs across sources. Filter by studio type, search by name or status. Retry failed jobs individually or in bulk — quota exhaustion is automatically detected.
+
+<img src="docs/screenshots/notebooklm-queue.png" width="720" alt="Studio Queue">
+
+### Settings
+
+Configure per-studio defaults: language (80+ languages), format, download format, and parallel request limits. Sync settings control parallel chunk uploads.
+
+<img src="docs/screenshots/settings.png" width="720" alt="Settings">
+
+### More Features
 
 | Feature | Description |
 |---|---|
-| **Heading-aware chunking** | Splits documents at heading boundaries (H1, H2, etc.) instead of arbitrary page breaks, keeping each source semantically coherent |
 | **Bulk source upload** | Upload dozens or hundreds of chunks to a single notebook in one operation with parallel processing |
 | **Bulk source delete** | Select and delete multiple chunks at once from the catalog |
 | **Resume interrupted uploads** | Sync tracks per-chunk status — come back tomorrow and only the remaining chunks get uploaded |
-| **Studio queue with retry** | Queue reports, slides, quizzes, flashcards, or audio jobs across multiple sources. Failed jobs (including quota exhaustion) are detected and can be retried individually or in bulk |
-| **Studio filtering by type** | Tab bar filters queue and generated outputs by studio type (report, slide deck, quiz, flashcards, audio) with search |
 | **Prompt library** | Save reusable prompts per studio type and apply them from the queue builder |
-| **Per-source settings** | Configure language (80+ languages), format, length, and parallel request limits per studio type |
 | **Skip pages** | Exclude preface, table of contents, index, or bibliography pages before chunking |
 | **Versioned lineages** | Multiple chunk versions of the same PDF, each with independent sync and studio state |
 | **Offline-first** | Chunk and edit locally without a network connection — sync when ready |
+
+---
 
 ### Installation
 
@@ -101,35 +119,6 @@ On first launch, the app verifies:
 
 You can continue into the app for local-only work even if auth is not ready yet.
 
-### Workflow
-
-1. **Document** — Upload a PDF to start a new chunk set
-2. **Structure** — Set min/max pages per chunk, skip pages from beginning or end, see estimated chunk count
-3. **Sources** — Review, search, edit, and bulk-manage the generated chunks
-4. **Sync** — Upload changed chunks to a new or existing NotebookLM notebook
-5. **NotebookLM Dashboard** — Browse notebooks, inspect synced sources, queue studio jobs, track outputs
-
-### NotebookLM Settings
-
-Accessible from Settings in the sidebar:
-
-- **Sources tab** — Per studio type: language (80+ languages), format, download format, max parallel requests
-- **Sync tab** — Max parallel chunk uploads
-
-Settings persist across sessions and are applied to all future queue items.
-
-### Studio Queue
-
-The queue panel mirrors the Studios panel:
-
-- Filter by studio type via tab bar (All, Report, Slide Deck, Quiz, Flashcards, Audio)
-- Search jobs by name, source, status, or message
-- Retry failed jobs individually or bulk retry all
-- Clear submitted jobs when done
-- Remove individual jobs from the queue
-
-Quota exhaustion and zero-output runs are automatically detected as failures, enabling retry after the cooldown period.
-
 ### Build
 
 Platform-specific builds:
@@ -139,22 +128,6 @@ cd desktop
 npm run build:mac    # macOS (.dmg, .zip)
 npm run build:win    # Windows (.exe, portable)
 npm run build:linux  # Linux (.AppImage, .deb)
-```
-
-### Project Layout
-
-```text
-desktop/
-├── renderer/
-│   ├── app.js           # Main UI logic
-│   ├── index.html       # UI structure
-│   ├── styles.css        # Styles
-│   └── project-utils.js  # Helper utilities
-├── src/
-│   ├── main.js           # Electron main process
-│   └── preload.js        # IPC bridge
-└── tests/
-    └── project-utils.test.js
 ```
 
 ---

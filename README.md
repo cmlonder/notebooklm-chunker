@@ -24,6 +24,22 @@
 
 An Electron desktop client that wraps the `nblm` CLI into a full visual workflow — from PDF upload to NotebookLM Studio generation.
 
+### Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/recent-chunks.png" width="100%" alt="Recent Chunks"><br><b>Recent Chunks</b><br><sub>Grid dashboard with status filter and search</sub></td>
+    <td align="center"><img src="docs/screenshots/structure.png" width="100%" alt="Structure"><br><b>Structure</b><br><sub>Min/max pages, skip pages, estimated chunk count</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/sources.png" width="100%" alt="Sources"><br><b>Sources</b><br><sub>Chunk catalog with inline markdown editor</sub></td>
+    <td align="center"><img src="docs/screenshots/notebooklm-dashboard.png" width="100%" alt="NotebookLM Dashboard"><br><b>NotebookLM Dashboard</b><br><sub>Notebook workspace, synced sources, studio queue</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="docs/screenshots/settings.png" width="50%" alt="Settings"><br><b>NotebookLM Settings</b><br><sub>Per-studio language, format, parallel processing</sub></td>
+  </tr>
+</table>
+
 ### Features NotebookLM Doesn't Have
 
 | Feature | Description |

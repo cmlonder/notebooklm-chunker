@@ -18,10 +18,10 @@
       <h1 class="text-lg font-bold tracking-tight">Chunker</h1>
     </div>
     <button onclick="window.startNewProject()" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-8 transition-all active:scale-95">
-      <span class="material-symbols-outlined !text-xl">add_box</span><span>New Project</span>
+      <span class="material-symbols-outlined !text-xl">add_box</span><span>New Chunk</span>
     </button>
     <nav class="flex-1 space-y-1">
-      <a data-sidebar="history" onclick="window.switchView('history')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">history</span> Recent Projects</a>
+      <a data-sidebar="history" onclick="window.switchView('history')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">history</span> Recent Chunks</a>
       <a data-sidebar="notebooks" onclick="window.openNotebookDashboard()" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">auto_stories</span> NotebookLM</a>
       <a data-sidebar="prompts" onclick="window.switchView('prompts')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">style</span> Prompts</a>
     </nav>
@@ -34,6 +34,7 @@
         </button>
         <div id="user-menu-panel" class="hidden user-menu-panel">
           <button onclick="window.openSetupView()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">checklist</span><span>Setup</span></button>
+          <button onclick="window.openNotebookLMSettings()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">auto_stories</span><span>NotebookLM</span></button>
           <button onclick="window.switchAccount()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Switch Account</span></button>
           <button onclick="window.logout()" class="user-menu-item user-menu-danger"><span class="material-symbols-outlined !text-sm">logout</span><span>Logout</span></button>
         </div>
@@ -138,11 +139,11 @@
 
       <div id="history-view" class="view p-8 sm:p-12 fade-in">
         <div class="max-w-5xl mx-auto w-full space-y-10 text-left">
-          <div class="flex justify-between items-end"><h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900 text-left">Recent Projects</h1></div>
+          <div class="flex justify-between items-end"><h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900 text-left">Recent Chunks</h1></div>
           
           <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100">
             <div class="grid grid-cols-12 gap-4 px-6 py-4 border-b bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <div class="col-span-5">Project Name</div>
+              <div class="col-span-5">Chunk Name</div>
               <div class="col-span-3">Status</div>
               <div class="col-span-2 text-center">Last Modified</div>
               <div class="col-span-2 text-right">NotebookLM</div>
@@ -173,7 +174,7 @@
               <div class="dashboard-spinner"></div>
               <div>
                 <p class="font-bold text-slate-900">Loading notebooks</p>
-                <p class="text-sm text-slate-500 mt-2">Fetching your local projects and NotebookLM links...</p>
+                <p class="text-sm text-slate-500 mt-2">Fetching your local chunks and NotebookLM links...</p>
               </div>
             </div>
             <div id="remote-notebook-list" class="notebook-card-list"></div>
@@ -383,7 +384,7 @@
                 </div>
                 <button id="generate-studios-btn" onclick="window.runStudios()" class="queue-generate-btn inline-flex items-center gap-2">
                   <span class="material-symbols-outlined !text-sm">auto_awesome</span>
-                  <span>Generate Queue</span>
+                  <span>Run Queue</span>
                 </button>
               </div>
               <div id="studio-queue-list" class="space-y-3 text-sm text-slate-500"></div>
@@ -446,7 +447,7 @@
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h3 id="source-summary-title" class="text-xl font-bold text-slate-900">Loaded document</h3>
-                <p id="source-summary-subtitle" class="text-sm text-slate-500">This synced project is read-only.</p>
+                <p id="source-summary-subtitle" class="text-sm text-slate-500">This synced chunk set is read-only.</p>
               </div>
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-bold uppercase tracking-widest">Read only</span>
             </div>
@@ -483,26 +484,41 @@
             <p id="structure-readonly-summary" class="text-sm text-green-700 mt-2">Chunking is already complete for this version.</p>
           </div>
           <div class="glass-panel rounded-3xl p-6 shadow-sm flex flex-col gap-6">
-            <div class="flex flex-col gap-4 text-left">
-              <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> chunks</span></div>
-              <div class="relative w-full h-10 flex items-center"><div class="absolute w-full h-2 bg-slate-200 rounded-full"></div><div id="slider-track" class="absolute h-2 bg-primary rounded-full" style="width: 30%;"></div><input id="target-count-slider" oninput="window.updateSlider(this.value)" class="absolute w-full opacity-0 cursor-pointer z-10" max="50" min="1" type="range" value="15"/></div>
+            <div class="bg-primary/5 p-4 rounded-2xl flex flex-col gap-2 text-left">
+              <div class="flex items-center gap-3"><span class="material-symbols-outlined text-primary">info</span><p class="text-primary/80 text-sm font-bold">Document: <span id="total-pages-display" class="font-bold">?</span> pages</p></div>
+              <p class="text-primary/70 text-xs leading-relaxed pl-9">The chunker splits your document at heading boundaries (H1, H2, etc.) to keep each chunk semantically coherent. Set the min and max page limits below to control chunk size — the algorithm will find heading-based split points that fit within your range.</p>
             </div>
-            <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3"><span class="material-symbols-outlined text-primary">info</span><p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Target: ~<span id="calc-pages-display" class="font-bold">?</span> p/chunk.</p></div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label class="space-y-2 text-left">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min Pages</span>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min Pages per Chunk</span>
                 <input id="min-pages-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="0.1" min="0.1" value="2.5" />
               </label>
               <label class="space-y-2 text-left">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max Pages</span>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max Pages per Chunk</span>
                 <input id="max-pages-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="0.1" min="0.1" value="4.0" />
               </label>
-              <label class="space-y-2 text-left">
-                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Words / Page</span>
-                <input id="words-per-page-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="10" min="50" value="500" />
-              </label>
             </div>
-            <p id="partition-range-note" class="text-sm text-slate-500 text-left">Pick the chunk count you want. The chunker will still prefer heading boundaries when it can, so the exact split is best-effort rather than a hard guarantee.</p>
+            <div class="bg-slate-50 p-4 rounded-2xl flex items-center gap-3">
+              <span class="material-symbols-outlined text-slate-400">calculate</span>
+              <p class="text-slate-600 text-sm">Estimated: ~<span id="estimated-chunk-count" class="font-bold text-primary">?</span> chunks (based on your page range)</p>
+            </div>
+            <div class="border-t border-slate-100 pt-5 flex flex-col gap-4">
+              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Skip Pages</h3>
+              <p class="text-xs text-slate-500 text-left -mt-2">Exclude pages from the beginning (e.g. preface, table of contents, cover) or from the end (e.g. index, bibliography, appendices).</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label class="space-y-2 text-left">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Skip from Beginning</span>
+                  <input id="skip-start-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="0" value="0" placeholder="e.g. 8" />
+                  <span class="text-[10px] text-slate-400">Number of pages to skip from the start</span>
+                </label>
+                <label class="space-y-2 text-left">
+                  <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Skip from End</span>
+                  <input id="skip-end-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="0" value="0" placeholder="e.g. 5" />
+                  <span class="text-[10px] text-slate-400">Number of pages to skip from the end</span>
+                </label>
+              </div>
+            </div>
+            <p id="partition-range-note" class="text-sm text-slate-500 text-left">The chunker prefers heading boundaries, so the exact split is best-effort rather than a hard guarantee. Actual chunk count may vary.</p>
           </div>
           <button id="process-btn" onclick="window.forceRefine()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Process</button>
         </div>
@@ -520,7 +536,7 @@
         </aside>
         <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
           <div id="sources-readonly-banner" class="hidden px-6 py-3 border-b border-slate-100 bg-green-50 text-sm text-green-700 font-bold">
-            This project is synced. You can search and inspect chunks, but editing is disabled.
+            This chunk set is synced. You can search and inspect chunks, but editing is disabled.
           </div>
           <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-md text-sm">
             <div class="flex items-center gap-2 transition-opacity" style="opacity: 0;"><span class="text-slate-400">Title:</span><span id="current-chunk-title" contenteditable="false" oninput="window.handleTitleEdit()" class="text-slate-900 font-bold border-b border-dashed border-slate-300 outline-none px-1">Select a chunk</span></div>
@@ -611,6 +627,25 @@
         <div class="flex items-center gap-3">
           <button onclick="window.savePromptPreset()" class="secondary-action-btn">Save</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nblm-settings-modal" class="hidden fixed inset-0 z-[100] preview-modal-shell bg-white/80 backdrop-blur-md p-6">
+    <div class="glass-panel preview-modal-card" style="max-width: 640px;">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 class="font-bold text-slate-900">NotebookLM Settings</h3>
+          <p class="text-xs text-slate-400 mt-1">Configure studio and sync defaults</p>
+        </div>
+        <button onclick="window.closeNotebookLMSettings()" class="secondary-action-btn">Close</button>
+      </div>
+      <div class="px-6 py-3 border-b border-slate-100">
+        <div id="nblm-settings-tab-bar" class="flex gap-1"></div>
+      </div>
+      <div id="nblm-settings-body" class="preview-modal-body text-sm text-slate-700" style="min-height: 320px;"></div>
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center gap-3">
+        <button onclick="window.saveNotebookLMSettings()" class="secondary-action-btn">Save</button>
       </div>
     </div>
   </div>

@@ -134,53 +134,42 @@ function updateStudioSettingsSummaries() {
   }
 }
 
-function partitionBounds() {
-  const pages = Number(appState.totalPages || 0);
-  if (pages <= 0) {
-    return {
-      minPages: DEFAULT_CHUNK_MIN_PAGES,
-      maxPages: DEFAULT_CHUNK_MAX_PAGES,
-      targetPages: DEFAULT_CHUNK_TARGET_PAGES,
-      minChunks: 1,
-      maxChunks: 50,
-      recommendedChunks: 1,
-    };
-  }
-  return {
-    minPages: DEFAULT_CHUNK_MIN_PAGES,
-    maxPages: DEFAULT_CHUNK_MAX_PAGES,
-    targetPages: DEFAULT_CHUNK_TARGET_PAGES,
-    minChunks: 1,
-    maxChunks: Math.max(1, Math.floor(pages)),
-    recommendedChunks: Math.max(1, Math.round(pages / DEFAULT_CHUNK_TARGET_PAGES)),
-  };
-}
-
-function suggestedStructureSettings(targetPages) {
-  const target = Math.max(0.1, Number(targetPages || DEFAULT_CHUNK_TARGET_PAGES));
-  return {
-    minPages: Math.max(0.1, Number((target * 0.8).toFixed(1))),
-    maxPages: Math.max(target, Number((target * 1.25).toFixed(1))),
-    wordsPerPage: 500,
-  };
-}
 
 function syncStructureInputs({ force = false } = {}) {
-  const targetPages = Number(appState.calculatedTargetPages || DEFAULT_CHUNK_TARGET_PAGES);
-  const suggested = suggestedStructureSettings(targetPages);
   const minInput = document.getElementById("min-pages-input");
   const maxInput = document.getElementById("max-pages-input");
-  const wordsInput = document.getElementById("words-per-page-input");
-  if (!minInput || !maxInput || !wordsInput) return;
+  if (!minInput || !maxInput) return;
   if (force || !appState.structureSettingsDirty) {
-    minInput.value = String(suggested.minPages);
-    maxInput.value = String(suggested.maxPages);
-    wordsInput.value = String(suggested.wordsPerPage);
+    minInput.value = String(DEFAULT_CHUNK_MIN_PAGES);
+    maxInput.value = String(DEFAULT_CHUNK_MAX_PAGES);
+    const skipStartInput = document.getElementById("skip-start-input");
+    const skipEndInput = document.getElementById("skip-end-input");
+    if (skipStartInput) skipStartInput.value = "0";
+    if (skipEndInput) skipEndInput.value = "0";
   }
+  updateEstimatedChunkCount();
 }
 
 function handleStructureSettingChange() {
   appState.structureSettingsDirty = true;
+  updateEstimatedChunkCount();
+}
+
+function updateEstimatedChunkCount() {
+  const el = document.getElementById("estimated-chunk-count");
+  if (!el) return;
+  const minPages = Number(document.getElementById("min-pages-input")?.value || DEFAULT_CHUNK_MIN_PAGES);
+  const maxPages = Number(document.getElementById("max-pages-input")?.value || DEFAULT_CHUNK_MAX_PAGES);
+  const skipStart = Number(document.getElementById("skip-start-input")?.value || 0);
+  const skipEnd = Number(document.getElementById("skip-end-input")?.value || 0);
+  const effectivePages = Math.max(0, appState.totalPages - skipStart - skipEnd);
+  if (effectivePages <= 0 || minPages <= 0 || maxPages <= 0) {
+    el.textContent = "?";
+    return;
+  }
+  const avgPages = (minPages + maxPages) / 2;
+  const estimated = Math.max(1, Math.round(effectivePages / avgPages));
+  el.textContent = String(estimated);
 }
 
 function iconSvg(iconName) {
@@ -647,6 +636,202 @@ function saveStudioSettings() {
   closeStudioSettings();
   renderNotebookDashboardDetail();
   showToast(`${studioName.replace(/_/g, " ")} settings saved.`);
+}
+
+const NBLM_SETTINGS_TABS = ["sources", "sync"];
+const DEFAULT_MAX_PARALLEL = { report: 2, slide_deck: 2, quiz: 2, flashcards: 2, audio: 1 };
+const DEFAULT_MAX_PARALLEL_CHUNKS = 3;
+
+function nblmSettingsStorageKey() {
+  return "nblm-desktop-nblm-settings-v1";
+}
+
+function loadNblmSettings() {
+  try {
+    const raw = localStorage.getItem(nblmSettingsStorageKey());
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function persistNblmSettings(settings) {
+  localStorage.setItem(nblmSettingsStorageKey(), JSON.stringify(settings));
+}
+
+function getMaxParallel(studioName) {
+  const settings = loadNblmSettings();
+  const val = settings?.maxParallel?.[studioName];
+  return val != null ? Number(val) : (DEFAULT_MAX_PARALLEL[studioName] || 2);
+}
+
+function getMaxParallelChunks() {
+  const settings = loadNblmSettings();
+  return settings?.maxParallelChunks != null ? Number(settings.maxParallelChunks) : DEFAULT_MAX_PARALLEL_CHUNKS;
+}
+
+let nblmSettingsActiveTab = "sources";
+let nblmSettingsActiveSourceTab = "report";
+
+function openNotebookLMSettings() {
+  closeUserMenu();
+  nblmSettingsActiveTab = "sources";
+  nblmSettingsActiveSourceTab = "report";
+  const modal = document.getElementById("nblm-settings-modal");
+  if (modal) modal.classList.remove("hidden");
+  renderNblmSettingsTabs();
+  renderNblmSettingsBody();
+}
+
+function closeNotebookLMSettings() {
+  const modal = document.getElementById("nblm-settings-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function renderNblmSettingsTabs() {
+  const tabBar = document.getElementById("nblm-settings-tab-bar");
+  if (!tabBar) return;
+  tabBar.innerHTML = NBLM_SETTINGS_TABS.map((tab) => `
+    <button onclick="window.switchNblmSettingsTab('${tab}')" class="${tab === nblmSettingsActiveTab ? "workspace-tab workspace-tab-active" : "workspace-tab"}">
+      ${tab === "sources" ? "Sources" : "Sync"}
+    </button>
+  `).join("");
+}
+
+function switchNblmSettingsTab(tab) {
+  nblmSettingsActiveTab = tab;
+  renderNblmSettingsTabs();
+  renderNblmSettingsBody();
+}
+
+function switchNblmSourceTab(studioName) {
+  nblmSettingsActiveSourceTab = studioName;
+  renderNblmSettingsBody();
+}
+
+function renderNblmSettingsBody() {
+  const body = document.getElementById("nblm-settings-body");
+  if (!body) return;
+  const nblmSettings = loadNblmSettings();
+
+  if (nblmSettingsActiveTab === "sources") {
+    const studioName = nblmSettingsActiveSourceTab;
+    const settings = appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {};
+    const maxPar = nblmSettings?.maxParallel?.[studioName] ?? DEFAULT_MAX_PARALLEL[studioName] ?? 2;
+
+    const sourceTabBar = promptStudioTypes.map((sn) => `
+      <button onclick="window.switchNblmSourceTab('${sn}')" class="${sn === studioName ? "workspace-tab workspace-tab-active" : "workspace-tab"} text-xs">
+        ${sn.replace(/_/g, " ")}
+      </button>
+    `).join("");
+
+    const settingSections = [];
+    if (studioName === "report") {
+      settingSections.push(studioSettingsField("language", "Language", [
+        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
+      ], settings.language));
+      settingSections.push(studioSettingsField("format", "Format", [
+        { value: "study-guide", label: "Study Guide" }, { value: "briefing-doc", label: "Briefing Doc" },
+        { value: "timeline", label: "Timeline" }, { value: "faq", label: "FAQ" }, { value: "custom", label: "Custom" },
+      ], settings.format));
+    } else if (studioName === "slide_deck") {
+      settingSections.push(studioSettingsField("language", "Language", [
+        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
+      ], settings.language));
+      settingSections.push(studioSettingsField("format", "Format", [
+        { value: "detailed", label: "Detailed" }, { value: "presenter", label: "Presenter" },
+      ], settings.format));
+      settingSections.push(studioSettingsField("length", "Length", [
+        { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
+      ], settings.length));
+      settingSections.push(studioSettingsField("downloadFormat", "Download format", [
+        { value: "pdf", label: "PDF" }, { value: "pptx", label: "PPTX" },
+      ], settings.downloadFormat));
+    } else if (studioName === "quiz" || studioName === "flashcards") {
+      settingSections.push(studioSettingsField("quantity", "Quantity", [
+        { value: "fewer", label: "Fewer" }, { value: "default", label: "Default" }, { value: "more", label: "More" },
+      ], settings.quantity));
+      settingSections.push(studioSettingsField("difficulty", "Difficulty", [
+        { value: "easier", label: "Easier" }, { value: "default", label: "Default" }, { value: "hard", label: "Hard" },
+      ], settings.difficulty));
+      settingSections.push(studioSettingsField("downloadFormat", "Download format", studioName === "quiz" ? [
+        { value: "json", label: "JSON" }, { value: "markdown", label: "Markdown" },
+      ] : [
+        { value: "markdown", label: "Markdown" }, { value: "json", label: "JSON" },
+      ], settings.downloadFormat));
+    } else if (studioName === "audio") {
+      settingSections.push(studioSettingsField("language", "Language", [
+        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
+      ], settings.language));
+      settingSections.push(studioSettingsField("format", "Format", [
+        { value: "deep-dive", label: "Deep Dive" }, { value: "conversational", label: "Conversational" },
+      ], settings.format));
+      settingSections.push(studioSettingsField("length", "Length", [
+        { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
+      ], settings.length));
+    }
+
+    settingSections.push(`
+      <label class="space-y-2 block border-t border-slate-100 pt-4 mt-2">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Parallel Requests</span>
+        <input data-nblm-setting="maxParallel" data-nblm-source="${studioName}" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="1" max="10" value="${maxPar}" />
+        <span class="text-[10px] text-slate-400">How many ${studioName.replace(/_/g, " ")} jobs run in parallel per queue batch</span>
+      </label>
+    `);
+
+    body.innerHTML = `
+      <div class="flex gap-1 mb-4 flex-wrap">${sourceTabBar}</div>
+      <div class="space-y-4">${settingSections.join("")}</div>
+    `;
+  } else if (nblmSettingsActiveTab === "sync") {
+    const mpc = nblmSettings?.maxParallelChunks ?? DEFAULT_MAX_PARALLEL_CHUNKS;
+    body.innerHTML = `
+      <div class="space-y-4">
+        <label class="space-y-2 block">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Parallel Chunk Uploads</span>
+          <input data-nblm-setting="maxParallelChunks" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="1" max="10" value="${mpc}" />
+          <span class="text-[10px] text-slate-400">Number of chunks uploaded to NotebookLM simultaneously during sync</span>
+        </label>
+      </div>
+    `;
+  }
+}
+
+function saveNotebookLMSettings() {
+  const body = document.getElementById("nblm-settings-body");
+  if (!body) return;
+  const nblmSettings = loadNblmSettings();
+
+  if (nblmSettingsActiveTab === "sources") {
+    const studioName = nblmSettingsActiveSourceTab;
+    // Save studio settings (same as existing openStudioSettings save)
+    const next = { ...(appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {}) };
+    body.querySelectorAll("[data-studio-setting]").forEach((node) => {
+      next[node.getAttribute("data-studio-setting")] = node.value;
+    });
+    appState.studioSettings = {
+      ...(appState.studioSettings || {}),
+      [studioName]: next,
+    };
+    persistStudioSettings();
+
+    // Save maxParallel per source
+    const maxParNode = body.querySelector(`[data-nblm-setting="maxParallel"][data-nblm-source="${studioName}"]`);
+    if (maxParNode) {
+      if (!nblmSettings.maxParallel) nblmSettings.maxParallel = {};
+      nblmSettings.maxParallel[studioName] = Math.max(1, Number(maxParNode.value) || DEFAULT_MAX_PARALLEL[studioName] || 2);
+    }
+    persistNblmSettings(nblmSettings);
+    updateStudioSettingsSummaries();
+    showToast(`${studioName.replace(/_/g, " ")} settings saved.`);
+  } else if (nblmSettingsActiveTab === "sync") {
+    const mpcNode = body.querySelector('[data-nblm-setting="maxParallelChunks"]');
+    if (mpcNode) {
+      nblmSettings.maxParallelChunks = Math.max(1, Number(mpcNode.value) || DEFAULT_MAX_PARALLEL_CHUNKS);
+    }
+    persistNblmSettings(nblmSettings);
+    showToast("Sync settings saved.");
+  }
 }
 
 function applyPromptPreset(studioName, promptId) {
@@ -1202,28 +1387,23 @@ function prepareSourceView() {
 function prepareStructureView() {
   const readOnly = isReadOnlyProject();
   const processButton = document.getElementById("process-btn");
-  const slider = document.getElementById("target-count-slider");
   const banner = document.getElementById("structure-readonly-banner");
   const summary = document.getElementById("structure-readonly-summary");
-  const rangeNote = document.getElementById("partition-range-note");
-  const bounds = partitionBounds();
-  if (slider) {
-    slider.min = String(bounds.minChunks);
-    slider.max = String(bounds.maxChunks);
-    const currentValue = Number(slider.value || bounds.recommendedChunks);
-    slider.value = String(Math.min(bounds.maxChunks, Math.max(bounds.minChunks, currentValue || bounds.recommendedChunks)));
-    slider.disabled = readOnly;
-  }
+  const minInput = document.getElementById("min-pages-input");
+  const maxInput = document.getElementById("max-pages-input");
+  const skipStartInput = document.getElementById("skip-start-input");
+  const skipEndInput = document.getElementById("skip-end-input");
   if (processButton) processButton.style.display = readOnly ? "none" : "block";
   if (banner) banner.style.display = readOnly ? "block" : "none";
   if (summary && readOnly) {
     summary.textContent = `${appState.totalPages || "Unknown"} pages were partitioned into ${appState.chunks.length} chunk(s) for this synced version.`;
   }
-  if (rangeNote) {
-    rangeNote.textContent = `Pick any target from 1 to ${bounds.maxChunks}. The chunker still prefers heading boundaries, so it will try to honor your target while keeping section breaks sensible.`;
-  }
+  if (minInput) minInput.disabled = readOnly;
+  if (maxInput) maxInput.disabled = readOnly;
+  if (skipStartInput) skipStartInput.disabled = readOnly;
+  if (skipEndInput) skipEndInput.disabled = readOnly;
   if (!readOnly) {
-    updateSlider(slider?.value || bounds.recommendedChunks);
+    updateEstimatedChunkCount();
   }
 }
 
@@ -1351,7 +1531,7 @@ async function fetchLocalProjects() {
   }
 
   if (appState.localProjects.length === 0) {
-    listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No local projects yet.</div>';
+    listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No local chunks yet.</div>';
     return;
   }
 
@@ -1959,7 +2139,6 @@ async function inspectSelectedPdf() {
   appState.totalPages = inspection.pages || 0;
   document.getElementById("total-pages-display").textContent = String(appState.totalPages || "?");
   appState.structureSettingsDirty = false;
-  updateSlider(partitionBounds().recommendedChunks);
   syncStructureInputs({ force: true });
 }
 
@@ -1979,55 +2158,49 @@ async function startNewVersion() {
   switchView("structure");
 }
 
-function updateSlider(value) {
-  const slider = document.getElementById("target-count-slider");
-  const bounds = partitionBounds();
-  const min = bounds.minChunks;
-  const max = bounds.maxChunks;
-  const targetCount = Math.min(max, Math.max(min, Number(value || bounds.recommendedChunks)));
-  if (slider) slider.value = String(targetCount);
-  document.getElementById("target-count-display").textContent = String(targetCount);
-  const denominator = Math.max(1, max - min);
-  const percent = ((targetCount - min) / denominator) * 100;
-  document.getElementById("slider-track").style.width = `${Math.max(0, Math.min(100, percent)).toFixed(2)}%`;
-  if (appState.totalPages > 0) {
-    appState.calculatedTargetPages = (appState.totalPages / targetCount).toFixed(2);
-    document.getElementById("calc-pages-display").textContent = appState.calculatedTargetPages;
-  }
-  syncStructureInputs();
+function updateSlider() {
+  // Legacy no-op — slider has been removed in favour of min/max page inputs.
+  updateEstimatedChunkCount();
 }
 
 async function forceRefine() {
   if (!appState.selectedPDF || !appState.outputDir) return;
   showLoading("Preparing chunks...");
   try {
-    const chunkCount = Number(document.getElementById("target-count-slider")?.value || 5);
-    const targetPages = Number((appState.totalPages / chunkCount).toFixed(2));
     const minPages = Number(document.getElementById("min-pages-input")?.value || 0);
     const maxPages = Number(document.getElementById("max-pages-input")?.value || 0);
-    const wordsPerPage = Number(document.getElementById("words-per-page-input")?.value || 500);
+    const skipStart = Number(document.getElementById("skip-start-input")?.value || 0);
+    const skipEnd = Number(document.getElementById("skip-end-input")?.value || 0);
     if (!(minPages > 0) || !(maxPages > 0) || minPages > maxPages) {
       throw new Error("Min/Max page settings are invalid. Make sure both are positive and min is not greater than max.");
     }
-    if (!(wordsPerPage > 0)) {
-      throw new Error("Words per page must be greater than 0.");
+    const effectivePages = Math.max(0, appState.totalPages - skipStart - skipEnd);
+    const avgPages = (minPages + maxPages) / 2;
+    const targetPages = Number(avgPages.toFixed(2));
+    const args = [
+      appState.selectedPDF,
+      "--yes",
+      "--output-dir",
+      appState.outputDir,
+      "--target-pages",
+      String(targetPages),
+      "--min-pages",
+      String(minPages),
+      "--max-pages",
+      String(maxPages),
+    ];
+    if (skipStart > 0) {
+      args.push("--skip-range", `1-${skipStart}`);
+    }
+    if (skipEnd > 0 && appState.totalPages > 0) {
+      const skipEndStart = appState.totalPages - skipEnd + 1;
+      if (skipEndStart <= appState.totalPages) {
+        args.push("--skip-range", `${skipEndStart}-${appState.totalPages}`);
+      }
     }
     const result = await window.electronAPI.runNBLM({
       command: "prepare",
-      args: [
-        appState.selectedPDF,
-        "--yes",
-        "--output-dir",
-        appState.outputDir,
-        "--target-pages",
-        String(targetPages),
-        "--min-pages",
-        String(minPages),
-        "--max-pages",
-        String(maxPages),
-        "--words-per-page",
-        String(wordsPerPage),
-      ],
+      args,
     });
     if (!result.success) {
       throw new Error(result.error || result.output || "Chunking failed.");
@@ -2403,7 +2576,7 @@ async function runSync() {
     const args = [
       appState.outputDir,
       "--max-parallel-chunks",
-      "3",
+      String(getMaxParallelChunks()),
       "--only-changed",
       "--rename-remote-titles",
     ];
@@ -2489,7 +2662,7 @@ function buildStudioSelections() {
       prompt: document.getElementById("studio-report-prompt")?.value.trim(),
       language: settings.report.language,
       format: settings.report.format,
-      maxParallel: 2,
+      maxParallel: getMaxParallel("report"),
     },
     slide_deck: {
       enabled: true,
@@ -2499,7 +2672,7 @@ function buildStudioSelections() {
       format: settings.slide_deck.format,
       length: settings.slide_deck.length,
       downloadFormat: settings.slide_deck.downloadFormat,
-      maxParallel: 2,
+      maxParallel: getMaxParallel("slide_deck"),
     },
     quiz: {
       enabled: true,
@@ -2508,7 +2681,7 @@ function buildStudioSelections() {
       quantity: settings.quiz.quantity,
       difficulty: settings.quiz.difficulty,
       downloadFormat: settings.quiz.downloadFormat,
-      maxParallel: 2,
+      maxParallel: getMaxParallel("quiz"),
     },
     flashcards: {
       enabled: true,
@@ -2517,7 +2690,7 @@ function buildStudioSelections() {
       quantity: settings.flashcards.quantity,
       difficulty: settings.flashcards.difficulty,
       downloadFormat: settings.flashcards.downloadFormat,
-      maxParallel: 2,
+      maxParallel: getMaxParallel("flashcards"),
     },
     audio: {
       enabled: true,
@@ -2526,7 +2699,7 @@ function buildStudioSelections() {
       language: settings.audio.language,
       format: settings.audio.format,
       length: settings.audio.length,
-      maxParallel: 1,
+      maxParallel: getMaxParallel("audio"),
     },
   };
 }
@@ -2543,6 +2716,37 @@ function studioQueueSummary(activeProject) {
     return "Queue is empty. Add report, slide, quiz, flashcard, or audio batches for the selected source set.";
   }
   return `${appState.studioQueue.length} queued job${appState.studioQueue.length === 1 ? "" : "s"} across the selected sources in this local run.`;
+}
+
+async function retryStudioJob(jobId) {
+  const activeProject = currentDashboardProject();
+  if (!activeProject) return;
+  const result = await window.electronAPI.retryStudioJob({
+    projectPath: activeProject.path,
+    jobId,
+  });
+  if (!result.success) {
+    alert(result.error || "Could not retry job.");
+    return;
+  }
+  await fetchLocalProjects();
+  renderNotebookDashboardDetail();
+  showToast("Job re-queued for retry.");
+}
+
+async function retryAllFailedStudioJobs() {
+  const activeProject = currentDashboardProject();
+  if (!activeProject) return;
+  const result = await window.electronAPI.retryAllFailedStudioJobs({
+    projectPath: activeProject.path,
+  });
+  if (!result.success) {
+    alert(result.error || "Could not retry failed jobs.");
+    return;
+  }
+  await fetchLocalProjects();
+  renderNotebookDashboardDetail();
+  showToast(`${result.retried} failed job${result.retried === 1 ? "" : "s"} re-queued for retry.`);
 }
 
 function renderStudioQueue(activeProject) {
@@ -2577,10 +2781,11 @@ function renderStudioQueue(activeProject) {
       : job.status === "running"
       ? "queue-progress-bar is-running"
       : "queue-progress-bar";
+    const logLines = job.status === "failed" ? 6 : 3;
     const logPreview = Array.isArray(job.logs) && job.logs.length > 0
       ? `
-        <div class="queue-log-preview">
-          ${job.logs.slice(-3).map((entry) => `<p>[${entry.channel}] ${entry.line}</p>`).join("")}
+        <div class="queue-log-preview ${job.status === "failed" ? "is-error" : ""}">
+          ${job.logs.slice(-logLines).map((entry) => `<p>[${entry.channel}] ${entry.line}</p>`).join("")}
         </div>
       `
       : "";
@@ -2596,11 +2801,18 @@ function renderStudioQueue(activeProject) {
             ${logPreview}
           </div>
         </div>
-        <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
+        <div class="flex flex-col items-end gap-2">
+          <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
+          ${job.status === "failed" ? `<button onclick="window.retryStudioJob('${job.id}')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
+        </div>
       </div>
     `;
   }).join("");
-  queueList.innerHTML = `${stagedRows}${backgroundRows}`;
+  const failedCount = backgroundJobs.filter((job) => job.status === "failed").length;
+  const retryAllRow = failedCount > 1
+    ? `<div class="flex justify-end p-3"><button onclick="window.retryAllFailedStudioJobs()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all cursor-pointer"><span class="material-symbols-outlined !text-sm">refresh</span>Retry All Failed (${failedCount})</button></div>`
+    : "";
+  queueList.innerHTML = `${stagedRows}${backgroundRows}${retryAllRow}`;
   applyOfflineIcons(queueList);
 }
 
@@ -2805,7 +3017,7 @@ async function runStudios() {
       configToml: window.projectUtils.buildStudiosToml({
         outputDir: `${item.lineagePath}/.desktop-studio-scratch/${item.id}`,
         notebookId: item.notebookId,
-        maxParallelChunks: 3,
+        maxParallelChunks: getMaxParallelChunks(),
         downloadOutputs: true,
         studios: {
           [item.studioName]: item.config,
@@ -2881,10 +3093,10 @@ async function resumeExistingPath(projectPath) {
 }
 
 async function deleteProject(projectPath) {
-  if (!confirm("Delete this local project version?")) return;
+  if (!confirm("Delete this local chunk version?")) return;
   const result = await window.electronAPI.deleteProject(projectPath);
   if (!result.success) {
-    alert(result.error || "Could not delete project.");
+    alert(result.error || "Could not delete chunk version.");
     return;
   }
   await fetchLocalProjects();
@@ -3017,7 +3229,6 @@ Object.assign(window, {
   handleNotebookSelectChange,
   handleTitleEdit,
   handleEdit,
-  updateSlider,
   handleStructureSettingChange,
   handleChunkSearch,
   handleNotebookSearch,
@@ -3062,6 +3273,13 @@ Object.assign(window, {
   selectDashboardLineage,
   selectDashboardSource,
   deleteProject,
+  retryStudioJob,
+  retryAllFailedStudioJobs,
+  openNotebookLMSettings,
+  closeNotebookLMSettings,
+  saveNotebookLMSettings,
+  switchNblmSettingsTab,
+  switchNblmSourceTab,
 });
 
 init();

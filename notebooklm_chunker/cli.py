@@ -59,14 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
         "list-artifacts",
         help="List NotebookLM Studio artifacts as JSON for desktop integrations.",
     )
-    list_artifacts_parser.add_argument("--notebook-id", required=True, help="Notebook ID to inspect.")
+    list_artifacts_parser.add_argument(
+        "--notebook-id", required=True, help="Notebook ID to inspect."
+    )
     list_artifacts_parser.set_defaults(handler=_handle_list_artifacts)
 
     delete_artifacts_parser = subparsers.add_parser(
         "delete-artifacts",
         help="Delete NotebookLM Studio artifacts for desktop integrations.",
     )
-    delete_artifacts_parser.add_argument("--notebook-id", required=True, help="Notebook ID that owns the artifacts.")
+    delete_artifacts_parser.add_argument(
+        "--notebook-id", required=True, help="Notebook ID that owns the artifacts."
+    )
     delete_artifacts_parser.add_argument(
         "--artifact-id",
         action="append",

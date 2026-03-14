@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notebooklm-chunker"
-version = "0.2.1"
+version = "0.3.1"
 description = "Turn long PDFs into chunked NotebookLM workflows with Studio outputs"
 readme = "README.md"
 requires-python = ">=3.12"

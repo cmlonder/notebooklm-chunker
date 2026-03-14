@@ -276,7 +276,9 @@ class NotebookLMPyUploader:
         async with await client_class.from_storage() as client:
             list_method = getattr(client.artifacts, "list", None)
             if list_method is None:
-                raise UploadError("notebooklm-py does not expose `client.artifacts.list` in this version.")
+                raise UploadError(
+                    "notebooklm-py does not expose `client.artifacts.list` in this version."
+                )
             artifacts = await list_method(notebook_id)
             normalized: list[dict[str, Any]] = []
             for artifact in artifacts or []:
@@ -297,7 +299,9 @@ class NotebookLMPyUploader:
         async with await client_class.from_storage() as client:
             delete_method = getattr(client.artifacts, "delete", None)
             if delete_method is None:
-                raise UploadError("notebooklm-py does not expose `client.artifacts.delete` in this version.")
+                raise UploadError(
+                    "notebooklm-py does not expose `client.artifacts.delete` in this version."
+                )
             for artifact_id in artifact_ids:
                 await delete_method(notebook_id, artifact_id)
 

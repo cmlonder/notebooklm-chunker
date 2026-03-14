@@ -1576,48 +1576,35 @@ function renderHistoryList() {
   const query = appState.historySearchQuery.trim().toLowerCase();
   const filtered = appState.localProjects.filter((project) => {
     if (!query) return true;
-    const text = `${project.rawName} ${project.metadata?.notebook_title || ""} ${project.status.label} ${project.path}`.toLowerCase();
-    return text.includes(query);
+    return `${project.rawName} ${project.metadata?.notebook_title || ""} ${project.status.label}`.toLowerCase().includes(query);
   });
 
   if (appState.localProjects.length === 0) {
-    listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No local chunks yet.</div>';
+    listEl.innerHTML = '<p class="text-sm text-slate-400 italic col-span-full py-10">No local chunks yet.</p>';
     return;
   }
   if (filtered.length === 0) {
-    listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No chunks matching your filter.</div>';
+    listEl.innerHTML = '<p class="text-sm text-slate-400 italic col-span-full py-10">No matches.</p>';
     return;
   }
 
+  const badge = (tone) =>
+    tone === "green" ? "color: #15803d;" : tone === "blue" ? "color: #1d4ed8;" : tone === "amber" ? "color: #b45309;" : "color: #64748b;";
+
   listEl.innerHTML = filtered.map((project) => {
-    const modified = new Date(project.modified).toLocaleDateString();
-    const notebookLabel = project.metadata?.notebook_title || "";
-    const statusClass = project.status.tone === "green"
-      ? "bg-green-50 text-green-700"
-      : project.status.tone === "amber"
-      ? "bg-amber-50 text-amber-700"
-      : project.status.tone === "blue"
-      ? "bg-blue-50 text-blue-700"
-      : "bg-slate-50 text-slate-500 border border-slate-200";
-    return `
-      <div class="flex items-center gap-4 px-5 py-4 rounded-2xl border border-slate-200 hover:border-primary/30 transition-all">
-        <button onclick="window.resumeExistingPath('${project.path}')" class="flex-1 min-w-0 text-left">
-          <p class="text-sm font-bold text-slate-900 truncate hover:text-primary transition-colors">${project.rawName}</p>
-          <div class="flex items-center gap-3 mt-1.5 flex-wrap">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}">${project.status.label}</span>
-            <span class="text-[11px] text-slate-400">${project.status.detail}</span>
-            <span class="text-[11px] text-slate-300">·</span>
-            <span class="text-[11px] text-slate-400">${modified}</span>
-            ${notebookLabel ? `<span class="text-[11px] text-slate-300">·</span><span class="text-[11px] text-slate-400 truncate max-w-[200px]">${notebookLabel}</span>` : ""}
-          </div>
-        </button>
-        <button onclick="window.deleteProject('${project.path}')" class="p-2 rounded-lg text-slate-400 hover:text-red-500 transition-colors shrink-0" title="Delete">
-          <span class="material-symbols-outlined !text-lg">delete</span>
-        </button>
-      </div>
-    `;
+    const date = new Date(project.modified).toLocaleDateString();
+    return `<div onclick="window.resumeExistingPath('${project.path}')" style="cursor:pointer;border:1px solid #e2e8f0;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;transition:border-color .15s;" onmouseenter="this.style.borderColor='#93c5fd'" onmouseleave="this.style.borderColor='#e2e8f0'">
+  <div style="display:flex;justify-content:space-between;align-items:start;">
+    <p style="font-weight:700;font-size:14px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${project.rawName}</p>
+    <button onclick="event.stopPropagation();window.deleteProject('${project.path}')" style="background:none;border:none;cursor:pointer;color:#cbd5e1;padding:4px;margin:-4px -4px 0 8px;transition:color .15s;" onmouseenter="this.style.color='#ef4444'" onmouseleave="this.style.color='#cbd5e1'" title="Delete"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 7h14M9 7V5h6v2M9 10v7M15 10v7M7 7l1 12h8l1-12"/></svg></button>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+    <span style="font-weight:700;${badge(project.status.tone)}">${project.status.label}</span>
+    <span style="color:#94a3b8;">${project.status.detail}</span>
+  </div>
+  <span style="font-size:11px;color:#94a3b8;">${date}</span>
+</div>`;
   }).join("");
-  applyOfflineIcons(listEl);
 }
 
 function linkedProjectsForNotebook(notebookId) {

@@ -80,6 +80,26 @@ To clear local `notebooklm-py` auth state later:
 nblm logout
 ```
 
+## Desktop App
+
+This repo also ships with an Electron desktop client under [`desktop/`](desktop/).
+
+The desktop flow is built on top of the real CLI:
+
+- choose or resume a local project
+- prepare chunk files with a slider-based target
+- refine chunk titles and content inline
+- sync only changed chunks to NotebookLM
+- generate new Studio outputs later from the saved `.nblm-run-state.json`
+
+Quick start:
+
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
 ## Quick Start
 
 Create a workflow file:

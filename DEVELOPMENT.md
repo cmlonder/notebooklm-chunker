@@ -62,6 +62,13 @@ Run the unit test suite:
 python -m unittest discover -s tests -v
 ```
 
+Run the desktop helper tests:
+
+```bash
+cd desktop
+npm test
+```
+
 Run a local Markdown chunking smoke test:
 
 ```bash
@@ -233,6 +240,7 @@ Important paths:
 - `notebooklm_chunker/uploaders/notebooklm_py.py`: NotebookLM upload and Studio integration
 - `examples/workflows/`: runnable sample workflow files
 - `tests/`: unit test suite
+- `desktop/`: Electron desktop client
 
 ## Contribution Expectations
 

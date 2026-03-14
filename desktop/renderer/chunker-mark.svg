@@ -1,0 +1,20 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="32" y1="24" x2="220" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.5" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="86" y1="64" x2="186" y2="194" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="220" height="220" rx="56" fill="url(#bg)"/>
+  <path d="M78 62C78 54.268 84.268 48 92 48H156L190 82V176C190 183.732 183.732 190 176 190H92C84.268 190 78 183.732 78 176V62Z" fill="url(#fold)"/>
+  <path d="M156 48V72C156 79.732 162.268 86 170 86H190" fill="#BFDBFE"/>
+  <path d="M108 98H158" stroke="#1D4ED8" stroke-width="12" stroke-linecap="round"/>
+  <path d="M108 130H148" stroke="#2563EB" stroke-width="12" stroke-linecap="round"/>
+  <path d="M108 162H136" stroke="#38BDF8" stroke-width="12" stroke-linecap="round"/>
+  <path d="M58 114L76 128L58 142" stroke="#F8FAFC" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

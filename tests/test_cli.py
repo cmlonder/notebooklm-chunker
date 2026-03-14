@@ -248,6 +248,59 @@ class CliTests(TestCase):
 
         self.assertEqual(exit_code, 1)
 
+    def test_inspect_command_prints_basic_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "book.md"
+            source.write_text("# Chapter 1\n\nBody\n", encoding="utf-8")
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                exit_code = main(["inspect", str(source)])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn('"headings": 1', stdout.getvalue())
+
+    def test_list_notebooks_command_prints_json(self) -> None:
+        stdout = io.StringIO()
+        with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+            mocked_uploader = mocked_uploader_class.return_value
+            mocked_uploader.list_notebooks.return_value = [{"id": "nb1", "title": "Notebook"}]
+            with redirect_stdout(stdout):
+                exit_code = main(["list-notebooks"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn('"id": "nb1"', stdout.getvalue())
+
+    def test_list_artifacts_command_prints_json(self) -> None:
+        stdout = io.StringIO()
+        with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+            mocked_uploader = mocked_uploader_class.return_value
+            mocked_uploader.list_artifacts.return_value = [{"id": "art1", "kind": "report"}]
+            with redirect_stdout(stdout):
+                exit_code = main(["list-artifacts", "--notebook-id", "nb1"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn('"id": "art1"', stdout.getvalue())
+
+    def test_delete_artifacts_command_passes_ids(self) -> None:
+        stdout = io.StringIO()
+        with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+            mocked_uploader = mocked_uploader_class.return_value
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "delete-artifacts",
+                        "--notebook-id",
+                        "nb1",
+                        "--artifact-id",
+                        "art1",
+                        "--artifact-id",
+                        "art2",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        mocked_uploader.delete_artifacts.assert_called_once_with("nb1", ["art1", "art2"])
+
     def test_upload_command_uses_notebooklm_py_uploader(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             chunks_dir = Path(directory) / "chunks"
@@ -312,6 +365,51 @@ class CliTests(TestCase):
         self.assertEqual(
             mocked_uploader.run_studios.call_args.kwargs["run_state_path"].resolve(),
             (chunks_dir / ".nblm-run-state.json").resolve(),
+        )
+
+    def test_studios_command_passes_selected_source_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / ".nblm-run-state.json").write_text("{}", encoding="utf-8")
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[chunking]",
+                        'output_dir = "./chunks"',
+                        "",
+                        "[studios.report]",
+                        "enabled = true",
+                        'output_dir = "./reports"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("notebooklm_chunker.cli.NotebookLMPyUploader") as mocked_uploader_class:
+                mocked_uploader = mocked_uploader_class.return_value
+                mocked_uploader.run_studios.return_value = []
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = main(
+                        [
+                            "studios",
+                            "--config",
+                            str(config_path),
+                            "--source-id",
+                            "src-1",
+                            "--source-id",
+                            "src-2",
+                        ]
+                    )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            mocked_uploader.run_studios.call_args.kwargs["source_ids"],
+            ["src-1", "src-2"],
         )
 
     def test_prepare_command_reports_missing_input_file_cleanly(self) -> None:

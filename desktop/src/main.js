@@ -352,6 +352,52 @@ ipcMain.handle('enqueue-studio-jobs', async (event, { projectPath, jobs }) => {
 });
 
 
+ipcMain.handle('retry-studio-job', async (event, { projectPath, jobId }) => {
+  try {
+    const state = readStudioQueueState(projectPath);
+    const job = state.jobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Job not found' };
+    if (job.status !== 'failed') return { success: false, error: 'Only failed jobs can be retried' };
+    job.status = 'queued';
+    job.progress = 8;
+    job.message = 'Queued for retry';
+    job.updatedAt = nowIso();
+    job.logs = [];
+    writeStudioQueueState(projectPath, state);
+    for (let index = 0; index < DESKTOP_STUDIO_MAX_PARALLEL; index += 1) {
+      runNextStudioJob(projectPath);
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('retry-all-failed-studio-jobs', async (event, { projectPath }) => {
+  try {
+    const state = readStudioQueueState(projectPath);
+    let retried = 0;
+    for (const job of state.jobs) {
+      if (job.status === 'failed') {
+        job.status = 'queued';
+        job.progress = 8;
+        job.message = 'Queued for retry';
+        job.updatedAt = nowIso();
+        job.logs = [];
+        retried += 1;
+      }
+    }
+    if (retried === 0) return { success: false, error: 'No failed jobs to retry' };
+    writeStudioQueueState(projectPath, state);
+    for (let index = 0; index < DESKTOP_STUDIO_MAX_PARALLEL; index += 1) {
+      runNextStudioJob(projectPath);
+    }
+    return { success: true, retried };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('delete-project', async (event, projectPath) => {
   try {
     if (fs.existsSync(projectPath)) {

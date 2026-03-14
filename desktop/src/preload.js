@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteProject: (projectPath) => ipcRenderer.invoke('delete-project', projectPath),
   getStudioQueue: (projectPath) => ipcRenderer.invoke('get-studio-queue', projectPath),
   enqueueStudioJobs: (payload) => ipcRenderer.invoke('enqueue-studio-jobs', payload),
+  retryStudioJob: (payload) => ipcRenderer.invoke('retry-studio-job', payload),
+  retryAllFailedStudioJobs: (payload) => ipcRenderer.invoke('retry-all-failed-studio-jobs', payload),
   getAppPaths: () => ipcRenderer.invoke('get-app-paths'),
   
   // CLI operations

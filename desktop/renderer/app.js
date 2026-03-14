@@ -48,6 +48,7 @@ const appState = {
   studioQueueTab: "all",
   studioQueueSearchQuery: "",
   historySearchQuery: "",
+  historyStatusFilter: "all",
   promptStudioTab: "report",
   promptSearchQuery: "",
   selectedPromptIds: new Set(),
@@ -1574,9 +1575,11 @@ function renderHistoryList() {
   const listEl = document.getElementById("project-history-list");
   if (!listEl) return;
   const query = appState.historySearchQuery.trim().toLowerCase();
+  const statusFilter = appState.historyStatusFilter || "all";
   const filtered = appState.localProjects.filter((project) => {
-    if (!query) return true;
-    return `${project.rawName} ${project.metadata?.notebook_title || ""} ${project.status.label}`.toLowerCase().includes(query);
+    if (statusFilter !== "all" && project.status.label !== statusFilter) return false;
+    if (query && !`${project.rawName} ${project.metadata?.notebook_title || ""} ${project.status.label}`.toLowerCase().includes(query)) return false;
+    return true;
   });
 
   if (appState.localProjects.length === 0) {
@@ -3352,6 +3355,11 @@ function handleHistorySearch(value) {
   renderHistoryList();
 }
 
+function handleHistoryStatusFilter(value) {
+  appState.historyStatusFilter = value;
+  renderHistoryList();
+}
+
 Object.assign(window, {
   login,
   confirmLogin,
@@ -3423,6 +3431,7 @@ Object.assign(window, {
   selectStudioQueueTab,
   handleStudioQueueSearch,
   handleHistorySearch,
+  handleHistoryStatusFilter,
   openNotebookLMSettings,
   saveNotebookLMSettings,
   switchNblmSettingsTab,

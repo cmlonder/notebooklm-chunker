@@ -28,9 +28,15 @@
     <div class="pt-4 border-t border-slate-100 p-2">
       <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">User</p>
       <p class="text-sm font-bold text-slate-900">Cemal Önder</p>
-      <div class="mt-3 flex items-center gap-2">
-        <button onclick="window.switchAccount()" class="secondary-action-btn flex-1 inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Switch</span></button>
-        <button onclick="window.logout()" class="secondary-action-btn flex-1 inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">logout</span><span>Logout</span></button>
+      <div id="user-menu-shell" class="mt-3 user-menu-shell">
+        <button onclick="window.toggleUserMenu()" class="secondary-action-btn w-full inline-flex items-center justify-center gap-2">
+          <span class="material-symbols-outlined !text-sm">settings</span><span>Settings</span>
+        </button>
+        <div id="user-menu-panel" class="hidden user-menu-panel">
+          <button onclick="window.openSetupView()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">checklist</span><span>Setup</span></button>
+          <button onclick="window.switchAccount()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Switch Account</span></button>
+          <button onclick="window.logout()" class="user-menu-item user-menu-danger"><span class="material-symbols-outlined !text-sm">logout</span><span>Logout</span></button>
+        </div>
       </div>
     </div>
   </aside>
@@ -48,6 +54,76 @@
     </header>
 
     <main id="view-container" class="flex-1 relative flex flex-col min-h-0 overflow-hidden">
+      <div id="setup-view" class="view flex items-center justify-center w-full h-full p-6">
+        <div class="setup-screen-shell fade-in">
+        <div class="w-full max-w-[880px] setup-screen-content">
+          <div class="setup-header-block">
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900">Desktop Setup</h1>
+            <p class="text-sm text-slate-500 mt-2">This desktop app wraps the `nblm` CLI. Check the machine once, then keep using the app normally.</p>
+            <p id="setup-logged-in-note" class="hidden text-sm text-slate-500 mt-3"></p>
+            <p id="setup-doctor-summary" class="text-sm text-slate-600 leading-6 mt-4"></p>
+            <div class="setup-command-note">
+              <p class="font-bold text-slate-900">Required once on each machine</p>
+              <code>pip install notebooklm-chunker</code>
+              <code>python -m playwright install chromium</code>
+              <code>nblm login</code>
+            </div>
+          </div>
+
+          <div class="setup-status-grid">
+            <div class="setup-status-card">
+              <div class="setup-status-head">
+                <span class="material-symbols-outlined">description</span>
+                <div>
+                  <h3>`nblm` CLI</h3>
+                  <p id="setup-cli-detail"></p>
+                </div>
+              </div>
+              <span id="setup-cli-badge" class="setup-status-pill">Checking</span>
+            </div>
+            <div class="setup-status-card">
+              <div class="setup-status-head">
+                <span class="material-symbols-outlined">slideshow</span>
+                <div>
+                  <h3>Playwright Chromium</h3>
+                  <p id="setup-playwright-detail"></p>
+                </div>
+              </div>
+              <span id="setup-playwright-badge" class="setup-status-pill">Checking</span>
+            </div>
+            <div class="setup-status-card">
+              <div class="setup-status-head">
+                <span class="material-symbols-outlined">manage_accounts</span>
+                <div>
+                  <h3>NotebookLM Login</h3>
+                  <p id="setup-auth-detail"></p>
+                </div>
+              </div>
+              <span id="setup-auth-badge" class="setup-status-pill">Checking</span>
+            </div>
+            <div class="setup-status-card">
+              <div class="setup-status-head">
+                <span class="material-symbols-outlined">auto_stories</span>
+                <div>
+                  <h3>PDF Parser</h3>
+                  <p id="setup-pdf-detail"></p>
+                </div>
+              </div>
+              <span id="setup-pdf-badge" class="setup-status-pill">Checking</span>
+            </div>
+          </div>
+          <div id="setup-action-row" class="setup-action-row">
+            <button onclick="window.recheckDesktopSetup()" class="secondary-action-btn inline-flex items-center gap-2"><span class="material-symbols-outlined !text-sm">refresh</span><span>Recheck</span></button>
+            <div id="setup-login-actions" class="flex items-center gap-3">
+              <button id="setup-login-btn" onclick="window.login()" class="bg-primary text-white font-bold py-3 px-5 rounded-xl shadow-lg active:scale-95 transition-all inline-flex items-center gap-2">
+                <span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Sign in</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
       <div id="auth-view" class="view active flex items-center justify-center w-full h-full p-6">
         <div class="w-full max-w-[400px] glass-panel rounded-3xl shadow-2xl p-12 text-center fade-in">
           <div class="mb-8 flex items-center justify-center mx-auto"><img src="chunker-mark.svg" alt="Chunker" class="auth-brand-mark"></div>

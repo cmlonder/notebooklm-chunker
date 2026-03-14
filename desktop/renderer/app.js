@@ -1,6 +1,8 @@
 const appState = {
   isAuthenticated: false,
+  setupStatus: null,
   currentView: "auth",
+  userMenuOpen: false,
   isResumeMode: false,
   isRunning: false,
   selectedPDF: null,
@@ -746,6 +748,164 @@ function doctorShowsReadyAuth(output) {
   return /OK\s+auth\s+/i.test(String(output || ""));
 }
 
+function desktopAppReady() {
+  return Boolean(appState.setupStatus?.readyForApp);
+}
+
+function setupNeedsFullscreen() {
+  return appState.currentView === "setup" && !appState.isAuthenticated;
+}
+
+function closeUserMenu() {
+  appState.userMenuOpen = false;
+  const menu = document.getElementById("user-menu-panel");
+  if (menu) menu.classList.add("hidden");
+}
+
+function toggleUserMenu() {
+  appState.userMenuOpen = !appState.userMenuOpen;
+  const menu = document.getElementById("user-menu-panel");
+  if (!menu) return;
+  menu.classList.toggle("hidden", !appState.userMenuOpen);
+}
+
+function parseDoctorStatus(output, label) {
+  const match = String(output || "").match(new RegExp(`^(OK|FAIL)\\s+${label}\\s+(.+)$`, "im"));
+  if (!match) {
+    return { ok: false, detail: "Not checked" };
+  }
+  return {
+    ok: match[1] === "OK",
+    detail: match[2].trim(),
+  };
+}
+
+function summarizeSetupStatus(cliCheck, doctorResult) {
+  const doctorOutput = String(doctorResult?.output || "");
+  const cliReady = Boolean(cliCheck?.success);
+  const notebooklmCli = parseDoctorStatus(doctorOutput, "notebooklm-cli");
+  const playwright = parseDoctorStatus(doctorOutput, "playwright");
+  const auth = parseDoctorStatus(doctorOutput, "auth");
+  const pdfParser = parseDoctorStatus(doctorOutput, "pdf-parser");
+  return {
+    cliReady,
+    cliVersion: cliReady ? String(cliCheck.output || "").trim() : "",
+    cliDetail: cliReady
+      ? (notebooklmCli.detail || String(cliCheck.output || "").trim())
+      : String(cliCheck?.error || "nblm was not found on PATH."),
+    playwrightReady: playwright.ok,
+    playwrightDetail: playwright.detail,
+    authReady: auth.ok,
+    authDetail: auth.detail,
+    pdfParserReady: pdfParser.ok,
+    pdfParserDetail: pdfParser.detail,
+    readyForApp: cliReady && playwright.ok,
+    readyForLiveRun: cliReady && playwright.ok && auth.ok,
+    doctorOutput,
+  };
+}
+
+function renderSetupView() {
+  const status = appState.setupStatus || {};
+  const cliBadge = document.getElementById("setup-cli-badge");
+  const cliDetail = document.getElementById("setup-cli-detail");
+  const playwrightBadge = document.getElementById("setup-playwright-badge");
+  const playwrightDetail = document.getElementById("setup-playwright-detail");
+  const authBadge = document.getElementById("setup-auth-badge");
+  const authDetail = document.getElementById("setup-auth-detail");
+  const pdfBadge = document.getElementById("setup-pdf-badge");
+  const pdfDetail = document.getElementById("setup-pdf-detail");
+  const doctorSummary = document.getElementById("setup-doctor-summary");
+  const signInButton = document.getElementById("setup-login-btn");
+  const actionRow = document.getElementById("setup-action-row");
+  const loginActions = document.getElementById("setup-login-actions");
+  const loggedInNotice = document.getElementById("setup-logged-in-note");
+  const showLoginActions = !appState.isAuthenticated;
+  const statusClass = (ok) => ok ? "setup-status-ok" : "setup-status-warn";
+  const statusText = (ok) => ok ? "Ready" : "Action needed";
+
+  if (cliBadge) {
+    cliBadge.className = `setup-status-pill ${statusClass(Boolean(status.cliReady))}`;
+    cliBadge.textContent = statusText(Boolean(status.cliReady));
+  }
+  if (cliDetail) {
+    cliDetail.textContent = status.cliReady
+      ? (status.cliVersion || status.cliDetail || "nblm is available.")
+      : (status.cliDetail || "Install notebooklm-chunker first so the desktop app can call nblm.");
+  }
+  if (playwrightBadge) {
+    playwrightBadge.className = `setup-status-pill ${statusClass(Boolean(status.playwrightReady))}`;
+    playwrightBadge.textContent = statusText(Boolean(status.playwrightReady));
+  }
+  if (playwrightDetail) {
+    playwrightDetail.textContent = status.playwrightReady
+      ? (status.playwrightDetail || "Chromium is ready.")
+      : (status.playwrightDetail || "Run `python -m playwright install chromium`.");
+  }
+  if (authBadge) {
+    authBadge.className = `setup-status-pill ${statusClass(Boolean(status.authReady))}`;
+    authBadge.textContent = statusText(Boolean(status.authReady));
+  }
+  if (authDetail) {
+    authDetail.textContent = status.authReady
+      ? (status.authDetail || "NotebookLM login is ready.")
+      : (status.authDetail || "Sign in once to unlock sync and Studio generation.");
+  }
+  if (pdfBadge) {
+    pdfBadge.className = `setup-status-pill ${statusClass(Boolean(status.pdfParserReady))}`;
+    pdfBadge.textContent = statusText(Boolean(status.pdfParserReady));
+  }
+  if (pdfDetail) {
+    pdfDetail.textContent = status.pdfParserReady
+      ? (status.pdfParserDetail || "PyMuPDF is available.")
+      : (status.pdfParserDetail || "Install the PDF parser dependency.");
+  }
+  if (doctorSummary) {
+    doctorSummary.textContent = status.readyForLiveRun
+      ? "This machine is ready for chunking, sync, and Studio generation."
+      : status.readyForApp
+      ? "Desktop is ready. Sign in once to unlock live NotebookLM sync and Studio generation."
+      : "Finish the setup items below before using the desktop app.";
+  }
+  if (actionRow) {
+    actionRow.classList.toggle("setup-action-row-compact", appState.isAuthenticated);
+  }
+  if (loginActions) {
+    loginActions.classList.toggle("hidden", !showLoginActions);
+    loginActions.style.display = showLoginActions ? "flex" : "none";
+  }
+  if (loggedInNotice) {
+    loggedInNotice.classList.toggle("hidden", !appState.isAuthenticated);
+    if (appState.isAuthenticated) {
+      loggedInNotice.textContent = "You are already signed in. Use this screen only to recheck the local CLI and browser prerequisites.";
+    }
+  }
+  if (signInButton) {
+    signInButton.disabled = !status.readyForApp;
+  }
+}
+
+async function refreshSetupStatus({ showSpinner = false } = {}) {
+  if (showSpinner) {
+    showLoading("Checking desktop setup...");
+  }
+  try {
+    const cliCheck = await window.electronAPI.checkNBLM();
+    let doctorResult = { output: "", success: false };
+    if (cliCheck.success) {
+      doctorResult = await window.electronAPI.runNBLM({ command: "doctor", args: [] });
+    }
+    appState.setupStatus = summarizeSetupStatus(cliCheck, doctorResult);
+    appState.isAuthenticated = Boolean(appState.setupStatus.readyForLiveRun);
+    renderSetupView();
+    return appState.setupStatus;
+  } finally {
+    if (showSpinner) {
+      hideLoading();
+    }
+  }
+}
+
 async function readJson(filePath) {
   const result = await window.electronAPI.readFile(filePath);
   if (!result.success) {
@@ -829,7 +989,10 @@ function resetSourceUI() {
 }
 
 function navigationGuard(targetView) {
-  if (targetView === "auth" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source") {
+  if (targetView === "setup" || targetView === "auth" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source") {
+    if (targetView === "notebooks" && !appState.isAuthenticated) {
+      return { allowed: false, message: "Sign in to inspect live NotebookLM notebooks and Studios." };
+    }
     return { allowed: true };
   }
   if (!appState.selectedPDF) {
@@ -840,6 +1003,9 @@ function navigationGuard(targetView) {
   }
   if ((targetView === "sources" || targetView === "sync") && !hasPreparedChunks()) {
     return { allowed: false, message: "Process the document in Structure before opening this step." };
+  }
+  if (targetView === "sync" && !appState.isAuthenticated) {
+    return { allowed: false, message: "Sign in before syncing chunks to NotebookLM." };
   }
   if (targetView === "studio" && !hasSyncedLineage()) {
     return { allowed: false, message: "Sync at least one chunk to NotebookLM before opening Studio." };
@@ -859,11 +1025,16 @@ function updateNavigationLocks() {
 function applyNavigationState(targetView) {
   const sidebar = document.getElementById("main-sidebar");
   const header = document.getElementById("wizard-header");
-  if (sidebar) sidebar.style.display = appState.isAuthenticated ? "flex" : "none";
+  appState.currentView = targetView;
+  const fullscreenSetup = setupNeedsFullscreen();
+  if (sidebar) sidebar.style.display = desktopAppReady() && !fullscreenSetup ? "flex" : "none";
   if (header) {
     header.style.display = ["source", "structure", "sources", "sync"].includes(targetView)
       ? "flex"
       : "none";
+  }
+  if (header && fullscreenSetup) {
+    header.style.display = "none";
   }
 
   document.querySelectorAll(".view").forEach((view) => {
@@ -893,13 +1064,20 @@ function applyNavigationState(targetView) {
     }
   });
 
-  appState.currentView = targetView;
+  closeUserMenu();
   updateNavigationLocks();
 }
 
 function switchView(viewName) {
-  if (!appState.isAuthenticated && viewName !== "auth") {
+  if (!desktopAppReady() && viewName !== "auth" && viewName !== "setup") {
     return;
+  }
+  if (!appState.isAuthenticated && viewName !== "auth" && viewName !== "setup") {
+    if (viewName === "setup") {
+      applyNavigationState("setup");
+      renderSetupView();
+      return;
+    }
   }
   const guard = navigationGuard(viewName);
   if (!guard.allowed) {
@@ -909,6 +1087,9 @@ function switchView(viewName) {
   applyNavigationState(viewName);
   if (viewName === "history" || viewName === "auth") {
     hideLoading();
+  }
+  if (viewName === "setup") {
+    renderSetupView();
   }
   if (viewName === "history") {
     void fetchLocalProjects();
@@ -1123,6 +1304,7 @@ async function confirmLogin() {
       throw new Error("NotebookLM login is not ready yet. Finish login in the browser and try again.");
     }
     appState.isAuthenticated = true;
+    appState.setupStatus = summarizeSetupStatus({ success: true, output: appState.setupStatus?.cliVersion || "nblm" }, result);
     appState.loginProcessActive = false;
     appState.loginAwaitingEnter = false;
     updateLoginPromptUI();
@@ -1629,7 +1811,8 @@ async function logout() {
       throw new Error(result.error || result.output || "NotebookLM logout failed.");
     }
     clearLocalSessionState();
-    switchView("auth");
+    await refreshSetupStatus();
+    switchView("setup");
     showToast("Signed out.");
   } catch (error) {
     alert(error.message);
@@ -1643,13 +1826,19 @@ async function switchAccount() {
   try {
     await window.electronAPI.runNBLM({ command: "logout", args: [] });
     clearLocalSessionState();
-    switchView("auth");
+    await refreshSetupStatus();
+    switchView("setup");
     hideLoading();
     await login();
   } catch (error) {
     hideLoading();
     alert(error.message);
   }
+}
+
+function openSetupView() {
+  closeUserMenu();
+  switchView("setup");
 }
 
 async function loadStudioArtifacts(force = false) {
@@ -2705,6 +2894,15 @@ async function refreshNotebookDashboard() {
   await prepareNotebooksView({ force: true });
 }
 
+async function recheckDesktopSetup() {
+  await refreshSetupStatus({ showSpinner: true });
+  if (appState.setupStatus?.readyForLiveRun) {
+    switchView("history");
+    return;
+  }
+  switchView("setup");
+}
+
 function applyStudioQueueUpdate(payload) {
   const project = appState.localProjects.find((item) => item.path === payload.projectPath);
   if (project) {
@@ -2727,13 +2925,14 @@ async function init() {
   applyOfflineIcons();
   hideLoading();
   appState.paths = await window.electronAPI.getAppPaths();
-  try {
-    const result = await window.electronAPI.runNBLM({ command: "doctor", args: [] });
-    appState.isAuthenticated = doctorShowsReadyAuth(result.output);
-  } catch (error) {
-    appState.isAuthenticated = false;
+  await refreshSetupStatus();
+  if (appState.setupStatus?.readyForLiveRun) {
+    switchView("history");
+  } else if (appState.setupStatus?.readyForApp) {
+    switchView("setup");
+  } else {
+    switchView("setup");
   }
-  switchView(appState.isAuthenticated ? "history" : "auth");
   window.electronAPI.onNBLMOutput((payload) => {
     if (!appState.isRunning) return;
     const text = payload.data || "";
@@ -2780,6 +2979,13 @@ async function init() {
     event.stopPropagation();
     void sendEnterToProcess();
   }, true);
+  document.addEventListener("click", (event) => {
+    const menu = document.getElementById("user-menu-shell");
+    if (!menu) return;
+    if (!menu.contains(event.target)) {
+      closeUserMenu();
+    }
+  });
   updateLoginPromptUI();
   hideLoading();
   updateNavigationLocks();
@@ -2794,6 +3000,10 @@ function handleChunkSearch(value) {
 Object.assign(window, {
   login,
   confirmLogin,
+  recheckDesktopSetup,
+  toggleUserMenu,
+  closeUserMenu,
+  openSetupView,
   switchView,
   startNewProject,
   triggerFileSelect,

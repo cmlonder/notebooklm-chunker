@@ -388,6 +388,10 @@
                   <span>Run Queue</span>
                 </button>
               </div>
+              <div class="flex items-center justify-between gap-4">
+                <div id="studio-queue-tab-bar" class="workspace-tab-bar"></div>
+                <input id="studio-queue-search" oninput="window.handleStudioQueueSearch(this.value)" type="text" placeholder="Filter queue..." class="studio-search-input" />
+              </div>
               <div id="studio-queue-list" class="space-y-3 text-sm text-slate-500"></div>
             </section>
 

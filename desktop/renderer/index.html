@@ -34,7 +34,7 @@
         </button>
         <div id="user-menu-panel" class="hidden user-menu-panel">
           <button onclick="window.openSetupView()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">checklist</span><span>Setup</span></button>
-          <button onclick="window.openNotebookLMSettings()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">auto_stories</span><span>NotebookLM</span></button>
+          <button onclick="window.openNotebookLMSettings()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">tune</span><span>NotebookLM Settings</span></button>
           <button onclick="window.switchAccount()" class="user-menu-item"><span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Switch Account</span></button>
           <button onclick="window.logout()" class="user-menu-item user-menu-danger"><span class="material-symbols-outlined !text-sm">logout</span><span>Logout</span></button>
         </div>
@@ -143,10 +143,11 @@
           
           <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100">
             <div class="grid grid-cols-12 gap-4 px-6 py-4 border-b bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              <div class="col-span-5">Chunk Name</div>
-              <div class="col-span-3">Status</div>
+              <div class="col-span-4">Chunk Name</div>
+              <div class="col-span-2">Status</div>
               <div class="col-span-2 text-center">Last Modified</div>
-              <div class="col-span-2 text-right">NotebookLM</div>
+              <div class="col-span-3 text-right">NotebookLM</div>
+              <div class="col-span-1"></div>
             </div>
             <div id="project-history-list" class="divide-y divide-slate-100">
               <!-- JS ile dolacak -->
@@ -388,9 +389,6 @@
                 </button>
               </div>
               <div id="studio-queue-list" class="space-y-3 text-sm text-slate-500"></div>
-              <div class="queue-note">
-                Submitted jobs may keep processing inside NotebookLM after they leave this queue. Check the Studios tab for the latest output status.
-              </div>
             </section>
 
             <section id="dashboard-studios-panel" class="hidden glass-panel rounded-3xl p-6 border border-slate-100 space-y-4">
@@ -436,6 +434,27 @@
                 <div id="prompt-detail"></div>
               </section>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="nblm-settings-view" class="view p-8 sm:p-12 fade-in overflow-y-auto">
+        <div class="max-w-4xl mx-auto w-full space-y-8 text-left">
+          <div class="flex items-end justify-between gap-6">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900">NotebookLM Settings</h1>
+              <p class="text-slate-500">Configure studio defaults, parallel processing, and sync options.</p>
+            </div>
+            <button onclick="window.saveNotebookLMSettings()" class="bg-primary text-white font-bold py-3 px-8 rounded-xl shadow-lg active:scale-95 transition-all inline-flex items-center gap-2">
+              <span class="material-symbols-outlined !text-sm">save</span>
+              <span>Save</span>
+            </button>
+          </div>
+          <div class="glass-panel rounded-3xl border border-slate-100 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-slate-50/50">
+              <div id="nblm-settings-tab-bar" class="flex gap-1"></div>
+            </div>
+            <div id="nblm-settings-body" class="p-6 text-sm text-slate-700"></div>
           </div>
         </div>
       </div>
@@ -531,7 +550,7 @@
             <div id="catalog-select-row" class="flex items-center gap-3"><input type="checkbox" id="select-all-chunks" onchange="window.toggleAllChunks(this.checked)" class="rounded text-primary size-4 cursor-pointer"/><label for="select-all-chunks" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer">Select All</label></div>
             <input id="chunk-search-input" oninput="window.handleChunkSearch(this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="text" placeholder="Search chunks..." />
           </div>
-          <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-1"></div>
+          <div id="chunk-list" class="flex-1 overflow-y-auto divide-y divide-slate-100"></div>
           <div class="p-4 border-t border-slate-200 bg-slate-50"><button id="continue-sync-btn" onclick="window.switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm shadow-md inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">cloud_upload</span><span>Continue to Sync</span></button></div>
         </aside>
         <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
@@ -627,25 +646,6 @@
         <div class="flex items-center gap-3">
           <button onclick="window.savePromptPreset()" class="secondary-action-btn">Save</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="nblm-settings-modal" class="hidden fixed inset-0 z-[100] preview-modal-shell bg-white/80 backdrop-blur-md p-6">
-    <div class="glass-panel preview-modal-card" style="max-width: 640px;">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-        <div>
-          <h3 class="font-bold text-slate-900">NotebookLM Settings</h3>
-          <p class="text-xs text-slate-400 mt-1">Configure studio and sync defaults</p>
-        </div>
-        <button onclick="window.closeNotebookLMSettings()" class="secondary-action-btn">Close</button>
-      </div>
-      <div class="px-6 py-3 border-b border-slate-100">
-        <div id="nblm-settings-tab-bar" class="flex gap-1"></div>
-      </div>
-      <div id="nblm-settings-body" class="preview-modal-body text-sm text-slate-700" style="min-height: 320px;"></div>
-      <div class="px-6 py-4 border-t border-slate-100 flex items-center gap-3">
-        <button onclick="window.saveNotebookLMSettings()" class="secondary-action-btn">Save</button>
       </div>
     </div>
   </div>

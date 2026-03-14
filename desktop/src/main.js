@@ -373,6 +373,34 @@ ipcMain.handle('retry-studio-job', async (event, { projectPath, jobId }) => {
   }
 });
 
+ipcMain.handle('remove-studio-job', async (event, { projectPath, jobId }) => {
+  try {
+    const state = readStudioQueueState(projectPath);
+    const job = state.jobs.find((j) => j.id === jobId);
+    if (!job) return { success: false, error: 'Job not found' };
+    if (job.status === 'running') return { success: false, error: 'Cannot remove a running job' };
+    state.jobs = state.jobs.filter((j) => j.id !== jobId);
+    writeStudioQueueState(projectPath, state);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('clear-submitted-studio-jobs', async (event, { projectPath }) => {
+  try {
+    const state = readStudioQueueState(projectPath);
+    const before = state.jobs.length;
+    state.jobs = state.jobs.filter((j) => j.status !== 'submitted');
+    const removed = before - state.jobs.length;
+    if (removed === 0) return { success: false, error: 'No submitted jobs to clear' };
+    writeStudioQueueState(projectPath, state);
+    return { success: true, removed };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('retry-all-failed-studio-jobs', async (event, { projectPath }) => {
   try {
     const state = readStudioQueueState(projectPath);

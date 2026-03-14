@@ -1600,7 +1600,7 @@ function renderHistoryList() {
       ? "bg-blue-50 text-blue-700"
       : "bg-slate-100 text-slate-600";
     return `
-      <div class="flex items-center gap-4 px-5 py-4 bg-white border border-slate-100 rounded-2xl hover:border-slate-200 hover:shadow-sm transition-all">
+      <div class="flex items-center gap-4 pl-5 pr-3 py-4 border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all">
         <button onclick="window.resumeExistingPath('${project.path}')" class="flex-1 min-w-0 text-left">
           <p class="text-sm font-bold text-slate-900 truncate hover:text-primary transition-colors">${project.rawName}</p>
           <div class="flex items-center gap-3 mt-1.5 flex-wrap">

@@ -1,6 +1,6 @@
 {
   "name": "notebooklm-chunker-desktop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Desktop app for NotebookLM Chunker",
   "main": "src/main.js",
   "scripts": {

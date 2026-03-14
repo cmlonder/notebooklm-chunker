@@ -8,6 +8,28 @@ let pythonProcess = null;
 const STUDIO_QUEUE_BASENAME = '.desktop-studio-queue.json';
 const DESKTOP_STUDIO_MAX_PARALLEL = 3;
 const studioQueueWorkers = new Map();
+let resolvedShellPath = process.env.PATH || '';
+
+function resolveShellPath() {
+  return new Promise((resolve) => {
+    const shell = process.env.SHELL || '/bin/zsh';
+    const proc = spawn(shell, ['-ilc', 'echo __PATH__=$PATH'], {
+      env: { ...process.env },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    proc.on('close', () => {
+      const match = stdout.match(/__PATH__=(.+)/);
+      if (match) {
+        resolvedShellPath = match[1].trim();
+      }
+      resolve(resolvedShellPath);
+    });
+    proc.on('error', () => resolve(resolvedShellPath));
+    setTimeout(() => { try { proc.kill(); } catch (e) {} resolve(resolvedShellPath); }, 5000);
+  });
+}
 
 function projectsRoot() {
   const projectsPath = path.join(app.getPath('documents'), 'NotebookLM-Chunker');
@@ -99,12 +121,15 @@ function appendStudioQueueLog(projectPath, jobId, channel, text) {
   return writeStudioQueueState(projectPath, state);
 }
 
-function buildStudioEnv() {
+function buildNblmEnv() {
   const projectRoot = path.resolve(__dirname, '../..');
+  const venvBin = path.join(projectRoot, '.venv/bin');
+  const basePath = resolvedShellPath || process.env.PATH || '';
+  const pathParts = fs.existsSync(venvBin) ? [venvBin, basePath] : [basePath];
   return {
     ...process.env,
     PYTHONPATH: projectRoot,
-    PATH: `${path.join(projectRoot, '.venv/bin')}${path.delimiter}${process.env.PATH}`,
+    PATH: pathParts.join(path.delimiter),
   };
 }
 
@@ -129,7 +154,7 @@ function runNextStudioJob(projectPath) {
   const tempConfigPath = path.join(app.getPath('temp'), `nblm-studio-${Date.now()}-${Math.random().toString(16).slice(2, 8)}.toml`);
   fs.writeFileSync(tempConfigPath, nextJob.configToml, 'utf-8');
   const proc = spawn('nblm', ['studios', ...nextJob.args, '--config', tempConfigPath], {
-    env: buildStudioEnv(),
+    env: buildNblmEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   updateStudioQueueJob(projectPath, nextJob.id, {
@@ -270,7 +295,8 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; if (pythonProcess) pythonProcess.kill(); });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await resolveShellPath();
   createWindow();
   resumeStudioQueues();
 });
@@ -307,12 +333,7 @@ ipcMain.handle('get-app-paths', () => {
 
 ipcMain.handle('check-nblm', async () => {
   return new Promise((resolve) => {
-    const projectRoot = path.resolve(__dirname, '../..');
-    const env = {
-      ...process.env,
-      PYTHONPATH: projectRoot,
-      PATH: `${path.join(projectRoot, '.venv/bin')}${path.delimiter}${process.env.PATH}`
-    };
+    const env = buildNblmEnv();
     const proc = spawn('nblm', ['--version'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     let errorOutput = '';
@@ -466,8 +487,7 @@ ipcMain.handle('run-nblm', async (event, { command, args = [], config }) => {
       try { fs.writeFileSync(args[0], args[1], 'utf-8'); return resolve({ success: true }); }
       catch (err) { return resolve({ success: false, error: err.message }); }
     }
-    const projectRoot = path.resolve(__dirname, '../..');
-    const env = { ...process.env, PYTHONPATH: projectRoot, PATH: `${path.join(projectRoot, '.venv/bin')}${path.delimiter}${process.env.PATH}` };
+    const env = buildNblmEnv();
     pythonProcess = spawn('nblm', spawnArgs, { env, stdio: ['pipe', 'pipe', 'pipe'] });
     let output = '', errorOutput = '';
     pythonProcess.stdout.on('data', (data) => {

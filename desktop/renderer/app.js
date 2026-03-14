@@ -47,6 +47,7 @@ const appState = {
   studioArtifactsSearchQuery: "",
   studioQueueTab: "all",
   studioQueueSearchQuery: "",
+  historySearchQuery: "",
   promptStudioTab: "report",
   promptSearchQuery: "",
   selectedPromptIds: new Set(),
@@ -1566,45 +1567,53 @@ async function fetchLocalProjects() {
     });
   }
 
+  renderHistoryList();
+}
+
+function renderHistoryList() {
+  const listEl = document.getElementById("project-history-list");
+  if (!listEl) return;
+  const query = appState.historySearchQuery.trim().toLowerCase();
+  const filtered = appState.localProjects.filter((project) => {
+    if (!query) return true;
+    const text = `${project.rawName} ${project.metadata?.notebook_title || ""} ${project.status.label} ${project.path}`.toLowerCase();
+    return text.includes(query);
+  });
+
   if (appState.localProjects.length === 0) {
     listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No local chunks yet.</div>';
     return;
   }
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div class="px-6 py-10 text-sm text-slate-400 italic">No chunks matching your filter.</div>';
+    return;
+  }
 
-  listEl.innerHTML = appState.localProjects.map((project) => {
-    const modified = new Date(project.modified).toLocaleString();
-    const notebookLabel = project.metadata?.notebook_title || "Not linked";
+  listEl.innerHTML = filtered.map((project) => {
+    const modified = new Date(project.modified).toLocaleDateString();
+    const notebookLabel = project.metadata?.notebook_title || "";
+    const statusClass = project.status.tone === "green"
+      ? "bg-green-50 text-green-700"
+      : project.status.tone === "amber"
+      ? "bg-amber-50 text-amber-700"
+      : project.status.tone === "blue"
+      ? "bg-blue-50 text-blue-700"
+      : "bg-slate-100 text-slate-600";
     return `
-      <div class="grid grid-cols-12 gap-4 px-6 py-5 hover:bg-slate-50/60 items-center">
-        <div class="col-span-4 min-w-0">
-          <button onclick="window.resumeExistingPath('${project.path}')" class="font-bold text-slate-900 truncate text-left hover:text-primary">
-            ${project.rawName}
-          </button>
-          <p class="text-xs text-slate-400 truncate mt-1">${project.path}</p>
-        </div>
-        <div class="col-span-2">
-          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
-            project.status.tone === "green"
-              ? "bg-green-50 text-green-700"
-              : project.status.tone === "amber"
-              ? "bg-amber-50 text-amber-700"
-              : project.status.tone === "blue"
-              ? "bg-blue-50 text-blue-700"
-              : "bg-slate-100 text-slate-600"
-          }">
-            ${project.status.label}
-          </span>
-          <p class="text-xs text-slate-400 mt-1">${project.status.detail}</p>
-        </div>
-        <div class="col-span-2 text-center text-sm text-slate-500">${modified}</div>
-        <div class="col-span-3 text-right">
-          <span class="text-xs text-slate-400 truncate">${notebookLabel}</span>
-        </div>
-        <div class="col-span-1 flex justify-end">
-          <button onclick="window.deleteProject('${project.path}')" class="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
-            <span class="material-symbols-outlined !text-lg">delete</span>
-          </button>
-        </div>
+      <div class="flex items-center gap-4 px-5 py-4 bg-white border border-slate-100 rounded-2xl hover:border-slate-200 hover:shadow-sm transition-all">
+        <button onclick="window.resumeExistingPath('${project.path}')" class="flex-1 min-w-0 text-left">
+          <p class="text-sm font-bold text-slate-900 truncate hover:text-primary transition-colors">${project.rawName}</p>
+          <div class="flex items-center gap-3 mt-1.5 flex-wrap">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass}">${project.status.label}</span>
+            <span class="text-[11px] text-slate-400">${project.status.detail}</span>
+            <span class="text-[11px] text-slate-300">·</span>
+            <span class="text-[11px] text-slate-400">${modified}</span>
+            ${notebookLabel ? `<span class="text-[11px] text-slate-300">·</span><span class="text-[11px] text-slate-400 truncate max-w-[200px]">${notebookLabel}</span>` : ""}
+          </div>
+        </button>
+        <button onclick="window.deleteProject('${project.path}')" class="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0">
+          <span class="material-symbols-outlined !text-lg">delete</span>
+        </button>
       </div>
     `;
   }).join("");
@@ -3351,6 +3360,11 @@ function handleChunkSearch(value) {
   populateChunkList();
 }
 
+function handleHistorySearch(value) {
+  appState.historySearchQuery = String(value || "");
+  renderHistoryList();
+}
+
 Object.assign(window, {
   login,
   confirmLogin,
@@ -3421,6 +3435,7 @@ Object.assign(window, {
   clearSubmittedStudioJobs,
   selectStudioQueueTab,
   handleStudioQueueSearch,
+  handleHistorySearch,
   openNotebookLMSettings,
   saveNotebookLMSettings,
   switchNblmSettingsTab,

@@ -1,30 +1,67 @@
 # notebooklm-chunker
 
-[![PyPI version](https://badge.fury.io/py/notebooklm-chunker.svg)](https://badge.fury.io/py/notebooklm-chunker)
 [![CI](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/codeql.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/codeql.yml)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Desktop Release](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml)
+[![PyPI version](https://badge.fury.io/py/notebooklm-chunker.svg)](https://badge.fury.io/py/notebooklm-chunker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Security: Trivy](https://img.shields.io/badge/security-trivy-blue.svg)](https://github.com/aquasecurity/trivy)
 
-`notebooklm-chunker` turns long documents into smaller, heading-aware NotebookLM
-sources so reports, slide decks, quizzes, flashcards, and audio outputs stay
-more focused and useful.
+Turn long documents into smaller, heading-aware NotebookLM sources so reports, slide decks, quizzes, flashcards, and audio outputs stay more focused and useful.
+
+> **Two interfaces, one core.** The Desktop app provides a visual workflow. The CLI provides scriptable automation. Both use the same `nblm` engine underneath.
+>
+> - **This page** covers the Desktop app
+> - **[CLI.md](CLI.md)** covers the Python CLI
+
+---
 
 ## Desktop App
 
-The repo ships with an Electron desktop client under [`desktop/`](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/desktop).
+An Electron desktop client that wraps the `nblm` CLI into a full visual workflow — from PDF upload to NotebookLM Studio generation.
 
-This is the main visual workflow:
+### Features NotebookLM Doesn't Have
 
-- create a local project from a PDF
-- choose a target chunk count and chunking settings
-- review and refine chunk files
-- sync only changed chunks to NotebookLM
-- open a NotebookLM workspace view inside the app
-- queue reports, slides, quizzes, flashcards, or audio jobs from synced sources
+| Feature | Description |
+|---|---|
+| **Heading-aware chunking** | Splits documents at heading boundaries (H1, H2, etc.) instead of arbitrary page breaks, keeping each source semantically coherent |
+| **Bulk source upload** | Upload dozens or hundreds of chunks to a single notebook in one operation with parallel processing |
+| **Bulk source delete** | Select and delete multiple chunks at once from the catalog |
+| **Resume interrupted uploads** | Sync tracks per-chunk status — come back tomorrow and only the remaining chunks get uploaded |
+| **Studio queue with retry** | Queue reports, slides, quizzes, flashcards, or audio jobs across multiple sources. Failed jobs (including quota exhaustion) are detected and can be retried individually or in bulk |
+| **Studio filtering by type** | Tab bar filters queue and generated outputs by studio type (report, slide deck, quiz, flashcards, audio) with search |
+| **Prompt library** | Save reusable prompts per studio type and apply them from the queue builder |
+| **Per-source settings** | Configure language (80+ languages), format, length, and parallel request limits per studio type |
+| **Skip pages** | Exclude preface, table of contents, index, or bibliography pages before chunking |
+| **Versioned lineages** | Multiple chunk versions of the same PDF, each with independent sync and studio state |
+| **Offline-first** | Chunk and edit locally without a network connection — sync when ready |
 
-Desktop quick start:
+### Installation
+
+#### Prerequisites
+
+1. Install the Python CLI (needed by the desktop app):
+
+```bash
+pip install notebooklm-chunker
+python -m playwright install chromium
+```
+
+2. Login to NotebookLM:
+
+```bash
+nblm login
+```
+
+#### Option A: Download Release Binary
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/cmlonder/notebooklm-chunker/releases):
+
+- **macOS**: `.dmg` or `.zip`
+- **Windows**: `.exe` (installer) or portable
+- **Linux**: `.AppImage` or `.deb`
+
+The desktop app expects `nblm` to be available on your system PATH.
+
+#### Option B: Run From Source
 
 ```bash
 cd desktop
@@ -32,224 +69,97 @@ npm install
 npm run dev
 ```
 
-On first launch, the desktop app now runs a setup check screen. It verifies:
+### Setup Check
 
-- `nblm` is available on `PATH`
+On first launch, the app verifies:
+
+- `nblm` is available on PATH
 - Playwright Chromium is installed
-- NotebookLM auth state is ready for live sync and Studio work
+- NotebookLM auth state is ready
 
-Desktop release binaries can be attached to GitHub releases, but for now the
-desktop app still expects `nblm` to be installed on the host machine and
-available on `PATH`. The Electron app is a desktop shell around the real CLI,
-not a fully bundled Python runtime yet.
+You can continue into the app for local-only work even if auth is not ready yet.
 
-What the desktop app gives you:
+### Workflow
 
-- recent projects dashboard
-- local project persistence
-- chunk refinement UI
-- changed-only sync
-- NotebookLM workspace dashboard
-- saved prompt library per Studio type
-- queued Studio generation from selected sources
+1. **Document** — Upload a PDF to start a new chunk set
+2. **Structure** — Set min/max pages per chunk, skip pages from beginning or end, see estimated chunk count
+3. **Sources** — Review, search, edit, and bulk-manage the generated chunks
+4. **Sync** — Upload changed chunks to a new or existing NotebookLM notebook
+5. **NotebookLM Dashboard** — Browse notebooks, inspect synced sources, queue studio jobs, track outputs
 
-The desktop app uses the real `nblm` CLI under the hood. It is not a separate
-backend.
+### NotebookLM Settings
 
-## Python CLI
+Accessible from Settings in the sidebar:
 
-The Python package is the automation core used by both the CLI and the desktop
-app.
+- **Sources tab** — Per studio type: language (80+ languages), format, download format, max parallel requests
+- **Sync tab** — Max parallel chunk uploads
 
-## Requirements
+Settings persist across sessions and are applied to all future queue items.
 
-- Python 3.12+
-- `pip`
+### Studio Queue
 
-This project automates NotebookLM through
-[`notebooklm-py`](https://github.com/teng-lin/notebooklm-py), which is an
-unofficial community library.
+The queue panel mirrors the Studios panel:
 
-For local development and contribution flow, see
-[DEVELOPMENT.md](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/DEVELOPMENT.md).
+- Filter by studio type via tab bar (All, Report, Slide Deck, Quiz, Flashcards, Audio)
+- Search jobs by name, source, status, or message
+- Retry failed jobs individually or bulk retry all
+- Clear submitted jobs when done
+- Remove individual jobs from the queue
 
-## Installation
+Quota exhaustion and zero-output runs are automatically detected as failures, enabling retry after the cooldown period.
 
-From PyPI:
+### Build
+
+Platform-specific builds:
+
+```bash
+cd desktop
+npm run build:mac    # macOS (.dmg, .zip)
+npm run build:win    # Windows (.exe, portable)
+npm run build:linux  # Linux (.AppImage, .deb)
+```
+
+### Project Layout
+
+```text
+desktop/
+├── renderer/
+│   ├── app.js           # Main UI logic
+│   ├── index.html       # UI structure
+│   ├── styles.css        # Styles
+│   └── project-utils.js  # Helper utilities
+├── src/
+│   ├── main.js           # Electron main process
+│   └── preload.js        # IPC bridge
+└── tests/
+    └── project-utils.test.js
+```
+
+---
+
+## CLI
+
+The Python CLI is the automation engine. It handles document parsing, heading-aware chunking, NotebookLM uploads, and Studio generation.
+
+For full CLI documentation, installation, config examples, and usage:
+
+**[CLI.md](CLI.md)**
+
+Quick start:
 
 ```bash
 pip install notebooklm-chunker
 python -m playwright install chromium
 nblm login
-```
-
-With `pipx`:
-
-```bash
-pipx install notebooklm-chunker
-python -m playwright install chromium
-nblm login
-```
-
-From a local checkout:
-
-```bash
-python -m pip install /ABS/PATH/notebooklm-chunker
-python -m playwright install chromium
-nblm login
-```
-
-If you already have valid NotebookLM auth state, you can skip `nblm login`.
-
-To clear local `notebooklm-py` auth state later:
-
-```bash
-nblm logout
-```
-
-## Quick Start
-
-Create a workflow file:
-
-```bash
-nblm init
-```
-
-Run the whole flow:
-
-```bash
 nblm run --config ./nblm.toml
 ```
 
-Continue later from the saved run state:
+---
 
-```bash
-nblm resume --config ./nblm.toml
-```
+## Development
 
-Add new per-chunk Studio outputs later without re-uploading chunks:
+For setup, testing, packaging, and GitHub release flow, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
-```bash
-nblm studios --config ./quiz.toml
-```
+## License
 
-Check auth, config, Playwright, and parser readiness:
-
-```bash
-nblm doctor --config ./nblm.toml
-```
-
-Show the installed CLI version:
-
-```bash
-nblm --version
-```
-
-`source.path` lives in the config file, so you do not need to pass the input
-document as a CLI argument.
-
-## Repo Demo
-
-This repository includes a full example built around the freely downloadable
-InfoQ mini-book
-[Domain-Driven Design Quickly](https://www.infoq.com/minibooks/domain-driven-design-quickly/).
-
-Repo demo command:
-
-```bash
-nblm run --config ./examples/workflows/ddd-quickly-demo.toml
-```
-
-Generated NotebookLM:
-
-- [DDD Quickly Interactive Learning Kit](https://notebooklm.google.com/notebook/3dec967d-7093-4937-917f-173763f79395)
-
-## Run State And Resume
-
-`nblm run` always starts a fresh run and writes a state file next to the chunk
-output:
-
-```text
-./output/chunks/.nblm-run-state.json
-```
-
-That file tracks:
-
-- source upload status for each chunk
-- Studio status for each chunk
-- saved `source_id`, `task_id`, `artifact_id`, output path, and last error when available
-
-This is why `nblm resume` can continue later without redoing finished work.
-
-If you want to inspect progress manually, open `.nblm-run-state.json`.
-
-Source uploads and per-chunk Studio jobs run as separate queues.
-
-Quota blocks are tracked per Studio type. If `report` is blocked, `slide_deck`
-or `quiz` can still continue until they hit their own limits.
-
-## Add More Studios Later
-
-If a previous `run` already uploaded the chunk sources, `nblm studios` can
-reuse `.nblm-run-state.json` and add new per-chunk Studio outputs later
-without uploading the chunks again.
-
-Example:
-
-```bash
-nblm studios --config ./quiz.toml
-```
-
-For `per_chunk = true`, this stays scoped to the saved per-chunk source IDs
-from the same run state. It does not silently widen to whole-notebook context.
-
-## Output Files
-
-One `chunking.output_dir` represents one workflow lineage.
-
-That lineage owns:
-
-- chunk markdown files
-- `manifest.json`
-- `.nblm-run-state.json`
-
-If you want another book, or the same book as a separate NotebookLM run, use a
-different `chunking.output_dir`.
-
-## Workflow Notes
-
-- paths inside workflow files are resolved relative to that file
-- output paths may use `{source_stem}`
-- `runtime.download_outputs = false` is supported
-- one `chunking.output_dir` maps to one NotebookLM workflow lineage
-
-## Example Config
-
-```toml
-[source]
-path = "./book.pdf"
-
-[notebook]
-title = "Book Notes"
-
-[chunking]
-output_dir = "./output/{source_stem}/chunks"
-target_pages = 3.0
-min_pages = 2.5
-max_pages = 4.0
-
-[runtime]
-max_parallel_chunks = 3
-
-[studios.report]
-enabled = true
-per_chunk = true
-output_dir = "./output/{source_stem}/reports"
-language = "en"
-format = "study-guide"
-```
-
-## Release And Development
-
-For setup, testing, packaging, and GitHub release flow, see
-[DEVELOPMENT.md](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/DEVELOPMENT.md).
+MIT

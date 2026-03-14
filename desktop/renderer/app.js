@@ -76,7 +76,7 @@ function studioSettingsStorageKey() {
 function defaultStudioSettings() {
   return {
     report: { language: "en", format: "study-guide" },
-    slide_deck: { language: "en", format: "detailed", length: "default", downloadFormat: "pdf" },
+    slide_deck: { language: "en", format: "detailed", length: "default", downloadFormat: "pptx" },
     quiz: { quantity: "more", difficulty: "hard", downloadFormat: "json" },
     flashcards: { quantity: "more", difficulty: "hard", downloadFormat: "markdown" },
     audio: { language: "en", format: "deep-dive", length: "long" },
@@ -96,6 +96,9 @@ function loadStudioSettings() {
           ...(parsed?.[studioName] || {}),
           ...(studioName === "slide_deck" && parsed?.[studioName]?.format === "summary"
             ? { format: "presenter" }
+            : {}),
+          ...(studioName === "slide_deck" && parsed?.[studioName]?.length === "long"
+            ? { length: "default" }
             : {}),
         },
       ]),
@@ -200,6 +203,11 @@ function iconSvg(iconName) {
     open_in_new: '<path d="M14 5h5v5"/><path d="M10 14 19 5"/><path d="M19 13v6H5V5h6"/>',
     cloud_upload: '<path d="M7 17a4 4 0 1 1 .6-7.9A5 5 0 0 1 17.6 10H18a3 3 0 0 1 0 6Z"/><path d="M12 11v7"/><path d="m9.5 13.5 2.5-2.5 2.5 2.5"/>',
     auto_awesome: '<path d="m12 4 1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/><path d="m18 12 .6 1.9L20.5 14l-1.9.6L18 16.5l-.6-1.9L15.5 14l1.9-.6z"/><path d="m6 13 .7 2.1L9 16l-2.3.9L6 19l-.7-2.1L3 16l2.3-.9z"/>',
+    done_all: '<path d="m1.5 12.5 5 5L18 6"/><path d="m7 12.5 5 5L23.5 6"/>',
+    save: '<path d="M5 4h11l4 4v12H5z"/><path d="M15 4v5H9V4"/><path d="M8 14h8v6H8z"/>',
+    tune: '<path d="M3 8h4M11 8h10M3 16h10M17 16h4"/><circle cx="9" cy="8" r="2"/><circle cx="15" cy="16" r="2"/>',
+    calculate: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h2M14 8h2M8 12h8M8 16h2M14 16h2"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
   };
   const path = paths[iconName];
   if (!path) return null;
@@ -545,70 +553,7 @@ function openStudioSettings(studioName) {
   const settings = appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {};
   title.textContent = `${studioName.replace(/_/g, " ")} settings`;
   meta.textContent = "These defaults will be reused for future queue items.";
-  const sections = [];
-  if (studioName === "report") {
-    sections.push(studioSettingsField("language", "Language", [
-      { value: "en", label: "English" },
-      { value: "tr", label: "Turkish" },
-    ], settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "study-guide", label: "Study Guide" },
-      { value: "briefing-doc", label: "Briefing Doc" },
-      { value: "timeline", label: "Timeline" },
-      { value: "faq", label: "FAQ" },
-      { value: "custom", label: "Custom" },
-    ], settings.format));
-  } else if (studioName === "slide_deck") {
-    sections.push(studioSettingsField("language", "Language", [
-      { value: "en", label: "English" },
-      { value: "tr", label: "Turkish" },
-    ], settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "detailed", label: "Detailed" },
-      { value: "presenter", label: "Presenter" },
-    ], settings.format));
-    sections.push(studioSettingsField("length", "Length", [
-      { value: "short", label: "Short" },
-      { value: "default", label: "Default" },
-      { value: "long", label: "Long" },
-    ], settings.length));
-    sections.push(studioSettingsField("downloadFormat", "Download format", [
-      { value: "pdf", label: "PDF" },
-      { value: "pptx", label: "PPTX" },
-    ], settings.downloadFormat));
-  } else if (studioName === "quiz" || studioName === "flashcards") {
-    sections.push(studioSettingsField("quantity", "Quantity", [
-      { value: "fewer", label: "Fewer" },
-      { value: "default", label: "Default" },
-      { value: "more", label: "More" },
-    ], settings.quantity));
-    sections.push(studioSettingsField("difficulty", "Difficulty", [
-      { value: "easier", label: "Easier" },
-      { value: "default", label: "Default" },
-      { value: "hard", label: "Hard" },
-    ], settings.difficulty));
-    sections.push(studioSettingsField("downloadFormat", "Download format", studioName === "quiz" ? [
-      { value: "json", label: "JSON" },
-      { value: "markdown", label: "Markdown" },
-    ] : [
-      { value: "markdown", label: "Markdown" },
-      { value: "json", label: "JSON" },
-    ], settings.downloadFormat));
-  } else if (studioName === "audio") {
-    sections.push(studioSettingsField("language", "Language", [
-      { value: "en", label: "English" },
-      { value: "tr", label: "Turkish" },
-    ], settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "deep-dive", label: "Deep Dive" },
-      { value: "conversational", label: "Conversational" },
-    ], settings.format));
-    sections.push(studioSettingsField("length", "Length", [
-      { value: "short", label: "Short" },
-      { value: "default", label: "Default" },
-      { value: "long", label: "Long" },
-    ], settings.length));
-  }
+  const sections = nblmSourceSettingsFields(studioName, settings);
   body.innerHTML = `<div class="space-y-4">${sections.join("")}</div>`;
   modal.classList.remove("hidden");
 }
@@ -642,6 +587,89 @@ const NBLM_SETTINGS_TABS = ["sources", "sync"];
 const DEFAULT_MAX_PARALLEL = { report: 2, slide_deck: 2, quiz: 2, flashcards: 2, audio: 1 };
 const DEFAULT_MAX_PARALLEL_CHUNKS = 3;
 
+const NBLM_LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "zh_Hans", label: "中文（简体）" },
+  { value: "zh_Hant", label: "中文（繁體）" },
+  { value: "es", label: "Español" },
+  { value: "es_419", label: "Español (Latinoamérica)" },
+  { value: "es_MX", label: "Español (México)" },
+  { value: "hi", label: "हिन्दी" },
+  { value: "ar_001", label: "العربية" },
+  { value: "ar_eg", label: "العربية (مصر)" },
+  { value: "pt_BR", label: "Português (Brasil)" },
+  { value: "pt_PT", label: "Português (Portugal)" },
+  { value: "bn", label: "বাংলা" },
+  { value: "ru", label: "Русский" },
+  { value: "ja", label: "日本語" },
+  { value: "pa", label: "ਪੰਜਾਬੀ" },
+  { value: "de", label: "Deutsch" },
+  { value: "jv", label: "Basa Jawa" },
+  { value: "ko", label: "한국어" },
+  { value: "fr", label: "Français" },
+  { value: "fr_CA", label: "Français (Canada)" },
+  { value: "te", label: "తెలుగు" },
+  { value: "vi", label: "Tiếng Việt" },
+  { value: "mr", label: "मराठी" },
+  { value: "ta", label: "தமிழ்" },
+  { value: "tr", label: "Türkçe" },
+  { value: "ur", label: "اردو" },
+  { value: "it", label: "Italiano" },
+  { value: "th", label: "ไทย" },
+  { value: "gu", label: "ગુજરાતી" },
+  { value: "fa", label: "فارسی" },
+  { value: "pl", label: "Polski" },
+  { value: "uk", label: "Українська" },
+  { value: "ml", label: "മലയാളം" },
+  { value: "kn", label: "ಕನ್ನಡ" },
+  { value: "or", label: "ଓଡ଼ିଆ" },
+  { value: "my", label: "မြန်မာဘာသာ" },
+  { value: "sw", label: "Kiswahili" },
+  { value: "nl_NL", label: "Nederlands" },
+  { value: "ro", label: "Română" },
+  { value: "hu", label: "Magyar" },
+  { value: "el", label: "Ελληνικά" },
+  { value: "cs", label: "Čeština" },
+  { value: "sv", label: "Svenska" },
+  { value: "be", label: "Беларуская" },
+  { value: "bg", label: "Български" },
+  { value: "hr", label: "Hrvatski" },
+  { value: "sk", label: "Slovenčina" },
+  { value: "da", label: "Dansk" },
+  { value: "fi", label: "Suomi" },
+  { value: "nb_NO", label: "Norsk Bokmål" },
+  { value: "nn_NO", label: "Norsk Nynorsk" },
+  { value: "he", label: "עברית" },
+  { value: "id", label: "Bahasa Indonesia" },
+  { value: "ms", label: "Bahasa Melayu" },
+  { value: "fil", label: "Filipino" },
+  { value: "ceb", label: "Cebuano" },
+  { value: "sr", label: "Српски" },
+  { value: "sl", label: "Slovenščina" },
+  { value: "sq", label: "Shqip" },
+  { value: "mk", label: "Македонски" },
+  { value: "lt", label: "Lietuvių" },
+  { value: "lv", label: "Latviešu" },
+  { value: "et", label: "Eesti" },
+  { value: "hy", label: "Հայերեն" },
+  { value: "ka", label: "ქართული" },
+  { value: "az", label: "Azərbaycanca" },
+  { value: "af", label: "Afrikaans" },
+  { value: "am", label: "አማርኛ" },
+  { value: "eu", label: "Euskara" },
+  { value: "ca", label: "Català" },
+  { value: "gl", label: "Galego" },
+  { value: "is", label: "Íslenska" },
+  { value: "la", label: "Latina" },
+  { value: "ne", label: "नेपाली" },
+  { value: "ps", label: "پښتو" },
+  { value: "sd", label: "سنڌي" },
+  { value: "si", label: "සිංහල" },
+  { value: "ht", label: "Kreyòl Ayisyen" },
+  { value: "kok", label: "कोंकणी" },
+  { value: "mai", label: "मैथिली" },
+];
+
 function nblmSettingsStorageKey() {
   return "nblm-desktop-nblm-settings-v1";
 }
@@ -672,20 +700,45 @@ function getMaxParallelChunks() {
 
 let nblmSettingsActiveTab = "sources";
 let nblmSettingsActiveSourceTab = "report";
+let nblmSettingsDraft = {};
+
+function initNblmSettingsDraft() {
+  const nblmSettings = loadNblmSettings();
+  nblmSettingsDraft = {
+    studioSettings: JSON.parse(JSON.stringify(appState.studioSettings || defaultStudioSettings())),
+    maxParallel: { ...DEFAULT_MAX_PARALLEL, ...(nblmSettings.maxParallel || {}) },
+    maxParallelChunks: nblmSettings.maxParallelChunks ?? DEFAULT_MAX_PARALLEL_CHUNKS,
+  };
+}
+
+function collectCurrentTabIntoDraft() {
+  const body = document.getElementById("nblm-settings-body");
+  if (!body) return;
+  if (nblmSettingsActiveTab === "sources") {
+    const studioName = nblmSettingsActiveSourceTab;
+    const next = { ...(nblmSettingsDraft.studioSettings[studioName] || {}) };
+    body.querySelectorAll("[data-studio-setting]").forEach((node) => {
+      next[node.getAttribute("data-studio-setting")] = node.value;
+    });
+    nblmSettingsDraft.studioSettings[studioName] = next;
+    const maxParNode = body.querySelector(`[data-nblm-setting="maxParallel"]`);
+    if (maxParNode) {
+      nblmSettingsDraft.maxParallel[studioName] = Math.max(1, Number(maxParNode.value) || DEFAULT_MAX_PARALLEL[studioName] || 2);
+    }
+  } else if (nblmSettingsActiveTab === "sync") {
+    const mpcNode = body.querySelector('[data-nblm-setting="maxParallelChunks"]');
+    if (mpcNode) {
+      nblmSettingsDraft.maxParallelChunks = Math.max(1, Number(mpcNode.value) || DEFAULT_MAX_PARALLEL_CHUNKS);
+    }
+  }
+}
 
 function openNotebookLMSettings() {
   closeUserMenu();
   nblmSettingsActiveTab = "sources";
   nblmSettingsActiveSourceTab = "report";
-  const modal = document.getElementById("nblm-settings-modal");
-  if (modal) modal.classList.remove("hidden");
-  renderNblmSettingsTabs();
-  renderNblmSettingsBody();
-}
-
-function closeNotebookLMSettings() {
-  const modal = document.getElementById("nblm-settings-modal");
-  if (modal) modal.classList.add("hidden");
+  initNblmSettingsDraft();
+  switchView("nblm-settings");
 }
 
 function renderNblmSettingsTabs() {
@@ -699,25 +752,69 @@ function renderNblmSettingsTabs() {
 }
 
 function switchNblmSettingsTab(tab) {
+  collectCurrentTabIntoDraft();
   nblmSettingsActiveTab = tab;
   renderNblmSettingsTabs();
   renderNblmSettingsBody();
 }
 
 function switchNblmSourceTab(studioName) {
+  collectCurrentTabIntoDraft();
   nblmSettingsActiveSourceTab = studioName;
   renderNblmSettingsBody();
+}
+
+function nblmSourceSettingsFields(studioName, settings) {
+  const sections = [];
+  if (studioName === "report") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    sections.push(studioSettingsField("format", "Format", [
+      { value: "study-guide", label: "Study Guide" }, { value: "briefing-doc", label: "Briefing Doc" },
+      { value: "timeline", label: "Timeline" }, { value: "faq", label: "FAQ" }, { value: "custom", label: "Custom" },
+    ], settings.format));
+  } else if (studioName === "slide_deck") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    sections.push(studioSettingsField("format", "Format", [
+      { value: "detailed", label: "Detailed" }, { value: "presenter", label: "Presenter" },
+    ], settings.format));
+    sections.push(studioSettingsField("length", "Length", [
+      { value: "default", label: "Default" }, { value: "short", label: "Short" },
+    ], settings.length));
+    sections.push(studioSettingsField("downloadFormat", "Download format", [
+      { value: "pdf", label: "PDF" }, { value: "pptx", label: "PPTX" },
+    ], settings.downloadFormat));
+  } else if (studioName === "quiz" || studioName === "flashcards") {
+    sections.push(studioSettingsField("quantity", "Quantity", [
+      { value: "fewer", label: "Fewer" }, { value: "default", label: "Default" }, { value: "more", label: "More" },
+    ], settings.quantity));
+    sections.push(studioSettingsField("difficulty", "Difficulty", [
+      { value: "easier", label: "Easier" }, { value: "default", label: "Default" }, { value: "hard", label: "Hard" },
+    ], settings.difficulty));
+    sections.push(studioSettingsField("downloadFormat", "Download format", studioName === "quiz" ? [
+      { value: "json", label: "JSON" }, { value: "markdown", label: "Markdown" },
+    ] : [
+      { value: "markdown", label: "Markdown" }, { value: "json", label: "JSON" },
+    ], settings.downloadFormat));
+  } else if (studioName === "audio") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    sections.push(studioSettingsField("format", "Format", [
+      { value: "deep-dive", label: "Deep Dive" }, { value: "conversational", label: "Conversational" },
+    ], settings.format));
+    sections.push(studioSettingsField("length", "Length", [
+      { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
+    ], settings.length));
+  }
+  return sections;
 }
 
 function renderNblmSettingsBody() {
   const body = document.getElementById("nblm-settings-body");
   if (!body) return;
-  const nblmSettings = loadNblmSettings();
 
   if (nblmSettingsActiveTab === "sources") {
     const studioName = nblmSettingsActiveSourceTab;
-    const settings = appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {};
-    const maxPar = nblmSettings?.maxParallel?.[studioName] ?? DEFAULT_MAX_PARALLEL[studioName] ?? 2;
+    const settings = nblmSettingsDraft.studioSettings[studioName] || defaultStudioSettings()[studioName] || {};
+    const maxPar = nblmSettingsDraft.maxParallel[studioName] ?? DEFAULT_MAX_PARALLEL[studioName] ?? 2;
 
     const sourceTabBar = promptStudioTypes.map((sn) => `
       <button onclick="window.switchNblmSourceTab('${sn}')" class="${sn === studioName ? "workspace-tab workspace-tab-active" : "workspace-tab"} text-xs">
@@ -725,56 +822,12 @@ function renderNblmSettingsBody() {
       </button>
     `).join("");
 
-    const settingSections = [];
-    if (studioName === "report") {
-      settingSections.push(studioSettingsField("language", "Language", [
-        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
-      ], settings.language));
-      settingSections.push(studioSettingsField("format", "Format", [
-        { value: "study-guide", label: "Study Guide" }, { value: "briefing-doc", label: "Briefing Doc" },
-        { value: "timeline", label: "Timeline" }, { value: "faq", label: "FAQ" }, { value: "custom", label: "Custom" },
-      ], settings.format));
-    } else if (studioName === "slide_deck") {
-      settingSections.push(studioSettingsField("language", "Language", [
-        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
-      ], settings.language));
-      settingSections.push(studioSettingsField("format", "Format", [
-        { value: "detailed", label: "Detailed" }, { value: "presenter", label: "Presenter" },
-      ], settings.format));
-      settingSections.push(studioSettingsField("length", "Length", [
-        { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
-      ], settings.length));
-      settingSections.push(studioSettingsField("downloadFormat", "Download format", [
-        { value: "pdf", label: "PDF" }, { value: "pptx", label: "PPTX" },
-      ], settings.downloadFormat));
-    } else if (studioName === "quiz" || studioName === "flashcards") {
-      settingSections.push(studioSettingsField("quantity", "Quantity", [
-        { value: "fewer", label: "Fewer" }, { value: "default", label: "Default" }, { value: "more", label: "More" },
-      ], settings.quantity));
-      settingSections.push(studioSettingsField("difficulty", "Difficulty", [
-        { value: "easier", label: "Easier" }, { value: "default", label: "Default" }, { value: "hard", label: "Hard" },
-      ], settings.difficulty));
-      settingSections.push(studioSettingsField("downloadFormat", "Download format", studioName === "quiz" ? [
-        { value: "json", label: "JSON" }, { value: "markdown", label: "Markdown" },
-      ] : [
-        { value: "markdown", label: "Markdown" }, { value: "json", label: "JSON" },
-      ], settings.downloadFormat));
-    } else if (studioName === "audio") {
-      settingSections.push(studioSettingsField("language", "Language", [
-        { value: "en", label: "English" }, { value: "tr", label: "Turkish" },
-      ], settings.language));
-      settingSections.push(studioSettingsField("format", "Format", [
-        { value: "deep-dive", label: "Deep Dive" }, { value: "conversational", label: "Conversational" },
-      ], settings.format));
-      settingSections.push(studioSettingsField("length", "Length", [
-        { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
-      ], settings.length));
-    }
+    const settingSections = nblmSourceSettingsFields(studioName, settings);
 
     settingSections.push(`
       <label class="space-y-2 block border-t border-slate-100 pt-4 mt-2">
         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Parallel Requests</span>
-        <input data-nblm-setting="maxParallel" data-nblm-source="${studioName}" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="1" max="10" value="${maxPar}" />
+        <input data-nblm-setting="maxParallel" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="1" min="1" max="10" value="${maxPar}" />
         <span class="text-[10px] text-slate-400">How many ${studioName.replace(/_/g, " ")} jobs run in parallel per queue batch</span>
       </label>
     `);
@@ -784,7 +837,7 @@ function renderNblmSettingsBody() {
       <div class="space-y-4">${settingSections.join("")}</div>
     `;
   } else if (nblmSettingsActiveTab === "sync") {
-    const mpc = nblmSettings?.maxParallelChunks ?? DEFAULT_MAX_PARALLEL_CHUNKS;
+    const mpc = nblmSettingsDraft.maxParallelChunks ?? DEFAULT_MAX_PARALLEL_CHUNKS;
     body.innerHTML = `
       <div class="space-y-4">
         <label class="space-y-2 block">
@@ -798,40 +851,17 @@ function renderNblmSettingsBody() {
 }
 
 function saveNotebookLMSettings() {
-  const body = document.getElementById("nblm-settings-body");
-  if (!body) return;
+  collectCurrentTabIntoDraft();
+  // Persist all studio settings at once
+  appState.studioSettings = nblmSettingsDraft.studioSettings;
+  persistStudioSettings();
+  // Persist nblm settings (maxParallel + maxParallelChunks)
   const nblmSettings = loadNblmSettings();
-
-  if (nblmSettingsActiveTab === "sources") {
-    const studioName = nblmSettingsActiveSourceTab;
-    // Save studio settings (same as existing openStudioSettings save)
-    const next = { ...(appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {}) };
-    body.querySelectorAll("[data-studio-setting]").forEach((node) => {
-      next[node.getAttribute("data-studio-setting")] = node.value;
-    });
-    appState.studioSettings = {
-      ...(appState.studioSettings || {}),
-      [studioName]: next,
-    };
-    persistStudioSettings();
-
-    // Save maxParallel per source
-    const maxParNode = body.querySelector(`[data-nblm-setting="maxParallel"][data-nblm-source="${studioName}"]`);
-    if (maxParNode) {
-      if (!nblmSettings.maxParallel) nblmSettings.maxParallel = {};
-      nblmSettings.maxParallel[studioName] = Math.max(1, Number(maxParNode.value) || DEFAULT_MAX_PARALLEL[studioName] || 2);
-    }
-    persistNblmSettings(nblmSettings);
-    updateStudioSettingsSummaries();
-    showToast(`${studioName.replace(/_/g, " ")} settings saved.`);
-  } else if (nblmSettingsActiveTab === "sync") {
-    const mpcNode = body.querySelector('[data-nblm-setting="maxParallelChunks"]');
-    if (mpcNode) {
-      nblmSettings.maxParallelChunks = Math.max(1, Number(mpcNode.value) || DEFAULT_MAX_PARALLEL_CHUNKS);
-    }
-    persistNblmSettings(nblmSettings);
-    showToast("Sync settings saved.");
-  }
+  nblmSettings.maxParallel = nblmSettingsDraft.maxParallel;
+  nblmSettings.maxParallelChunks = nblmSettingsDraft.maxParallelChunks;
+  persistNblmSettings(nblmSettings);
+  updateStudioSettingsSummaries();
+  showToast("NotebookLM settings saved.");
 }
 
 function applyPromptPreset(studioName, promptId) {
@@ -1174,7 +1204,7 @@ function resetSourceUI() {
 }
 
 function navigationGuard(targetView) {
-  if (targetView === "setup" || targetView === "auth" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source") {
+  if (targetView === "setup" || targetView === "auth" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source" || targetView === "nblm-settings") {
     if (targetView === "notebooks" && !appState.isAuthenticated) {
       return { allowed: false, message: "Sign in to inspect live NotebookLM notebooks and Studios." };
     }
@@ -1297,6 +1327,10 @@ function switchView(viewName) {
   }
   if (viewName === "sync") {
     prepareSyncView();
+  }
+  if (viewName === "nblm-settings") {
+    renderNblmSettingsTabs();
+    renderNblmSettingsBody();
   }
 }
 
@@ -1540,13 +1574,13 @@ async function fetchLocalProjects() {
     const notebookLabel = project.metadata?.notebook_title || "Not linked";
     return `
       <div class="grid grid-cols-12 gap-4 px-6 py-5 hover:bg-slate-50/60 items-center">
-        <div class="col-span-5 min-w-0">
+        <div class="col-span-4 min-w-0">
           <button onclick="window.resumeExistingPath('${project.path}')" class="font-bold text-slate-900 truncate text-left hover:text-primary">
             ${project.rawName}
           </button>
           <p class="text-xs text-slate-400 truncate mt-1">${project.path}</p>
         </div>
-        <div class="col-span-3">
+        <div class="col-span-2">
           <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
             project.status.tone === "green"
               ? "bg-green-50 text-green-700"
@@ -1561,8 +1595,10 @@ async function fetchLocalProjects() {
           <p class="text-xs text-slate-400 mt-1">${project.status.detail}</p>
         </div>
         <div class="col-span-2 text-center text-sm text-slate-500">${modified}</div>
-        <div class="col-span-2 flex items-center justify-end gap-3">
-          <span class="text-xs text-slate-400 truncate max-w-[150px]">${notebookLabel}</span>
+        <div class="col-span-3 text-right">
+          <span class="text-xs text-slate-400 truncate">${notebookLabel}</span>
+        </div>
+        <div class="col-span-1 flex justify-end">
           <button onclick="window.deleteProject('${project.path}')" class="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
             <span class="material-symbols-outlined !text-lg">delete</span>
           </button>
@@ -2246,16 +2282,16 @@ function populateChunkList() {
   document.getElementById("bulk-actions").style.display =
     appState.selectedChunkIds.size > 0 && !lockedProject ? "flex" : "none";
   list.innerHTML = visibleChunks.map((chunk) => `
-    <div class="group p-3 rounded-lg border flex items-center gap-3 source-list-card ${chunk.id === appState.currentChunkId ? "border-primary/20 shadow-sm is-active" : "border-slate-100 hover:border-slate-200"}">
-      ${lockedProject ? "" : `<input type="checkbox" ${appState.selectedChunkIds.has(chunk.id) ? "checked" : ""} onchange="window.toggleChunk(${chunk.id}, this.checked)" class="rounded text-primary size-4 cursor-pointer" />`}
-      <button onclick="window.selectChunk(${chunk.id})" class="flex-1 min-w-0 text-left">
-        <div class="flex items-center justify-between gap-2">
-          <h4 class="text-xs font-bold truncate ${chunk.id === appState.currentChunkId ? "text-primary" : "text-slate-700"}">${chunk.filename}</h4>
-          <span class="size-1.5 rounded-full ${chunk.synced ? "bg-green-500" : "bg-blue-500"} shrink-0"></span>
+    <div class="dashboard-source-row ${chunk.id === appState.currentChunkId ? "is-active" : ""}">
+      ${lockedProject ? "" : `<button onclick="window.toggleChunk(${chunk.id}, ${!appState.selectedChunkIds.has(chunk.id)})" class="dashboard-source-select ${appState.selectedChunkIds.has(chunk.id) ? "is-selected" : ""}" title="${appState.selectedChunkIds.has(chunk.id) ? "Deselect" : "Select"}"><span class="material-symbols-outlined !text-sm">${appState.selectedChunkIds.has(chunk.id) ? "check_circle" : "add_circle"}</span></button>`}
+      <button onclick="window.selectChunk(${chunk.id})" class="dashboard-source-main">
+        <div class="dashboard-source-copy">
+          <p class="text-sm font-bold ${chunk.id === appState.currentChunkId ? "text-primary" : "text-slate-900"} truncate">${chunk.title}</p>
+          <p class="text-xs text-slate-400 truncate mt-1">${chunk.filename}</p>
         </div>
-        <p class="text-xs text-slate-400 truncate mt-1">${chunk.title}</p>
+        <span class="inline-flex items-center px-2 py-1 rounded-full ${chunk.synced ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-600"} text-[10px] font-bold uppercase tracking-widest">${chunk.synced ? "synced" : "draft"}</span>
       </button>
-      ${lockedProject ? "" : `<button onclick="window.deleteChunk(${chunk.id})" class="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all shrink-0"><span class="material-symbols-outlined !text-sm">delete</span></button>`}
+      ${lockedProject ? "" : `<button onclick="window.deleteChunk(${chunk.id})" class="dashboard-source-preview-btn" title="Delete chunk"><span class="material-symbols-outlined !text-base text-slate-300 hover:text-red-500">delete</span></button>`}
     </div>
   `).join("");
   applyOfflineIcons(list);
@@ -2749,6 +2785,36 @@ async function retryAllFailedStudioJobs() {
   showToast(`${result.retried} failed job${result.retried === 1 ? "" : "s"} re-queued for retry.`);
 }
 
+async function removeBackgroundStudioJob(jobId) {
+  const activeProject = currentDashboardProject();
+  if (!activeProject) return;
+  const result = await window.electronAPI.removeStudioJob({
+    projectPath: activeProject.path,
+    jobId,
+  });
+  if (!result.success) {
+    alert(result.error || "Could not remove job.");
+    return;
+  }
+  await fetchLocalProjects();
+  renderNotebookDashboardDetail();
+}
+
+async function clearSubmittedStudioJobs() {
+  const activeProject = currentDashboardProject();
+  if (!activeProject) return;
+  const result = await window.electronAPI.clearSubmittedStudioJobs({
+    projectPath: activeProject.path,
+  });
+  if (!result.success) {
+    alert(result.error || "Could not clear submitted jobs.");
+    return;
+  }
+  await fetchLocalProjects();
+  renderNotebookDashboardDetail();
+  showToast(`${result.removed} submitted job${result.removed === 1 ? "" : "s"} cleared.`);
+}
+
 function renderStudioQueue(activeProject) {
   const queueList = document.getElementById("studio-queue-list");
   if (!queueList) return;
@@ -2803,16 +2869,27 @@ function renderStudioQueue(activeProject) {
         </div>
         <div class="flex flex-col items-end gap-2">
           <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
-          ${job.status === "failed" ? `<button onclick="window.retryStudioJob('${job.id}')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
+          <div class="flex items-center gap-1">
+            ${job.status === "failed" ? `<button onclick="window.retryStudioJob('${job.id}')" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
+            ${job.status !== "running" ? `<button onclick="window.removeBackgroundStudioJob('${job.id}')" class="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Remove"><span class="material-symbols-outlined !text-sm">delete</span></button>` : ""}
+          </div>
         </div>
       </div>
     `;
   }).join("");
   const failedCount = backgroundJobs.filter((job) => job.status === "failed").length;
-  const retryAllRow = failedCount > 1
-    ? `<div class="flex justify-end p-3"><button onclick="window.retryAllFailedStudioJobs()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 transition-all cursor-pointer"><span class="material-symbols-outlined !text-sm">refresh</span>Retry All Failed (${failedCount})</button></div>`
+  const submittedCount = backgroundJobs.filter((job) => job.status === "submitted").length;
+  const actionButtons = [];
+  if (submittedCount > 0) {
+    actionButtons.push(`<button onclick="window.clearSubmittedStudioJobs()" class="p-2 rounded-lg text-green-600 hover:bg-green-50 transition-all" title="Clear ${submittedCount} submitted job${submittedCount === 1 ? "" : "s"}"><span class="material-symbols-outlined !text-lg">done_all</span></button>`);
+  }
+  if (failedCount > 1) {
+    actionButtons.push(`<button onclick="window.retryAllFailedStudioJobs()" class="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-all" title="Retry ${failedCount} failed job${failedCount === 1 ? "" : "s"}"><span class="material-symbols-outlined !text-lg">refresh</span></button>`);
+  }
+  const topBar = actionButtons.length > 0
+    ? `<div class="flex items-center justify-between px-3 py-2 border-b border-slate-100"><p class="text-[11px] text-slate-400">Submitted jobs may keep processing inside NotebookLM after they leave this queue.</p><div class="flex items-center gap-1">${actionButtons.join("")}</div></div>`
     : "";
-  queueList.innerHTML = `${stagedRows}${backgroundRows}${retryAllRow}`;
+  queueList.innerHTML = `${topBar}${stagedRows}${backgroundRows}`;
   applyOfflineIcons(queueList);
 }
 
@@ -3275,8 +3352,9 @@ Object.assign(window, {
   deleteProject,
   retryStudioJob,
   retryAllFailedStudioJobs,
+  removeBackgroundStudioJob,
+  clearSubmittedStudioJobs,
   openNotebookLMSettings,
-  closeNotebookLMSettings,
   saveNotebookLMSettings,
   switchNblmSettingsTab,
   switchNblmSourceTab,

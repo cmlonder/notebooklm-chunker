@@ -20,6 +20,15 @@ It is designed around one local project lineage per chunk output directory:
 The desktop app shells out to the real CLI. It does not reimplement the core
 workflow.
 
+On first launch, the app shows a setup screen and checks:
+
+- `nblm` availability on `PATH`
+- Playwright Chromium readiness
+- NotebookLM auth readiness
+
+If live NotebookLM auth is not ready yet, you can still continue into the app
+for local-only work and come back to sign in later.
+
 The renderer now ships with local styles and icon fallbacks, so it does not
 depend on Tailwind or Google Fonts CDNs at runtime.
 
@@ -61,6 +70,30 @@ npm run build:mac
 npm run build:win
 npm run build:linux
 ```
+
+For a local release-style build on your current platform:
+
+```bash
+bash ../scripts/release_desktop_local.sh
+```
+
+## GitHub Release Binaries
+
+GitHub releases can now attach desktop artifacts automatically through:
+
+- `.github/workflows/desktop-release.yml`
+
+When a GitHub release is published, the workflow builds and uploads:
+
+- macOS: `dmg`, `zip`
+- Windows: `nsis`, `portable`
+- Linux: `AppImage`, `deb`
+
+Important:
+
+- the desktop app still expects `nblm` on `PATH`
+- it does not bundle the Python CLI/runtime yet
+- so these binaries are packaged desktop shells around the existing CLI workflow
 
 ## Main Features
 

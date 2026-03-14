@@ -7,33 +7,59 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Security: Trivy](https://img.shields.io/badge/security-trivy-blue.svg)](https://github.com/aquasecurity/trivy)
 
-Uploading one large PDF to NotebookLM usually gives weak Studio outputs.
-Reports, slide decks, quizzes, and similar artifacts stay short and generic
-because they are generated from one oversized context.
+`notebooklm-chunker` turns long documents into smaller, heading-aware NotebookLM
+sources so reports, slide decks, quizzes, flashcards, and audio outputs stay
+more focused and useful.
 
-`notebooklm-chunker` solves that by splitting a long document into smaller,
-heading-aware chunks, uploading each chunk as a separate NotebookLM source,
-and then running the Studio outputs you choose. The result is closer to an
-interactive learning kit than a single uploaded PDF.
+## Desktop App
 
-## Demo
+The repo ships with an Electron desktop client under [`desktop/`](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/desktop).
 
-This repository ships with a full demo built around the freely downloadable
-InfoQ mini-book
-[Domain-Driven Design Quickly](https://www.infoq.com/minibooks/domain-driven-design-quickly/).
+This is the main visual workflow:
 
-This demo command is set up to split the book into 5 chunks, then generate
-5 reports and 5 slide decks from those chunks.
+- create a local project from a PDF
+- choose a target chunk count and chunking settings
+- review and refine chunk files
+- sync only changed chunks to NotebookLM
+- open a NotebookLM workspace view inside the app
+- queue reports, slides, quizzes, flashcards, or audio jobs from synced sources
 
-Command:
+Desktop quick start:
 
 ```bash
-nblm run --config ./examples/workflows/ddd-quickly-demo.toml
+cd desktop
+npm install
+npm run dev
 ```
 
-Generated NotebookLM:
+On first launch, the desktop app now runs a setup check screen. It verifies:
 
-- [DDD Quickly Interactive Learning Kit](https://notebooklm.google.com/notebook/3dec967d-7093-4937-917f-173763f79395)
+- `nblm` is available on `PATH`
+- Playwright Chromium is installed
+- NotebookLM auth state is ready for live sync and Studio work
+
+Desktop release binaries can be attached to GitHub releases, but for now the
+desktop app still expects `nblm` to be installed on the host machine and
+available on `PATH`. The Electron app is a desktop shell around the real CLI,
+not a fully bundled Python runtime yet.
+
+What the desktop app gives you:
+
+- recent projects dashboard
+- local project persistence
+- chunk refinement UI
+- changed-only sync
+- NotebookLM workspace dashboard
+- saved prompt library per Studio type
+- queued Studio generation from selected sources
+
+The desktop app uses the real `nblm` CLI under the hood. It is not a separate
+backend.
+
+## Python CLI
+
+The Python package is the automation core used by both the CLI and the desktop
+app.
 
 ## Requirements
 
@@ -44,7 +70,8 @@ This project automates NotebookLM through
 [`notebooklm-py`](https://github.com/teng-lin/notebooklm-py), which is an
 unofficial community library.
 
-For local development and contribution flow, see `DEVELOPMENT.md`.
+For local development and contribution flow, see
+[DEVELOPMENT.md](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/DEVELOPMENT.md).
 
 ## Installation
 
@@ -80,26 +107,6 @@ To clear local `notebooklm-py` auth state later:
 nblm logout
 ```
 
-## Desktop App
-
-This repo also ships with an Electron desktop client under [`desktop/`](desktop/).
-
-The desktop flow is built on top of the real CLI:
-
-- choose or resume a local project
-- prepare chunk files with a slider-based target
-- refine chunk titles and content inline
-- sync only changed chunks to NotebookLM
-- generate new Studio outputs later from the saved `.nblm-run-state.json`
-
-Quick start:
-
-```bash
-cd desktop
-npm install
-npm run dev
-```
-
 ## Quick Start
 
 Create a workflow file:
@@ -107,10 +114,6 @@ Create a workflow file:
 ```bash
 nblm init
 ```
-
-This writes `./nblm.toml`. Edit it with your document path, notebook title, and
-the Studio outputs you want. If you want a ready-made config, you can also copy
-one of the example workflow files from the GitHub repo into `nblm.toml`.
 
 Run the whole flow:
 
@@ -124,26 +127,13 @@ Continue later from the saved run state:
 nblm resume --config ./nblm.toml
 ```
 
-Repo demo example: run the bundled multi-chunk DDD workflow:
-
-```bash
-nblm run --config ./examples/workflows/ddd-quickly-demo.toml
-```
-
-Repo demo example: resume that workflow later after quotas reset:
-
-```bash
-nblm resume --config ./examples/workflows/ddd-quickly-demo.toml
-```
-
-Example: after a previous `run`, add per-chunk quizzes later without
-re-uploading the chunks:
+Add new per-chunk Studio outputs later without re-uploading chunks:
 
 ```bash
 nblm studios --config ./quiz.toml
 ```
 
-Check auth, config, Playwright, and PDF parser readiness:
+Check auth, config, Playwright, and parser readiness:
 
 ```bash
 nblm doctor --config ./nblm.toml
@@ -158,6 +148,22 @@ nblm --version
 `source.path` lives in the config file, so you do not need to pass the input
 document as a CLI argument.
 
+## Repo Demo
+
+This repository includes a full example built around the freely downloadable
+InfoQ mini-book
+[Domain-Driven Design Quickly](https://www.infoq.com/minibooks/domain-driven-design-quickly/).
+
+Repo demo command:
+
+```bash
+nblm run --config ./examples/workflows/ddd-quickly-demo.toml
+```
+
+Generated NotebookLM:
+
+- [DDD Quickly Interactive Learning Kit](https://notebooklm.google.com/notebook/3dec967d-7093-4937-917f-173763f79395)
+
 ## Run State And Resume
 
 `nblm run` always starts a fresh run and writes a state file next to the chunk
@@ -167,60 +173,26 @@ output:
 ./output/chunks/.nblm-run-state.json
 ```
 
-That file tracks every chunk separately:
+That file tracks:
 
-- whether its NotebookLM source upload is still pending, uploaded, or failed
-- whether each Studio job for that chunk is pending, completed, or failed
-- the `source_id`, `task_id`, `artifact_id`, output path, and last error when available
+- source upload status for each chunk
+- Studio status for each chunk
+- saved `source_id`, `task_id`, `artifact_id`, output path, and last error when available
 
-Example shape:
-
-```json
-{
-  "chunks": {
-    "c001-intro.md": {
-      "source": {
-        "status": "uploaded",
-        "source_id": "src-c001-intro"
-      },
-      "studios": {
-        "report": {
-          "status": "completed",
-          "artifact_id": "art-report-1"
-        },
-        "slide_deck": {
-          "status": "pending",
-          "task_id": "art-slide-deck-1"
-        }
-      }
-    }
-  }
-}
-```
-
-This is why `nblm resume` can continue hours or days later after quotas reset:
-it does not guess what happened, it reads the saved job state and continues
-only the unfinished source or Studio jobs.
+This is why `nblm resume` can continue later without redoing finished work.
 
 If you want to inspect progress manually, open `.nblm-run-state.json`.
 
-Source uploads and per-chunk Studio jobs run as separate queues. That means
-new source uploads can keep moving while earlier reports, slide decks, or
-other Studio jobs are still running.
+Source uploads and per-chunk Studio jobs run as separate queues.
 
-Quota blocks are tracked per Studio type. If `report` hits a daily quota
-limit, `slide_deck`, `quiz`, or other Studio types can still continue until
-they hit their own limits.
+Quota blocks are tracked per Studio type. If `report` is blocked, `slide_deck`
+or `quiz` can still continue until they hit their own limits.
 
 ## Add More Studios Later
 
-This is a useful workflow once your sources are already uploaded.
-
-If you ran `nblm run` first and later decide you also want per-chunk quizzes,
-flashcards, reports, or slide decks, you can run `nblm studios` with a new
-workflow config. `nblm` reads `.nblm-run-state.json`, reuses the saved source
-ID for each chunk, and generates one new Studio output per chunk without
-uploading the chunk files again.
+If a previous `run` already uploaded the chunk sources, `nblm studios` can
+reuse `.nblm-run-state.json` and add new per-chunk Studio outputs later
+without uploading the chunks again.
 
 Example:
 
@@ -228,76 +200,39 @@ Example:
 nblm studios --config ./quiz.toml
 ```
 
-For `per_chunk = true`, that means one output per uploaded chunk, not one
-output from the whole notebook context. If the run state exists, notebook-level
-Studio jobs also stay scoped to the source IDs from that saved run instead of
-widening to unrelated sources already in the notebook.
-
-### Resume After Quotas
-
-NotebookLM usage limits and quotas depend on your plan. Google documents those
-limits here:
-
-- [NotebookLM usage limits and upgrades](https://support.google.com/notebooklm/answer/16213268?hl=en)
-
-That matters for long books. If your quota fills up in the middle of a run,
-you can stop, wait for the quota window to reset, and then run:
-
-```bash
-nblm resume --config ./nblm.toml
-```
-
-Because `nblm` persists source and Studio job state separately, it can continue
-from where it left off instead of redoing the whole notebook. NotebookLM's help
-page also notes that daily quotas reset after 24 hours.
-
-When `nblm` sees a quota-exhausted error during Studio creation, it records an
-estimated retry time in `.nblm-run-state.json`, grouped by Studio type,
-reports that time, and exits once the blocked Studio type should stop
-retrying. Later, `nblm resume` checks those saved timestamps and warns you
-before retrying too early.
+For `per_chunk = true`, this stays scoped to the saved per-chunk source IDs
+from the same run state. It does not silently widen to whole-notebook context.
 
 ## Output Files
 
-`chunking.output_dir` is the working folder for a run:
+One `chunking.output_dir` represents one workflow lineage.
 
-- `*.md`: the current chunk files that get uploaded as NotebookLM sources
-- `manifest.json`: the current chunk list
-- `.nblm-run-state.json`: saved source and Studio progress for `nblm resume`
+That lineage owns:
 
-Treat one `chunking.output_dir` as one NotebookLM book/workflow. If you want to
-run another book, or the same book as a separate NotebookLM run, give it a
-different output folder so it gets its own chunks, manifest, and run state.
+- chunk markdown files
+- `manifest.json`
+- `.nblm-run-state.json`
 
-Studio downloads go into each Studio `output_dir`, for example
-`./output/reports` and `./output/slides`, but only when
-`runtime.download_outputs = true`.
+If you want another book, or the same book as a separate NotebookLM run, use a
+different `chunking.output_dir`.
 
-If you edit chunk files and then run `resume`, `nblm` continues from the saved
-state for whatever is still pending. If you want a completely new notebook run,
-use `nblm run`.
+## Workflow Notes
 
-If `nblm prepare` or a fresh `nblm run` targets a non-empty chunk output
-folder, `nblm` asks before overwriting the chunk files and run state there.
-Use `--yes` when you want to skip that confirmation.
+- paths inside workflow files are resolved relative to that file
+- output paths may use `{source_stem}`
+- `runtime.download_outputs = false` is supported
+- one `chunking.output_dir` maps to one NotebookLM workflow lineage
 
-## Workflow File
-
-Start with a small workflow like this:
+## Example Config
 
 ```toml
 [source]
-path = "./your-document.pdf"
-# PDF only. Inclusive physical PDF page ranges to skip (1-based).
-# These are file pages, not the page numbers printed inside the book.
-# skip_ranges = ["1-8", "399-420", "512"]
+path = "./book.pdf"
 
 [notebook]
-title = "Interactive Learning Notebook"
-# id = "nb_..."
+title = "Book Notes"
 
 [chunking]
-# `{source_stem}` expands from `source.path`. Example: `book.pdf` -> `book`.
 output_dir = "./output/{source_stem}/chunks"
 target_pages = 3.0
 min_pages = 2.5
@@ -312,196 +247,9 @@ per_chunk = true
 output_dir = "./output/{source_stem}/reports"
 language = "en"
 format = "study-guide"
-prompt = """
-Write a study-guide style report for this chunk.
-Explain the main ideas, terminology, and design tradeoffs.
-"""
-
-[studios.slide_deck]
-enabled = true
-per_chunk = true
-output_dir = "./output/{source_stem}/slides"
-language = "en"
-format = "detailed"
-length = "default"
-download_format = "pdf"
-prompt = """
-Build a teaching deck for this chunk.
-Keep the section order and make each slide carry one clear idea.
-"""
 ```
 
-Only add the advanced runtime and per-Studio overrides if you actually need
-them. Most workflows can start with the config above.
+## Release And Development
 
-## Studio Parameters
-
-Common fields:
-
-| Field | Meaning |
-| --- | --- |
-| `enabled` | Turn the Studio on or off. |
-| `per_chunk` | Generate one output per chunk instead of one output for the whole notebook. |
-| `max_parallel` | Override generic concurrency for this Studio type. |
-| `prompt` | Extra instructions for NotebookLM. Use TOML multiline strings for anything non-trivial. |
-| `output_path` | Single output file. Best for notebook-level generation. |
-| `output_dir` | Output directory for `per_chunk = true`. |
-| `language` | Output language when supported. |
-
-Per-Studio options:
-
-| Studio | Extra fields | Defaults |
-| --- | --- | --- |
-| `audio` | `format`, `length` | `deep-dive`, `long` |
-| `video` | `format`, `style` | `explainer`, `whiteboard` |
-| `report` | `format` | `study-guide` |
-| `slide_deck` | `format`, `length`, `download_format` | `detailed`, `default`, `pdf` |
-| `quiz` | `quantity`, `difficulty`, `download_format` | `more`, `hard`, `json` |
-| `flashcards` | `quantity`, `difficulty`, `download_format` | `more`, `hard`, `markdown` |
-| `infographic` | `orientation`, `detail` | `portrait`, `detailed` |
-| `data_table` | `language`, `prompt` | `en`, built-in comparison prompt |
-| `mind_map` | `output_path` | JSON output path |
-
-Notes:
-
-- For `report`, `format = "custom"` sends `prompt` as the main custom report prompt.
-- For built-in report formats, `prompt` is appended as extra instructions.
-- `mind_map` currently has no custom prompt surface in `notebooklm-py`.
-
-## Technical Notes
-
-### Heading-Aware Chunking
-
-- chunks start and end on heading boundaries when possible
-- chunk size targets `target_pages` while trying to stay inside `min_pages` and `max_pages`
-- local chunk filenames come from the first or nearest heading, including leading numbers
-
-### PDF Cleanup
-
-- `skip_ranges` lets you remove contents, foreword, references, appendix, or index pages
-- `skip_ranges` uses physical PDF page numbers, not the page numbers printed inside the book
-- ranges are inclusive, for example: `["1-8", "399-420", "512"]`
-- if front matter is still present, increase the range and rerun until the first kept page is correct
-
-### Parallelism And Quotas
-
-- `max_parallel_chunks` controls how many source uploads run at once
-- per-chunk Studio jobs run on their own queues after each source upload finishes
-- good starting point for long books: `max_parallel_chunks = 3`
-- values like `5` can hit NotebookLM quota or rate-limit errors faster
-- if you need finer control, `studios.<name>.max_parallel` overrides one Studio type
-- `runtime.max_parallel_heavy_studios` is the fallback for heavier Studio types such as `audio`, `video`, `slide_deck`, and `infographic`
-
-### Retry And Backoff
-
-- failed NotebookLM `CREATE_ARTIFACT` calls retry automatically
-- quota or rate-limit errors trigger a shared cooldown before more Studio create requests are sent
-- quota exhaustion is tracked per Studio type, so a blocked `report` queue does not automatically block `quiz` or `slide_deck`
-- only tune `runtime.studio_create_retries`, `runtime.studio_create_backoff_seconds`, and `runtime.studio_rate_limit_cooldown_seconds` if the defaults do not fit your workload
-
-### Optional Local Downloads
-
-- `runtime.download_outputs = true` keeps local report, slide, quiz, and other Studio files
-- `runtime.download_outputs = false` records completion in `.nblm-run-state.json` without downloading local artifacts
-- `resume` uses saved Studio state, not local artifact files, to decide what is already complete
-
-### Optional NotebookLM Renaming
-
-- by default, NotebookLM keeps its own auto-generated source and artifact titles
-- set `runtime.rename_remote_titles = true` if you want NotebookLM titles to follow chunk headings
-- tradeoff: the related Studio type becomes more serialized so renames stay correct
-
-### Advanced Runtime Options
-
-You can ignore these at first:
-
-- `runtime.max_parallel_heavy_studios`: fallback concurrency for heavier Studio types
-- `runtime.studio_wait_timeout_seconds`: how long local waits allow a Studio job to finish
-- `runtime.studio_create_retries`: how many times `CREATE_ARTIFACT` is retried
-- `runtime.studio_create_backoff_seconds`: base delay for retry backoff
-- `runtime.studio_rate_limit_cooldown_seconds`: shared cooldown after NotebookLM quota or rate-limit errors
-- `runtime.download_outputs`: keep or skip local Studio downloads
-- `runtime.rename_remote_titles`: rename remote NotebookLM source and artifact titles
-
-## Examples
-
-Start from the general end-to-end workflows first. Use the partial `prepare`
-examples only when you want to inspect chunking before any live NotebookLM run.
-
-### DDD Quickly Demo
-
-```bash
-nblm run --config ./examples/workflows/ddd-quickly-demo.toml
-```
-
-### Full Learning Kit
-
-```bash
-nblm run --config ./examples/workflows/learning-kit.toml
-```
-
-### Per-Chunk Report + Slide Deck
-
-```bash
-nblm run --config ./examples/workflows/per-chunk-report-and-slides.toml
-```
-
-### Single-Studio Workflows
-
-NotebookLM Studio is NotebookLM's built-in generation layer: Audio Overview,
-Video Overview, Report, Slide Deck, Quiz, Flashcards, Infographic, Data Table,
-and Mind Map.
-
-Single-Studio end-to-end examples live under:
-
-```text
-./examples/workflows/studios/
-```
-
-Run one of them with:
-
-```bash
-nblm run --config ./examples/workflows/studios/audio.toml
-```
-
-### Chunking Only
-
-PDF:
-
-```bash
-nblm prepare --config ./examples/workflows/pdf.toml
-```
-
-Markdown:
-
-```bash
-nblm prepare --config ./examples/workflows/markdown.toml
-```
-
-## Commands
-
-`nblm --help`:
-
-```text
-usage: nblm [-h] [--version]
-            {login,logout,doctor,init,prepare,upload,studios,run,resume} ...
-
-Split long documents into NotebookLM-ready chunks and optionally generate
-Studio outputs.
-
-positional arguments:
-  {login,logout,doctor,init,prepare,upload,studios,run,resume}
-    login               Run `notebooklm login` for notebooklm-py authentication.
-    logout              Clear notebooklm-py local authentication state from disk.
-    doctor              Check config discovery, auth, Playwright, PDF parser, and notebooklm CLI readiness.
-    init                Write a workflow config file with chunking and Studio settings.
-    prepare             Parse a document and export Markdown chunks.
-    upload              Upload existing chunks to NotebookLM.
-    studios             Generate enabled Studio outputs for an existing notebook or a saved run state.
-    run                 Prepare a document, create a fresh notebook run, then generate enabled Studio outputs.
-    resume              Continue a previous run from `.nblm-run-state.json` and finish pending uploads or Studio jobs.
-
-options:
-  -h, --help            show this help message and exit
-  --version             show program's version number and exit
-```
+For setup, testing, packaging, and GitHub release flow, see
+[DEVELOPMENT.md](/Users/C_ONDER1/Dev/cemal/notebooklm-chunker/DEVELOPMENT.md).

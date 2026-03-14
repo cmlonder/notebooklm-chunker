@@ -3,46 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;"
+  >
   <title>NotebookLM Chunker</title>
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-  <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: { extend: { colors: { "primary": "#007aff" }, fontFamily: { "display": ["Inter", "sans-serif"] } } }
-    }
-  </script>
-  <style>
-    body { font-family: 'Inter', sans-serif; height: 100vh; display: flex; flex-direction: row; overflow: hidden; }
-    .sidebar-glass { background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(20px); border-right: 1px solid rgba(0, 0, 0, 0.05); }
-    .header-glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
-    .glass-panel { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.3); }
-    .view { display: none; width: 100%; flex-direction: column; overflow-y: auto; }
-    .view.active { display: flex; }
-    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    input[type="range"] { height: 40px; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body class="bg-slate-50 font-display antialiased text-slate-900 overflow-hidden text-left">
   
   <aside id="main-sidebar" class="hidden shrink-0 w-[260px] sidebar-glass flex flex-col p-4 z-50">
     <div class="flex items-center gap-3 px-2 py-4 mb-6">
-      <div class="bg-primary text-white p-1.5 rounded-lg flex items-center justify-center shadow-md"><span class="material-symbols-outlined !text-xl font-bold">folder_zip</span></div>
+      <img src="chunker-mark.svg" alt="Chunker" class="app-brand-mark">
       <h1 class="text-lg font-bold tracking-tight">Chunker</h1>
     </div>
     <button onclick="window.startNewProject()" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 mb-8 transition-all active:scale-95">
       <span class="material-symbols-outlined !text-xl">add_box</span><span>New Project</span>
     </button>
     <nav class="flex-1 space-y-1">
-      <a data-sidebar="dashboard" onclick="window.switchView('dashboard')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">dashboard</span> Dashboard</a>
+      <a data-sidebar="history" onclick="window.switchView('history')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">history</span> Recent Projects</a>
+      <a data-sidebar="notebooks" onclick="window.openNotebookDashboard()" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">auto_stories</span> NotebookLM</a>
+      <a data-sidebar="prompts" onclick="window.switchView('prompts')" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-500 hover:bg-slate-100 transition-all cursor-pointer"><span class="material-symbols-outlined">style</span> Prompts</a>
     </nav>
     <div class="pt-4 border-t border-slate-100 p-2">
       <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">User</p>
-      <p class="text-sm font-bold text-slate-900" id="user-name-display">Cemal Önder</p>
+      <p class="text-sm font-bold text-slate-900">Cemal Önder</p>
+      <div class="mt-3 flex items-center gap-2">
+        <button onclick="window.switchAccount()" class="secondary-action-btn flex-1 inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">manage_accounts</span><span>Switch</span></button>
+        <button onclick="window.logout()" class="secondary-action-btn flex-1 inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">logout</span><span>Logout</span></button>
+      </div>
     </div>
   </aside>
 
@@ -50,11 +39,10 @@
     <header id="wizard-header" class="hidden shrink-0 z-40 header-glass px-6 py-3 fade-in">
       <div class="max-w-4xl mx-auto flex items-center justify-center">
         <nav class="flex items-center gap-1 bg-slate-200/50 p-1 rounded-xl">
-          <a data-nav="source" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('source')">Source</a>
+          <a data-nav="source" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('source')">Document</a>
           <a data-nav="structure" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('structure')">Structure</a>
           <a data-nav="sources" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('sources')">Sources</a>
           <a data-nav="sync" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('sync')">Sync</a>
-          <a data-nav="studio" class="px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer" onclick="window.switchView('studio')">Studio</a>
         </nav>
       </div>
     </header>
@@ -62,102 +50,449 @@
     <main id="view-container" class="flex-1 relative flex flex-col min-h-0 overflow-hidden">
       <div id="auth-view" class="view active flex items-center justify-center w-full h-full p-6">
         <div class="w-full max-w-[400px] glass-panel rounded-3xl shadow-2xl p-12 text-center fade-in">
-          <div class="mb-8 flex items-center justify-center size-16 bg-primary/10 rounded-2xl text-primary mx-auto"><span class="material-symbols-outlined !text-4xl">auto_stories</span></div>
+          <div class="mb-8 flex items-center justify-center mx-auto"><img src="chunker-mark.svg" alt="Chunker" class="auth-brand-mark"></div>
           <h1 class="text-2xl font-bold mb-6">NotebookLM Chunker</h1>
-          <button id="login-btn" onclick="window.login()" class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Sign in to NotebookLM</button>
-          <button id="confirm-login-btn" onclick="window.confirmLogin()" class="hidden w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">I've Logged In</button>
+          <button id="login-btn" onclick="window.login()" class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Sign in to Google</button>
+          <button id="confirm-login-btn" class="hidden w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all" onclick="window.sendEnterToProcess()">Send Enter To CLI</button>
+          <p id="auth-enter-hint" class="hidden mt-4 text-sm text-slate-500">
+            Complete the browser login, then press <span class="font-bold">Enter</span> here if the CLI is waiting.
+          </p>
         </div>
       </div>
 
-      <div id="dashboard-view" class="view p-8 sm:p-12 fade-in">
-        <div class="max-w-5xl mx-auto w-full space-y-10">
-          <div class="flex justify-between items-end"><div class="text-left"><h1 class="text-4xl font-extrabold tracking-tight mb-2">Dashboard</h1><p class="text-slate-500 text-lg">Your local projects.</p></div><button onclick="window.fetchLocalProjects()" class="p-2 hover:bg-slate-100 rounded-full transition-all"><span class="material-symbols-outlined">refresh</span></button></div>
-          <div id="recent-projects-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      <div id="history-view" class="view p-8 sm:p-12 fade-in">
+        <div class="max-w-5xl mx-auto w-full space-y-10 text-left">
+          <div class="flex justify-between items-end"><h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900 text-left">Recent Projects</h1></div>
+          
+          <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100">
+            <div class="grid grid-cols-12 gap-4 px-6 py-4 border-b bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <div class="col-span-5">Project Name</div>
+              <div class="col-span-3">Status</div>
+              <div class="col-span-2 text-center">Last Modified</div>
+              <div class="col-span-2 text-right">NotebookLM</div>
+            </div>
+            <div id="project-history-list" class="divide-y divide-slate-100">
+              <!-- JS ile dolacak -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="notebooks-view" class="view p-8 sm:p-12 fade-in">
+        <div class="max-w-5xl mx-auto w-full space-y-8 text-left">
+          <div class="flex items-end justify-between gap-6">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900">NotebookLM Dashboard</h1>
+              <p class="text-slate-500">Browse notebooks first, then open a workspace to inspect synced sources and build Studio work.</p>
+            </div>
+            <button onclick="window.refreshNotebookDashboard()" class="secondary-action-btn inline-flex items-center gap-2"><span class="material-symbols-outlined !text-sm">refresh</span><span>Refresh</span></button>
+          </div>
+
+          <section id="notebook-overview-panel" class="glass-panel rounded-3xl border border-slate-100 overflow-hidden">
+            <div class="px-6 py-4 border-b bg-slate-50/50 space-y-3">
+              <h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Notebooks</h3>
+              <input id="dashboard-notebook-search" oninput="window.handleNotebookSearch(this.value)" type="text" placeholder="Filter notebooks..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+            </div>
+            <div id="notebook-dashboard-loading" class="hidden notebook-dashboard-loading">
+              <div class="dashboard-spinner"></div>
+              <div>
+                <p class="font-bold text-slate-900">Loading notebooks</p>
+                <p class="text-sm text-slate-500 mt-2">Fetching your local projects and NotebookLM links...</p>
+              </div>
+            </div>
+            <div id="remote-notebook-list" class="notebook-card-list"></div>
+          </section>
+
+          <section id="notebook-workspace-panel" class="hidden notebook-dashboard-detail">
+            <div class="glass-panel rounded-3xl border border-slate-100 p-6 space-y-5">
+              <div class="flex items-start justify-between gap-6">
+                <div>
+                <h2 id="dashboard-header-title" class="text-2xl font-bold text-slate-900">Select a notebook</h2>
+                <p id="dashboard-header-subtitle" class="text-sm text-slate-500 mt-2">Choose a notebook to inspect its local synced runs.</p>
+                </div>
+              </div>
+              <div id="dashboard-workspace-notice" class="hidden queue-note workspace-note"></div>
+              <div class="workspace-tab-row">
+                <div class="workspace-tab-bar">
+                  <button id="workspace-tab-sources" onclick="window.switchNotebookWorkspaceTab('sources')" class="workspace-tab workspace-tab-active">Sources</button>
+                  <button id="workspace-tab-queue" onclick="window.switchNotebookWorkspaceTab('queue')" class="workspace-tab">Queue</button>
+                  <button id="workspace-tab-studios" onclick="window.switchNotebookWorkspaceTab('studios')" class="workspace-tab">Studios</button>
+                </div>
+                <a id="dashboard-notebook-link-btn" href="#" class="hidden notebook-link-btn notebook-link-btn-inline"><span class="material-symbols-outlined">open_in_new</span><span>Open</span></a>
+              </div>
+            </div>
+
+            <div id="dashboard-sources-panel" class="notebook-workspace-grid">
+              <section class="glass-panel rounded-3xl border border-slate-100 overflow-hidden min-w-0">
+                <div class="px-5 py-4 border-b bg-slate-50/50 space-y-3">
+                  <div>
+                    <h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Sources</h3>
+                    <p id="dashboard-source-summary" class="text-sm text-slate-500 mt-2">Choose a synced source, preview it with the magnifier, then add Studio work for that source on the right.</p>
+                  </div>
+                  <div class="flex items-center justify-between gap-4">
+                    <span id="dashboard-selected-count" class="text-xs font-bold uppercase tracking-widest text-slate-400">0 selected</span>
+                    <button onclick="window.toggleAllDashboardSources()" class="secondary-action-btn inline-flex items-center gap-2"><span class="material-symbols-outlined !text-sm">checklist</span><span>Select all</span></button>
+                  </div>
+                  <input id="dashboard-source-search" oninput="window.handleNotebookSourceSearch(this.value)" type="text" placeholder="Search synced sources..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+                </div>
+                <div id="dashboard-source-list" class="divide-y divide-slate-100 max-h-[620px] overflow-y-auto text-left"></div>
+              </section>
+
+              <section class="glass-panel rounded-3xl border border-slate-100 p-6 space-y-4 min-w-0">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="font-bold text-slate-900">Studio Builder</h3>
+                    <p id="dashboard-selected-source-meta" class="text-sm text-slate-500">Select a source on the left, then add report, slide, quiz, flashcard, or audio jobs for it.</p>
+                  </div>
+                </div>
+                <div id="studio-controls" class="grid grid-cols-1 gap-4">
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">description</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Report</h3>
+                          <p class="text-sm text-slate-500">Study-guide style report for the selected source.</p>
+                          <p id="studio-report-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('report')" class="queue-action-btn queue-settings-btn" title="Report settings" aria-label="Report settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('report')" class="queue-action-btn" title="Add report to queue" aria-label="Add report to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('report')" class="queue-action-btn" title="Add one report per selected source" aria-label="Add one report per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-report-preset" onchange="window.applyPromptPreset('report', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-report-prompt-wrap" class="hidden">
+                      <textarea id="studio-report-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom report prompt"></textarea>
+                    </div>
+                  </label>
+
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">slideshow</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Slide Deck</h3>
+                          <p class="text-sm text-slate-500">Presentation deck for the selected source.</p>
+                          <p id="studio-slide_deck-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('slide_deck')" class="queue-action-btn queue-settings-btn" title="Slide deck settings" aria-label="Slide deck settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('slide_deck')" class="queue-action-btn" title="Add slide deck to queue" aria-label="Add slide deck to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('slide_deck')" class="queue-action-btn" title="Add one slide deck per selected source" aria-label="Add one slide deck per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-slide_deck-preset" onchange="window.applyPromptPreset('slide_deck', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-slide-prompt-wrap" class="hidden">
+                      <textarea id="studio-slide-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom slide prompt"></textarea>
+                    </div>
+                  </label>
+
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">quiz</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Quiz</h3>
+                          <p class="text-sm text-slate-500">Quiz batch for the selected source.</p>
+                          <p id="studio-quiz-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('quiz')" class="queue-action-btn queue-settings-btn" title="Quiz settings" aria-label="Quiz settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('quiz')" class="queue-action-btn" title="Add quiz to queue" aria-label="Add quiz to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('quiz')" class="queue-action-btn" title="Add one quiz per selected source" aria-label="Add one quiz per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-quiz-preset" onchange="window.applyPromptPreset('quiz', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-quiz-prompt-wrap" class="hidden">
+                      <textarea id="studio-quiz-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom quiz prompt"></textarea>
+                    </div>
+                  </label>
+
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">style</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Flashcards</h3>
+                          <p class="text-sm text-slate-500">Flashcard batch for the selected source.</p>
+                          <p id="studio-flashcards-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('flashcards')" class="queue-action-btn queue-settings-btn" title="Flashcard settings" aria-label="Flashcard settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('flashcards')" class="queue-action-btn" title="Add flashcards to queue" aria-label="Add flashcards to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('flashcards')" class="queue-action-btn" title="Add one flashcard set per selected source" aria-label="Add one flashcard set per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-flashcards-preset" onchange="window.applyPromptPreset('flashcards', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-flashcards-prompt-wrap" class="hidden">
+                      <textarea id="studio-flashcards-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom flashcard prompt"></textarea>
+                    </div>
+                  </label>
+
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">podcasts</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Audio</h3>
+                          <p class="text-sm text-slate-500">Audio batch for the selected source.</p>
+                          <p id="studio-audio-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('audio')" class="queue-action-btn queue-settings-btn" title="Audio settings" aria-label="Audio settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('audio')" class="queue-action-btn" title="Add audio to queue" aria-label="Add audio to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('audio')" class="queue-action-btn" title="Add one audio job per selected source" aria-label="Add one audio job per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-audio-preset" onchange="window.applyPromptPreset('audio', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-audio-prompt-wrap" class="hidden">
+                      <textarea id="studio-audio-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom audio prompt"></textarea>
+                    </div>
+                  </label>
+                </div>
+              </section>
+            </div>
+
+            <section id="dashboard-queue-panel" class="hidden glass-panel rounded-3xl p-6 border border-slate-100 space-y-4">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <h3 class="font-bold text-slate-900">Queued jobs</h3>
+                  <p id="studio-summary" class="text-sm text-slate-500 mt-2">Choose a source to start building the queue.</p>
+                </div>
+                <button id="generate-studios-btn" onclick="window.runStudios()" class="queue-generate-btn inline-flex items-center gap-2">
+                  <span class="material-symbols-outlined !text-sm">auto_awesome</span>
+                  <span>Generate Queue</span>
+                </button>
+              </div>
+              <div id="studio-queue-list" class="space-y-3 text-sm text-slate-500"></div>
+              <div class="queue-note">
+                Submitted jobs may keep processing inside NotebookLM after they leave this queue. Check the Studios tab for the latest output status.
+              </div>
+            </section>
+
+            <section id="dashboard-studios-panel" class="hidden glass-panel rounded-3xl p-6 border border-slate-100 space-y-4">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <h3 class="font-bold text-slate-900">Studios</h3>
+                  <p class="text-sm text-slate-500">NotebookLM Studio outputs for the active notebook.</p>
+                </div>
+                <button id="delete-studio-selection-btn" onclick="window.deleteSelectedStudioArtifacts()" class="secondary-action-btn icon-only-btn" disabled title="Delete selected" aria-label="Delete selected">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <div id="studio-artifact-tab-bar" class="workspace-tab-bar"></div>
+                <input id="studio-artifact-search" oninput="window.handleStudioArtifactsSearch(this.value)" type="text" placeholder="Filter current Studio tab..." class="studio-search-input" />
+              </div>
+              <div id="studio-generated-list" class="space-y-3 text-sm text-slate-500"></div>
+            </section>
+          </section>
+        </div>
+      </div>
+
+      <div id="prompts-view" class="view p-8 sm:p-12 fade-in">
+        <div class="max-w-5xl mx-auto w-full space-y-8 text-left">
+          <div>
+            <h1 class="text-4xl font-extrabold tracking-tight mb-2 text-slate-900">Prompts</h1>
+            <p class="text-slate-500">Save reusable prompts for each Studio type and use them from the NotebookLM builder.</p>
+          </div>
+          <div class="glass-panel rounded-3xl border border-slate-100 p-6 space-y-5">
+            <div class="flex items-center justify-between gap-4">
+              <div id="prompt-tab-bar" class="workspace-tab-bar"></div>
+              <div class="flex items-center gap-3">
+                <button onclick="window.startPromptDraft()" class="secondary-action-btn">New prompt</button>
+                <button id="delete-prompt-selection-btn" onclick="window.deleteSelectedPrompts()" class="secondary-action-btn" disabled>Delete selected</button>
+              </div>
+            </div>
+            <input id="prompt-search" oninput="window.handlePromptSearch(this.value)" type="text" placeholder="Filter prompts..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+            <div class="notebook-workspace-grid">
+              <section class="glass-panel rounded-3xl border border-slate-100 overflow-hidden min-w-0">
+                <div id="prompt-list" class="divide-y divide-slate-100 max-h-[620px] overflow-y-auto text-left"></div>
+              </section>
+              <section class="glass-panel rounded-3xl border border-slate-100 p-6 min-w-0">
+                <div id="prompt-detail"></div>
+              </section>
+            </div>
+          </div>
         </div>
       </div>
 
       <div id="source-view" class="view p-8 sm:p-12 fade-in">
         <div class="max-w-4xl mx-auto w-full flex flex-col items-center gap-10">
-          <div class="text-center"><h2 class="text-4xl font-bold tracking-tight mb-3">Add your knowledge</h2><p class="text-slate-500 text-lg">Upload a PDF to start chunking.</p></div>
-          <div id="drop-zone" onclick="window.triggerFileSelect()" class="w-full aspect-[21/9] glass-panel rounded-3xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center p-8 hover:border-primary/50 cursor-pointer transition-all">
-            <span class="material-symbols-outlined text-primary !text-5xl mb-4">add_circle</span>
-            <p class="text-xl font-semibold">Click or Drag PDF</p>
-          </div>
-          <div id="selected-state" class="hidden w-full glass-panel rounded-3xl p-8 flex items-center gap-6">
-            <div class="bg-primary/10 text-primary p-4 rounded-2xl"><span class="material-symbols-outlined !text-xl">description</span></div>
-            <div class="flex-1 overflow-hidden"><h3 id="selected-file-name" class="text-lg font-bold truncate">filename.pdf</h3><p class="text-sm text-slate-500">Document selected</p></div>
-            <div class="flex gap-3"><button onclick="window.startNewProject()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-sm hover:bg-slate-50">Change</button><button onclick="window.startStructurePhase()" class="bg-primary text-white font-bold py-3 px-10 rounded-xl shadow-lg active:scale-95">Analyze</button></div>
-          </div>
-
-          <div id="duplicate-state" class="hidden w-full glass-panel rounded-3xl p-8 border-2 border-primary/20 flex flex-col gap-6 fade-in">
-            <div class="flex items-center gap-6">
-              <div class="bg-primary text-white p-4 rounded-2xl shadow-lg"><span class="material-symbols-outlined !text-3xl">library_books</span></div>
-              <div class="flex-1 text-left"><h3 class="text-xl font-extrabold text-slate-900">Existing Versions Found</h3><p class="text-slate-500">We found multiple catalogs for this document. Choose an action:</p></div>
+          <div id="source-view-header" class="text-center text-left"><h2 id="source-view-title" class="text-4xl font-bold tracking-tight mb-3">Add Knowledge</h2><p id="source-view-subtitle" class="text-slate-500 text-lg text-center">Upload a PDF to start chunking.</p></div>
+          <div id="source-summary-card" class="hidden w-full glass-panel rounded-3xl p-8 text-left space-y-4">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h3 id="source-summary-title" class="text-xl font-bold text-slate-900">Loaded document</h3>
+                <p id="source-summary-subtitle" class="text-sm text-slate-500">This synced project is read-only.</p>
+              </div>
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-bold uppercase tracking-widest">Read only</span>
             </div>
-            
-            <!-- Mevcut Versiyonlar Listesi -->
-            <div id="existing-versions-list" class="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-              <!-- JS ile dolacak -->
-            </div>
-
-            <div class="pt-4 border-t border-slate-100">
-              <button onclick="window.startNewVersion()" class="w-full p-4 bg-white border border-dashed border-primary/40 rounded-2xl hover:bg-primary/5 text-primary font-bold flex items-center justify-center gap-2 transition-all group">
-                <span class="material-symbols-outlined group-hover:rotate-90 transition-transform">add_circle</span>
-                Create Fresh Version (Auto-numbered)
-              </button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="glass-panel rounded-2xl p-4">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">PDF</p>
+                <p id="source-summary-pdf" class="mt-2 text-sm font-bold text-slate-900 truncate">-</p>
+              </div>
+              <div class="glass-panel rounded-2xl p-4">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">NotebookLM</p>
+                <p id="source-summary-notebook" class="mt-2 text-sm font-bold text-slate-900 truncate">-</p>
+              </div>
+              <div class="glass-panel rounded-2xl p-4">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pages</p>
+                <p id="source-summary-pages" class="mt-2 text-sm font-bold text-slate-900">-</p>
+              </div>
+              <div class="glass-panel rounded-2xl p-4">
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Chunks</p>
+                <p id="source-summary-chunks" class="mt-2 text-sm font-bold text-slate-900">-</p>
+              </div>
             </div>
           </div>
+          <div id="drop-zone" onclick="window.triggerFileSelect()" class="w-full aspect-[21/9] glass-panel rounded-3xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center p-8 hover:border-primary/50 cursor-pointer transition-all"><span class="material-symbols-outlined text-primary !text-5xl mb-4">add_circle</span><p class="text-xl font-semibold">Click or Drag PDF</p></div>
+          <div id="selected-state" class="hidden w-full glass-panel rounded-3xl p-8 flex items-center gap-6"><div class="bg-primary/10 text-primary p-4 rounded-2xl"><span class="material-symbols-outlined !text-xl">description</span></div><div class="flex-1 overflow-hidden"><h3 id="selected-file-name" class="text-lg font-bold truncate">filename.pdf</h3><p id="selected-file-subtitle" class="text-sm text-slate-500">Document selected</p></div><div id="selected-file-actions" class="flex gap-3"><button onclick="window.replaceSelectedPDF()" class="px-4 py-2 border border-slate-200 rounded-xl font-bold text-sm hover:bg-slate-50">Change</button><button onclick="window.switchView('structure')" class="bg-primary text-white font-bold py-3 px-10 rounded-xl shadow-lg active:scale-95">Analyze</button></div></div>
+          <div id="duplicate-state" class="hidden w-full glass-panel rounded-3xl p-8 border-2 border-primary/20 flex flex-col gap-6 fade-in"><div id="existing-versions-list" class="space-y-3"></div><button onclick="window.startNewVersion()" class="w-full p-4 bg-white border border-dashed border-primary/40 rounded-2xl text-primary font-bold">Create Fresh Version</button></div>
         </div>
       </div>
 
       <div id="structure-view" class="view items-center p-8 sm:p-12 fade-in">
-        <div class="max-w-[800px] w-full flex flex-col gap-8 py-10">
-          <h1 class="text-4xl font-extrabold tracking-tight text-left">Partition Strategy</h1>
-          <div class="glass-panel rounded-3xl p-8 shadow-sm flex flex-col gap-10">
-            <div class="flex flex-col gap-6 text-left">
-              <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Number of Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> chunks</span></div>
-              <div class="relative w-full h-10 flex items-center">
-                <div class="absolute w-full h-2 bg-slate-200 rounded-full"></div>
-                <div id="slider-track" class="absolute h-2 bg-primary rounded-full" style="width: 30%;"></div>
-                <input id="target-count-slider" oninput="window.updateSlider(this.value)" class="absolute w-full opacity-0 cursor-pointer z-10" max="50" min="1" type="range" value="15"/>
-              </div>
-            </div>
-            <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary">info</span>
-              <p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Target: ~<span id="calc-pages-display" class="font-bold">?</span> p/chunk.</p>
-            </div>
+        <div class="max-w-[800px] w-full flex flex-col gap-6 py-6">
+          <h1 class="text-4xl font-extrabold tracking-tight text-left text-slate-900">Partition Strategy</h1>
+          <div id="structure-readonly-banner" class="hidden glass-panel rounded-3xl p-5 border border-green-200 bg-green-50 text-left">
+            <h3 class="font-bold text-green-700">This synced lineage is read-only</h3>
+            <p id="structure-readonly-summary" class="text-sm text-green-700 mt-2">Chunking is already complete for this version.</p>
           </div>
-          <button onclick="window.forceRefine()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Process</button>
+          <div class="glass-panel rounded-3xl p-6 shadow-sm flex flex-col gap-6">
+            <div class="flex flex-col gap-4 text-left">
+              <div class="flex justify-between items-end"><label class="text-slate-700 font-bold text-sm uppercase">Chunks</label><span class="text-primary font-bold text-3xl"><span id="target-count-display">15</span> chunks</span></div>
+              <div class="relative w-full h-10 flex items-center"><div class="absolute w-full h-2 bg-slate-200 rounded-full"></div><div id="slider-track" class="absolute h-2 bg-primary rounded-full" style="width: 30%;"></div><input id="target-count-slider" oninput="window.updateSlider(this.value)" class="absolute w-full opacity-0 cursor-pointer z-10" max="50" min="1" type="range" value="15"/></div>
+            </div>
+            <div class="bg-primary/5 p-4 rounded-2xl flex items-center gap-3"><span class="material-symbols-outlined text-primary">info</span><p class="text-primary/80 text-sm">Document: <span id="total-pages-display" class="font-bold">?</span> pages. Target: ~<span id="calc-pages-display" class="font-bold">?</span> p/chunk.</p></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <label class="space-y-2 text-left">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min Pages</span>
+                <input id="min-pages-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="0.1" min="0.1" value="2.5" />
+              </label>
+              <label class="space-y-2 text-left">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max Pages</span>
+                <input id="max-pages-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="0.1" min="0.1" value="4.0" />
+              </label>
+              <label class="space-y-2 text-left">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Words / Page</span>
+                <input id="words-per-page-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="number" step="10" min="50" value="500" />
+              </label>
+            </div>
+            <p id="partition-range-note" class="text-sm text-slate-500 text-left">Pick the chunk count you want. The chunker will still prefer heading boundaries when it can, so the exact split is best-effort rather than a hard guarantee.</p>
+          </div>
+          <button id="process-btn" onclick="window.forceRefine()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Process</button>
         </div>
       </div>
 
       <div id="sources-view" class="view flex-row h-full fade-in overflow-hidden">
         <aside class="w-[300px] border-r border-slate-200 bg-white flex flex-col shrink-0">
-          <div class="p-4 border-b border-slate-100 font-bold">Catalog</div>
-          <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
-          <div class="p-4 border-t border-slate-200 bg-slate-50"><button onclick="window.switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm">Continue to Sync</button></div>
+          <div class="p-4 border-b border-slate-100 flex items-center justify-between"><h2 class="font-bold text-slate-900">Catalog</h2><div id="bulk-actions" class="hidden flex items-center gap-2"><button onclick="window.deleteSelected()" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><span class="material-symbols-outlined !text-xl">delete_sweep</span></button></div></div>
+          <div class="px-4 py-3 border-b border-slate-50 space-y-3">
+            <div id="catalog-select-row" class="flex items-center gap-3"><input type="checkbox" id="select-all-chunks" onchange="window.toggleAllChunks(this.checked)" class="rounded text-primary size-4 cursor-pointer"/><label for="select-all-chunks" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer">Select All</label></div>
+            <input id="chunk-search-input" oninput="window.handleChunkSearch(this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="text" placeholder="Search chunks..." />
+          </div>
+          <div id="chunk-list" class="flex-1 overflow-y-auto p-3 space-y-1"></div>
+          <div class="p-4 border-t border-slate-200 bg-slate-50"><button id="continue-sync-btn" onclick="window.switchView('sync')" class="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm shadow-md inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined !text-sm">cloud_upload</span><span>Continue to Sync</span></button></div>
         </aside>
         <main class="flex-1 flex flex-col relative bg-white overflow-hidden text-left">
+          <div id="sources-readonly-banner" class="hidden px-6 py-3 border-b border-slate-100 bg-green-50 text-sm text-green-700 font-bold">
+            This project is synced. You can search and inspect chunks, but editing is disabled.
+          </div>
           <div class="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white/80 backdrop-blur-md text-sm">
-            <div class="flex items-center gap-2"><span class="text-slate-400">Title:</span><span id="current-chunk-title" contenteditable="true" oninput="window.handleTitleEdit()" class="text-slate-900 font-bold border-b border-dashed border-slate-300 outline-none px-1">Select a chunk</span></div>
-            <span class="text-slate-400 text-xs italic">Saved</span>
+            <div class="flex items-center gap-2 transition-opacity" style="opacity: 0;"><span class="text-slate-400">Title:</span><span id="current-chunk-title" contenteditable="false" oninput="window.handleTitleEdit()" class="text-slate-900 font-bold border-b border-dashed border-slate-300 outline-none px-1">Select a chunk</span></div>
+            <span id="sources-empty-hint" class="text-slate-400 text-xs italic">Select a chunk to begin</span>
           </div>
           <div id="editor-surface" class="flex-1 overflow-y-auto p-12 md:p-20"><div id="markdown-content" class="prose prose-slate max-w-none outline-none"></div></div>
-          <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full px-6 py-3 shadow-xl z-20"><button onclick="window.switchView('sync')" class="bg-primary text-white px-8 py-2 rounded-full font-bold text-sm">Ready to Sync</button></div>
         </main>
       </div>
 
       <div id="sync-view" class="view items-center p-8 sm:p-12 fade-in">
-        <div class="max-w-4xl w-full flex flex-col gap-8 py-10">
-          <h1 class="text-4xl font-extrabold tracking-tight">Sync to NotebookLM</h1>
-          <p id="active-notebook-info" class="text-primary font-bold text-sm hidden text-left">Syncing to: <span id="active-notebook-name">...</span></p>
-          <div id="notebook-settings-panel" class="glass-panel p-6 rounded-3xl border border-slate-100 space-y-4 w-full text-left"><h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Notebook Settings</h3><input id="new-notebook-title" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none" type="text" placeholder="Notebook Title..."/></div>
-          <div id="sync-main-panel" class="space-y-6 w-full">
-            <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100 w-full"><div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center"><h3 class="font-bold text-xs uppercase text-slate-500 tracking-widest">Status (<span id="sync-count-total">0</span>)</h3></div><div id="sync-chunk-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto text-left"></div></div>
-            <button id="start-sync-btn" onclick="window.runSync()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Upload Changes</button>
+        <div class="max-w-4xl w-full flex flex-col gap-5 py-6">
+          <div class="flex items-end justify-between gap-6">
+            <div>
+              <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">Sync to NotebookLM</h1>
+            </div>
+            <a id="sync-notebook-link-btn" href="#" class="hidden notebook-link-btn inline-flex items-center gap-2">
+              <span class="material-symbols-outlined !text-sm">open_in_new</span>
+              <span>Open</span>
+            </a>
+          </div>
+          <div id="sync-readonly-banner" class="hidden glass-panel rounded-3xl p-4 border border-green-200 bg-green-50 text-left">
+            <h3 class="font-bold text-green-700">Already synced</h3>
+            <p class="text-sm text-green-700 mt-2">This lineage is read-only. Review the notebook link and synced chunk status below.</p>
+          </div>
+          <div id="notebook-settings-panel" class="glass-panel p-5 rounded-3xl border border-slate-100 space-y-3 w-full text-left">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-left">Notebook Settings</h3>
+            
+            <div class="space-y-2">
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Target Notebook</label>
+              <select id="notebook-select" onchange="window.handleNotebookSelectChange(this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer">
+                <option value="" disabled selected>Select a notebook...</option>
+                <option value="new">+ Create New Notebook</option>
+                <!-- Existing notebooks will be loaded here -->
+              </select>
+            </div>
+
+            <div id="new-notebook-input-group" class="hidden space-y-2">
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">New Notebook Title</label>
+              <input id="new-notebook-title" oninput="window.handleNotebookSelectChange('new')" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="text" placeholder="Enter title..."/>
+            </div>
+          </div>
+          <div id="sync-main-panel" class="space-y-4 w-full">
+            <div class="glass-panel rounded-3xl overflow-hidden shadow-sm border border-slate-100 w-full"><div class="px-6 py-4 border-b bg-slate-50/50 flex justify-between items-center"><h3 id="sync-list-title" class="font-bold text-xs uppercase text-slate-500 tracking-widest">Pending Changes (<span id="sync-count-total">0</span>)</h3></div><div id="sync-chunk-list" class="divide-y divide-slate-100 max-h-[400px] overflow-y-auto text-left"></div></div>
+            <button id="start-sync-btn" onclick="window.runSync()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg inline-flex items-center justify-center gap-3"><span class="material-symbols-outlined">cloud_upload</span><span>Upload Changes</span></button>
           </div>
         </div>
       </div>
+
     </main>
   </div>
 
@@ -166,9 +501,63 @@
       <p id="loading-msg" class="text-2xl font-bold text-slate-900 tracking-tight">Processing...</p>
       <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div id="progress-bar-fill" class="h-full bg-primary transition-all duration-300 w-0"></div></div>
       <p id="loading-log" class="text-xs text-slate-400 truncate w-full italic"></p>
+      <button id="loading-enter-btn" onclick="window.sendEnterToProcess()" class="hidden px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-bold">
+        Send Enter
+      </button>
     </div>
   </div>
 
+  <div id="preview-modal" class="hidden fixed inset-0 z-[100] preview-modal-shell bg-white/80 backdrop-blur-md p-6">
+    <div class="glass-panel preview-modal-card">
+      <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 id="preview-modal-title" class="font-bold text-slate-900">Source Preview</h3>
+          <p id="preview-modal-meta" class="text-xs text-slate-400 mt-1">Local markdown preview</p>
+        </div>
+        <button onclick="window.closeDashboardPreview()" class="secondary-action-btn">Close</button>
+      </div>
+      <div id="preview-modal-body" class="preview-modal-body text-sm text-slate-700"></div>
+    </div>
+  </div>
+
+  <div id="prompt-modal" class="hidden fixed inset-0 z-[100] preview-modal-shell bg-white/80 backdrop-blur-md p-6">
+    <div class="glass-panel preview-modal-card">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 id="prompt-modal-title" class="font-bold text-slate-900">Prompt</h3>
+          <p id="prompt-modal-meta" class="text-xs text-slate-400 mt-1">Studio prompt editor</p>
+        </div>
+        <button onclick="window.closePromptEditor()" class="secondary-action-btn">Close</button>
+      </div>
+      <div class="preview-modal-body text-sm text-slate-700 space-y-4">
+        <input id="prompt-modal-name" type="text" placeholder="Prompt name" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
+        <textarea id="prompt-modal-body" rows="14" placeholder="Prompt body" class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all"></textarea>
+        <div class="flex items-center gap-3">
+          <button onclick="window.savePromptPreset()" class="secondary-action-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="studio-settings-modal" class="hidden fixed inset-0 z-[100] preview-modal-shell bg-white/80 backdrop-blur-md p-6">
+    <div class="glass-panel preview-modal-card">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div>
+          <h3 id="studio-settings-title" class="font-bold text-slate-900">Studio settings</h3>
+          <p id="studio-settings-meta" class="text-xs text-slate-400 mt-1">Saved per Studio type</p>
+        </div>
+        <button onclick="window.closeStudioSettings()" class="secondary-action-btn">Close</button>
+      </div>
+      <div id="studio-settings-body" class="preview-modal-body text-sm text-slate-700"></div>
+      <div class="px-6 py-4 border-t border-slate-100 flex items-center gap-3">
+        <button onclick="window.saveStudioSettings()" class="secondary-action-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app-toast" class="hidden app-toast"></div>
+
+  <script src="project-utils.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

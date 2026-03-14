@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDir: (path) => ipcRenderer.invoke('read-dir', path),
   dirExists: (path) => ipcRenderer.invoke('dir-exists', path),
   listProjects: (rootPath) => ipcRenderer.invoke('list-projects', rootPath),
+  deleteProject: (projectPath) => ipcRenderer.invoke('delete-project', projectPath),
+  getStudioQueue: (projectPath) => ipcRenderer.invoke('get-studio-queue', projectPath),
+  enqueueStudioJobs: (payload) => ipcRenderer.invoke('enqueue-studio-jobs', payload),
   getAppPaths: () => ipcRenderer.invoke('get-app-paths'),
   
   // CLI operations
@@ -26,9 +29,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onNBLMOutput: (callback) => {
     ipcRenderer.on('nblm-output', (event, data) => callback(data));
   },
+  onStudioQueueUpdate: (callback) => {
+    ipcRenderer.on('studio-queue-update', (event, data) => callback(data));
+  },
   
   // Remove listener
   removeNBLMOutputListener: () => {
     ipcRenderer.removeAllListeners('nblm-output');
-  }
+  },
+  removeStudioQueueListener: () => {
+    ipcRenderer.removeAllListeners('studio-queue-update');
+  },
 });

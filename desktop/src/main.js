@@ -287,7 +287,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200, height: 800, minWidth: 800, minHeight: 600,
     webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
-    icon: path.join(__dirname, '../renderer/chunker-mark.svg'),
+    icon: path.join(__dirname, '../build/icon.png'),
     titleBarStyle: 'hiddenInset', backgroundColor: '#1e1e1e'
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));

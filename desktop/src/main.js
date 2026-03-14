@@ -297,6 +297,13 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await resolveShellPath();
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(__dirname, '../build/icon.png');
+    if (fs.existsSync(iconPath)) {
+      const { nativeImage } = require('electron');
+      app.dock.setIcon(nativeImage.createFromPath(iconPath));
+    }
+  }
   createWindow();
   resumeStudioQueues();
 });

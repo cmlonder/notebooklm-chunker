@@ -1,11 +1,17 @@
-# notebooklm-chunker
+<p align="center">
+  <img src="desktop/renderer/chunker-mark.svg" width="96" height="96" alt="NotebookLM Chunker">
+</p>
 
-[![CI](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml)
-[![Desktop Release](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml/badge.svg)](https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml)
-[![PyPI version](https://badge.fury.io/py/notebooklm-chunker.svg)](https://badge.fury.io/py/notebooklm-chunker)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<h1 align="center">notebooklm-chunker</h1>
 
-Turn long documents into smaller, heading-aware NotebookLM sources so reports, slide decks, quizzes, flashcards, and audio outputs stay more focused and useful.
+<p align="center">
+  <a href="https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml"><img src="https://github.com/cmlonder/notebooklm-chunker/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml"><img src="https://github.com/cmlonder/notebooklm-chunker/actions/workflows/desktop-release.yml/badge.svg" alt="Desktop Release"></a>
+  <a href="https://badge.fury.io/py/notebooklm-chunker"><img src="https://badge.fury.io/py/notebooklm-chunker.svg" alt="PyPI version"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">Turn long documents into smaller, heading-aware NotebookLM sources so reports, slide decks, quizzes, flashcards, and audio outputs stay more focused and useful.</p>
 
 > **Two interfaces, one core.** The Desktop app provides a visual workflow. The CLI provides scriptable automation. Both use the same `nblm` engine underneath.
 >

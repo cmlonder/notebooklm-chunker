@@ -1600,7 +1600,7 @@ function renderHistoryList() {
       ? "bg-blue-50 text-blue-700"
       : "bg-slate-50 text-slate-500 border border-slate-200";
     return `
-      <div class="flex items-center gap-4 px-5 py-4 border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all">
+      <div class="flex items-center gap-4 px-5 py-4 rounded-2xl border border-slate-200 hover:border-primary/30 transition-all">
         <button onclick="window.resumeExistingPath('${project.path}')" class="flex-1 min-w-0 text-left">
           <p class="text-sm font-bold text-slate-900 truncate hover:text-primary transition-colors">${project.rawName}</p>
           <div class="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -1611,7 +1611,7 @@ function renderHistoryList() {
             ${notebookLabel ? `<span class="text-[11px] text-slate-300">·</span><span class="text-[11px] text-slate-400 truncate max-w-[200px]">${notebookLabel}</span>` : ""}
           </div>
         </button>
-        <button onclick="window.deleteProject('${project.path}')" class="p-2 mr-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 shrink-0">
+        <button onclick="window.deleteProject('${project.path}')" class="p-2 rounded-lg text-slate-400 hover:text-red-500 transition-colors shrink-0" title="Delete">
           <span class="material-symbols-outlined !text-lg">delete</span>
         </button>
       </div>

@@ -140,7 +140,17 @@
       <div id="history-view" class="view p-8 sm:p-12 fade-in overflow-y-auto">
         <div class="max-w-5xl mx-auto w-full space-y-6 text-left">
           <h1 class="text-4xl font-extrabold tracking-tight text-slate-900">Recent Chunks</h1>
-          <input id="history-search" oninput="window.handleHistorySearch(this.value)" type="text" placeholder="Filter..." class="max-w-xs border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+          <div style="display:flex;gap:10px;align-items:center;">
+            <input id="history-search" oninput="window.handleHistorySearch(this.value)" type="text" placeholder="Filter..." class="max-w-xs border border-slate-200 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+            <select id="history-status-filter" onchange="window.handleHistoryStatusFilter(this.value)" style="border:1px solid #e2e8f0;border-radius:12px;padding:8px 14px;font-size:13px;color:#475569;outline:none;cursor:pointer;">
+              <option value="all">All statuses</option>
+              <option value="Synced">Synced</option>
+              <option value="Needs sync">Needs sync</option>
+              <option value="Local draft">Local draft</option>
+              <option value="Empty draft">Empty draft</option>
+              <option value="Quota blocked">Quota blocked</option>
+            </select>
+          </div>
           <div id="project-history-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
       </div>

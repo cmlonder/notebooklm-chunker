@@ -6445,3 +6445,9 @@ coverage.xml
 /desktop/node_modules/yocto-queue/license
 /desktop/node_modules/yocto-queue/package.json
 /desktop/node_modules/yocto-queue/readme.md
+
+# PyInstaller sidecar build artifacts
+desktop/sidecar/.build-venv/
+desktop/sidecar/build/
+desktop/sidecar/dist/nblm*
+desktop/sidecar/*.spec

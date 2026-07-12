@@ -24,6 +24,9 @@ fi
 
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
 "$VENV_DIR/bin/pip" install --quiet "$REPO_ROOT" pyinstaller
+# pip skips same-version reinstalls, which would freeze stale code into the
+# binary; force just the project package to rebuild from the working tree.
+"$VENV_DIR/bin/pip" install --quiet --force-reinstall --no-deps --no-cache-dir "$REPO_ROOT"
 
 # --onedir instead of --onefile: onefile unpacks itself on EVERY invocation
 # (7-10s per command on macOS), which makes the desktop app feel frozen.

@@ -207,11 +207,15 @@ def _playwright_check() -> DoctorCheck:
 
         with sync_playwright() as playwright:
             executable_path = Path(playwright.chromium.executable_path)
-    except Exception:
+    except Exception as exc:
+        detail = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
         return DoctorCheck(
             name="playwright",
             status="warn",
-            summary=f"Playwright{_version_suffix(version)} is installed but Chromium is missing.",
+            summary=(
+                f"Playwright{_version_suffix(version)} is installed but could not start "
+                f"({detail})."
+            ),
             hint="Run `python -m playwright install chromium`.",
         )
 
@@ -225,7 +229,10 @@ def _playwright_check() -> DoctorCheck:
     return DoctorCheck(
         name="playwright",
         status="warn",
-        summary=f"Playwright{_version_suffix(version)} is installed but Chromium is missing.",
+        summary=(
+            f"Playwright{_version_suffix(version)} is installed but Chromium is missing "
+            f"(expected at {executable_path})."
+        ),
         hint="Run `python -m playwright install chromium`.",
     )
 

@@ -26,7 +26,7 @@ An Electron desktop client that wraps the `nblm` CLI into a full visual workflow
 
 ### Partition Strategy
 
-Set min and max pages per chunk, skip pages from the beginning (preface, TOC) or end (index, bibliography), and see the estimated chunk count before processing. The chunker splits at heading boundaries to keep each source semantically coherent.
+Set min and max pages per chunk, skip pages from the beginning (preface, TOC) or end (index, bibliography), and see the estimated chunk count before processing. The chunker splits at heading boundaries to keep each source semantically coherent — when the PDF has an embedded table of contents, headings and chapter hierarchy come straight from the publisher's outline, and chunk boundaries prefer chapter starts over sub-sections.
 
 <img src="docs/screenshots/structure.png" width="720" alt="Structure">
 
@@ -78,7 +78,7 @@ Configure per-studio defaults: language (80+ languages), format, download format
 
 #### Prerequisites
 
-1. Install the Python CLI (needed by the desktop app):
+1. Install the Python CLI (needed by current release binaries):
 
 ```bash
 pip install notebooklm-chunker
@@ -99,7 +99,8 @@ Download the latest release for your platform from [GitHub Releases](https://git
 - **Windows**: `.exe` (installer) or portable
 - **Linux**: `.AppImage` or `.deb`
 
-The desktop app expects `nblm` to be available on your system PATH.
+Current releases expect `nblm` to be available on your system PATH (see
+Prerequisites above).
 
 #### Option B: Run From Source
 
@@ -107,6 +108,14 @@ The desktop app expects `nblm` to be available on your system PATH.
 cd desktop
 npm install
 npm run dev
+```
+
+Optional: bundle the engine into the app so it does not depend on a system
+Python install (experimental):
+
+```bash
+bash scripts/build_sidecar.sh   # builds desktop/sidecar/dist/nblm
+cd desktop && npm run build:mac # or build:win / build:linux
 ```
 
 ### Setup Check

@@ -246,15 +246,27 @@ Then publish the GitHub release for that tag. Two workflows will run:
 - `.github/workflows/publish.yml` for the Python package / PyPI
 - `.github/workflows/desktop-release.yml` for Electron desktop binaries
 
-Important current limitation:
+### Sidecar Binary (Experimental)
 
-- the desktop app still shells out to `nblm`
-- that means the released Electron binary is not yet fully self-contained
-- end users still need `notebooklm-chunker` installed and available on `PATH`
-- `python -m playwright install chromium` and `nblm login` are still part of the live NotebookLM setup path
+The desktop app can bundle a standalone `nblm` binary (PyInstaller) so end
+users do not need Python, pip, or PATH setup:
 
-So today the desktop binary release is a packaged UI shell around the CLI, not
-an all-in-one installer.
+```bash
+bash scripts/build_sidecar.sh
+```
+
+That writes `desktop/sidecar/dist/nblm`. `electron-builder` picks it up via
+`extraResources`, and the app prefers the bundled binary at runtime, falling
+back to `nblm` on PATH (dev setups, power users).
+
+Current limitations:
+
+- run the sidecar build before `npm run build:*` or the packaged app falls
+  back to requiring `nblm` on PATH
+- the sidecar is per-platform; each OS build needs its own sidecar build
+- `nblm login` still needs Playwright Chromium on the machine
+  (`python -m playwright install chromium`), because Playwright browsers are
+  not bundled into the binary. All other commands are self-contained.
 
 ## Local Package Verification
 

@@ -181,6 +181,43 @@ language = "en"
 format = "study-guide"
 ```
 
+## How Headings Are Detected
+
+For PDFs, the chunker first looks for an embedded table of contents
+(bookmarks/outline). When present, heading titles and hierarchy levels come
+straight from the publisher's outline — the most reliable signal for keeping
+chunks aligned with real chapters. When a PDF has no usable outline, text
+heuristics detect headings instead, and repeated running headers/footers are
+filtered out.
+
+Chunk boundaries prefer chapter-level headings over deep sub-sections when
+both fit the configured page limits.
+
+## Studio Options
+
+All nine Studio types are supported: `audio`, `video`, `report`,
+`slide_deck`, `quiz`, `flashcards`, `infographic`, `data_table`, `mind_map`.
+
+Selected per-type options:
+
+```toml
+[studios.video]
+format = "explainer"       # explainer | brief | cinematic
+style = "whiteboard"       # auto | custom | classic | whiteboard | kawaii | anime | ...
+# style_prompt only applies when style = "custom"
+# style_prompt = "Retro sci-fi paperback illustration"
+
+[studios.quiz]
+quantity = "standard"      # fewer | standard  ("more" is deprecated upstream; maps to standard)
+difficulty = "hard"        # easy | medium | hard
+download_format = "json"   # json | markdown | html
+
+[studios.infographic]
+orientation = "portrait"   # landscape | portrait | square
+detail = "detailed"        # concise | standard | detailed
+style = "bento-grid"       # auto | sketch-note | professional | bento-grid | editorial | ...
+```
+
 ## Workflow Notes
 
 - paths inside workflow files are resolved relative to that file

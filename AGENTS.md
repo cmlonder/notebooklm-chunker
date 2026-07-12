@@ -91,6 +91,24 @@ making future changes.
 - After publishing, verify the real installed binary in a clean virtual
   environment, not just the editable install.
 
+## Studio Type Rules
+
+- Studio types are table-driven via `_STUDIO_SPECS` in
+  `notebooklm_chunker/uploaders/notebooklm_py.py`.
+- Adding a NotebookLM studio type means: one create function, one download
+  function, one `_StudioSpec` table entry, and fake-API coverage in
+  `tests/test_uploader.py`. Do not reintroduce per-type `if` ladders.
+- `mind_map` is intentionally special-cased (no create/wait/retry pipeline).
+
+## Dependency Rules
+
+- `notebooklm-py` ships breaking changes per minor release. Keep the
+  dependency pinned with an upper bound (`<0.8` today) and bump it
+  deliberately after checking upstream release notes and enum changes.
+- Mirror upstream enum removals in the fake RPC module in
+  `tests/test_uploader.py` — the fakes are the only thing that catches
+  member-removal breakage before users do.
+
 ## Testing Rules
 
 - Prefer the full suite:

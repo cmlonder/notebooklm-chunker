@@ -18,19 +18,6 @@ _EMPTY_SOURCE_STATE = {
     "last_error": None,
     "updated_at": None,
 }
-_EMPTY_STUDIO_STATE = {
-    "status": "pending",
-    "task_id": None,
-    "artifact_id": None,
-    "output_path": None,
-    "remote_title": None,
-    "attempts": 0,
-    "last_error": None,
-    "next_retry_at": None,
-    "updated_at": None,
-}
-
-
 class RunStateError(ChunkerError):
     """Raised when a persisted run state file cannot be read or written."""
 
@@ -106,12 +93,6 @@ class RunStateStore:
             return None
         return source_id, _read_optional_str(source.get("remote_title"))
 
-    def source_state(self, file_name: str, *, content_hash: str) -> dict[str, Any] | None:
-        entry = self._matching_chunk(file_name, content_hash=content_hash)
-        if entry is None:
-            return None
-        return _normalize_source_state(entry.get("source"))
-
     async def record_source_state(
         self,
         *,
@@ -166,9 +147,6 @@ class RunStateStore:
             status="failed",
             last_error=error,
         )
-
-    def uploaded_chunk(self, file_name: str, *, content_hash: str) -> tuple[str, str | None] | None:
-        return self.uploaded_source(file_name, content_hash=content_hash)
 
     def uploaded_chunk_sources(self) -> list[dict[str, str | None]]:
         uploaded: list[dict[str, str | None]] = []
@@ -235,21 +213,6 @@ class RunStateStore:
             else:
                 self._quota_blocks.pop(studio_name, None)
             self._write()
-
-    async def record_uploaded_chunk(
-        self,
-        *,
-        file_name: str,
-        content_hash: str,
-        source_id: str,
-        remote_title: str | None,
-    ) -> None:
-        await self.record_source_uploaded(
-            file_name=file_name,
-            content_hash=content_hash,
-            source_id=source_id,
-            remote_title=remote_title,
-        )
 
     def completed_chunk_studio(
         self,

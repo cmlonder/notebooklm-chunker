@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 from collections.abc import Awaitable, Callable, Coroutine
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -42,9 +43,11 @@ _AUDIO_LENGTH_TO_MEMBER = {
 _VIDEO_FORMAT_TO_MEMBER = {
     "explainer": "EXPLAINER",
     "brief": "BRIEF",
+    "cinematic": "CINEMATIC",
 }
 _VIDEO_STYLE_TO_MEMBER = {
     "auto": "AUTO_SELECT",
+    "custom": "CUSTOM",
     "classic": "CLASSIC",
     "whiteboard": "WHITEBOARD",
     "kawaii": "KAWAII",
@@ -71,7 +74,9 @@ _SLIDE_LENGTH_TO_MEMBER = {
 _QUIZ_QUANTITY_TO_MEMBER = {
     "fewer": "FEWER",
     "standard": "STANDARD",
-    "more": "MORE",
+    # NotebookLM removed the MORE option (notebooklm-py 0.7.x); accept legacy
+    # configs but send the closest remaining member.
+    "more": "STANDARD",
 }
 _QUIZ_DIFFICULTY_TO_MEMBER = {
     "easy": "EASY",
@@ -87,6 +92,19 @@ _INFOGRAPHIC_DETAIL_TO_MEMBER = {
     "concise": "CONCISE",
     "standard": "STANDARD",
     "detailed": "DETAILED",
+}
+_INFOGRAPHIC_STYLE_TO_MEMBER = {
+    "auto": "AUTO_SELECT",
+    "sketch-note": "SKETCH_NOTE",
+    "professional": "PROFESSIONAL",
+    "bento-grid": "BENTO_GRID",
+    "editorial": "EDITORIAL",
+    "instructional": "INSTRUCTIONAL",
+    "bricks": "BRICKS",
+    "clay": "CLAY",
+    "anime": "ANIME",
+    "kawaii": "KAWAII",
+    "scientific": "SCIENTIFIC",
 }
 
 
@@ -888,12 +906,12 @@ async def _run_chunk_pipelines(
                             )
                         )
                     except QuotaExceededError as exc:
-                        if current_studio_name not in blocked_studios:
-                            blocked_studios[current_studio_name] = exc.blocked_until
-                            _emit(
-                                reporter,
-                                f"studio: suspending remaining {current_studio_name.replace('_', '-')} jobs until {exc.blocked_until}",
-                            )
+                        _suspend_studio_after_quota_block(
+                            blocked_studios,
+                            studio_name=current_studio_name,
+                            blocked_until=exc.blocked_until,
+                            reporter=reporter,
+                        )
                     finally:
                         current_queue.task_done()
 
@@ -936,26 +954,6 @@ async def _run_chunk_pipelines(
         studio_results.extend(result_set)
 
     return uploaded, studio_results
-
-
-async def _gather_studio_results(
-    studio_tasks: list[asyncio.Task[list[StudioResult]]],
-) -> list[StudioResult]:
-    if not studio_tasks:
-        return []
-    try:
-        results = await asyncio.gather(*studio_tasks)
-    except Exception:
-        for task in studio_tasks:
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(*studio_tasks, return_exceptions=True)
-        raise
-
-    flattened: list[StudioResult] = []
-    for chunk_results in results:
-        flattened.extend(chunk_results)
-    return flattened
 
 
 async def _gather_chunk_tasks(
@@ -1014,8 +1012,11 @@ async def _upload_markdown_file(
             last_error=None,
         )
 
+    # Passing the title at upload time saves a separate rename RPC per chunk
+    # (supported since notebooklm-py 0.7).
+    remote_title = _remote_source_title(path) if rename_remote_titles else None
     try:
-        source = await client.sources.add_file(notebook_id, path, wait=True)
+        source = await client.sources.add_file(notebook_id, path, wait=True, title=remote_title)
     except Exception as exc:
         if run_state is not None:
             await run_state.record_source_failed(
@@ -1041,7 +1042,7 @@ async def _upload_markdown_file(
             file_name=path.name,
             content_hash=content_hash,
             source_id=uploaded_source_id,
-            remote_title=None,
+            remote_title=remote_title,
         )
 
     _emit(
@@ -1049,23 +1050,6 @@ async def _upload_markdown_file(
         f"upload: {index}/{total_files} {path.name}"
         + (f" -> {uploaded_source_id}" if uploaded_source_id else ""),
     )
-    remote_title = None
-    if rename_remote_titles:
-        remote_title = _remote_source_title(path)
-        await _rename_source(
-            client,
-            notebook_id=notebook_id,
-            source_id=uploaded_source_id,
-            remote_title=remote_title,
-            reporter=reporter,
-        )
-    if run_state is not None:
-        await run_state.record_source_uploaded(
-            file_name=path.name,
-            content_hash=content_hash,
-            source_id=uploaded_source_id,
-            remote_title=remote_title,
-        )
     return UploadResult(
         file_path=str(path),
         source_id=uploaded_source_id,
@@ -1163,13 +1147,293 @@ async def _run_enabled_studios(
                 )
             )
         except QuotaExceededError as exc:
-            if studio_name not in blocked_studios:
-                blocked_studios[studio_name] = exc.blocked_until
-                _emit(
-                    reporter,
-                    f"studio: suspending remaining {studio_name.replace('_', '-')} jobs until {exc.blocked_until}",
-                )
+            _suspend_studio_after_quota_block(
+                blocked_studios,
+                studio_name=studio_name,
+                blocked_until=exc.blocked_until,
+                reporter=reporter,
+            )
     return results
+
+
+def _suspend_studio_after_quota_block(
+    blocked_studios: dict[str, str],
+    *,
+    studio_name: str,
+    blocked_until: str,
+    reporter: Callable[[str], None] | None,
+) -> None:
+    if studio_name not in blocked_studios:
+        blocked_studios[studio_name] = blocked_until
+        _emit(
+            reporter,
+            f"studio: suspending remaining {studio_name.replace('_', '-')} jobs until {blocked_until}",
+        )
+
+
+async def _create_audio_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_audio(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        instructions=config.prompt,
+        audio_format=_enum_value(
+            rpc_module, "AudioFormat", _AUDIO_FORMAT_TO_MEMBER, config.format or "deep-dive"
+        ),
+        audio_length=_enum_value(
+            rpc_module, "AudioLength", _AUDIO_LENGTH_TO_MEMBER, config.length or "long"
+        ),
+    )
+
+
+async def _create_video_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_video(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        instructions=config.prompt,
+        video_format=_enum_value(
+            rpc_module, "VideoFormat", _VIDEO_FORMAT_TO_MEMBER, config.format or "explainer"
+        ),
+        video_style=_enum_value(
+            rpc_module, "VideoStyle", _VIDEO_STYLE_TO_MEMBER, config.style or "whiteboard"
+        ),
+        style_prompt=config.style_prompt,
+    )
+
+
+async def _create_report_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    format_key = config.format or "study-guide"
+    return await client.artifacts.generate_report(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        report_format=_enum_value(rpc_module, "ReportFormat", _REPORT_FORMAT_TO_MEMBER, format_key),
+        custom_prompt=config.prompt if format_key == "custom" else None,
+        extra_instructions=config.prompt if format_key != "custom" else None,
+    )
+
+
+async def _create_slide_deck_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_slide_deck(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        instructions=config.prompt,
+        slide_format=_enum_value(
+            rpc_module, "SlideDeckFormat", _SLIDE_FORMAT_TO_MEMBER, config.format or "detailed"
+        ),
+        slide_length=_enum_value(
+            rpc_module, "SlideDeckLength", _SLIDE_LENGTH_TO_MEMBER, config.length or "default"
+        ),
+    )
+
+
+async def _create_quiz_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_quiz(
+        notebook_id,
+        source_ids=source_ids,
+        instructions=config.prompt,
+        quantity=_enum_value(
+            rpc_module, "QuizQuantity", _QUIZ_QUANTITY_TO_MEMBER, config.quantity or "standard"
+        ),
+        difficulty=_enum_value(
+            rpc_module, "QuizDifficulty", _QUIZ_DIFFICULTY_TO_MEMBER, config.difficulty or "hard"
+        ),
+    )
+
+
+async def _create_flashcards_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_flashcards(
+        notebook_id,
+        source_ids=source_ids,
+        instructions=config.prompt,
+        quantity=_enum_value(
+            rpc_module, "QuizQuantity", _QUIZ_QUANTITY_TO_MEMBER, config.quantity or "standard"
+        ),
+        difficulty=_enum_value(
+            rpc_module, "QuizDifficulty", _QUIZ_DIFFICULTY_TO_MEMBER, config.difficulty or "hard"
+        ),
+    )
+
+
+async def _create_infographic_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_infographic(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        instructions=config.prompt,
+        orientation=_enum_value(
+            rpc_module,
+            "InfographicOrientation",
+            _INFOGRAPHIC_ORIENTATION_TO_MEMBER,
+            config.orientation or "portrait",
+        ),
+        detail_level=_enum_value(
+            rpc_module,
+            "InfographicDetail",
+            _INFOGRAPHIC_DETAIL_TO_MEMBER,
+            config.detail or "detailed",
+        ),
+        style=_enum_value(
+            rpc_module, "InfographicStyle", _INFOGRAPHIC_STYLE_TO_MEMBER, config.style
+        ),
+    )
+
+
+async def _create_data_table_artifact(
+    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+) -> Any:
+    return await client.artifacts.generate_data_table(
+        notebook_id,
+        source_ids=source_ids,
+        language=config.language or "en",
+        instructions=config.prompt or _DEFAULT_DATA_TABLE_PROMPT,
+    )
+
+
+async def _download_audio_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_audio(  # type: ignore[no-any-return]
+        notebook_id, str(output_path), artifact_id=artifact_id
+    )
+
+
+async def _download_video_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_video(  # type: ignore[no-any-return]
+        notebook_id, str(output_path), artifact_id=artifact_id
+    )
+
+
+async def _download_report_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_report(  # type: ignore[no-any-return]
+        notebook_id, str(output_path), artifact_id=artifact_id
+    )
+
+
+async def _download_slide_deck_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_slide_deck(  # type: ignore[no-any-return]
+        notebook_id,
+        str(output_path),
+        artifact_id=artifact_id,
+        output_format=config.download_format or "pdf",
+    )
+
+
+async def _download_quiz_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_quiz(  # type: ignore[no-any-return]
+        notebook_id,
+        str(output_path),
+        artifact_id=artifact_id,
+        output_format=config.download_format or "json",
+    )
+
+
+async def _download_flashcards_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_flashcards(  # type: ignore[no-any-return]
+        notebook_id,
+        str(output_path),
+        artifact_id=artifact_id,
+        output_format=config.download_format or "markdown",
+    )
+
+
+async def _download_infographic_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_infographic(  # type: ignore[no-any-return]
+        notebook_id, str(output_path), artifact_id=artifact_id
+    )
+
+
+async def _download_data_table_artifact(
+    client: Any, notebook_id: str, artifact_id: str | None, output_path: Path, config: StudioConfig
+) -> str:
+    return await client.artifacts.download_data_table(  # type: ignore[no-any-return]
+        notebook_id, str(output_path), artifact_id=artifact_id
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _StudioSpec:
+    """Everything type-specific about one Studio artifact kind.
+
+    Adding a new NotebookLM studio type means adding one create function, one
+    download function, and one table entry here — nothing else.
+    """
+
+    wait_label: str
+    default_filename: Callable[[StudioConfig], str]
+    create: Callable[[Any, Any, str, list[str] | None, StudioConfig], Awaitable[Any]]
+    download: Callable[[Any, str, str | None, Path, StudioConfig], Awaitable[str]]
+
+
+_STUDIO_SPECS: dict[str, _StudioSpec] = {
+    "audio": _StudioSpec(
+        "audio", lambda config: "audio-overview.mp4", _create_audio_artifact, _download_audio_artifact
+    ),
+    "video": _StudioSpec(
+        "video", lambda config: "video-overview.mp4", _create_video_artifact, _download_video_artifact
+    ),
+    "report": _StudioSpec(
+        "report", lambda config: "report.md", _create_report_artifact, _download_report_artifact
+    ),
+    "slide_deck": _StudioSpec(
+        "slide deck",
+        lambda config: f"slide-deck.{config.download_format or 'pdf'}",
+        _create_slide_deck_artifact,
+        _download_slide_deck_artifact,
+    ),
+    "quiz": _StudioSpec(
+        "quiz",
+        lambda config: f"quiz.{_interactive_extension(config.download_format or 'json')}",
+        _create_quiz_artifact,
+        _download_quiz_artifact,
+    ),
+    "flashcards": _StudioSpec(
+        "flashcards",
+        lambda config: f"flashcards.{_interactive_extension(config.download_format or 'markdown')}",
+        _create_flashcards_artifact,
+        _download_flashcards_artifact,
+    ),
+    "infographic": _StudioSpec(
+        "infographic",
+        lambda config: "infographic.png",
+        _create_infographic_artifact,
+        _download_infographic_artifact,
+    ),
+    "data_table": _StudioSpec(
+        "data table",
+        lambda config: "data-table.csv",
+        _create_data_table_artifact,
+        _download_data_table_artifact,
+    ),
+}
 
 
 async def _run_single_studio(
@@ -1208,105 +1472,30 @@ async def _run_single_studio(
         and _supports_remote_artifact_rename(studio_name)
     ):
         lock = (studio_locks or {}).get(studio_name)
-    if semaphore is not None and lock is not None:
-        async with semaphore:
-            async with lock:
-                return await _run_single_studio_locked(
-                    client,
-                    rpc_module,
-                    notebook_id=notebook_id,
-                    studio_name=studio_name,
-                    studio_config=studio_config,
-                    studio_output_dir=studio_output_dir,
-                    source_ids=source_ids,
-                    source_file=source_file,
-                    source_remote_title=source_remote_title,
-                    studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-                    studio_create_retries=studio_create_retries,
-                    studio_create_backoff_seconds=studio_create_backoff_seconds,
-                    rename_remote_titles=rename_remote_titles,
-                    run_state=run_state,
-                    create_semaphore=create_semaphore,
-                    create_quota_cooldown=create_quota_cooldown,
-                    download_outputs=download_outputs,
-                    studio_quota_blocks=studio_quota_blocks,
-                    reporter=reporter,
-                    job_index=job_index,
-                    job_total=job_total,
-                )
-    if semaphore is not None:
-        async with semaphore:
-            return await _run_single_studio_locked(
-                client,
-                rpc_module,
-                notebook_id=notebook_id,
-                studio_name=studio_name,
-                studio_config=studio_config,
-                studio_output_dir=studio_output_dir,
-                source_ids=source_ids,
-                source_file=source_file,
-                source_remote_title=source_remote_title,
-                studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-                studio_create_retries=studio_create_retries,
-                studio_create_backoff_seconds=studio_create_backoff_seconds,
-                rename_remote_titles=rename_remote_titles,
-                run_state=run_state,
-                create_semaphore=create_semaphore,
-                create_quota_cooldown=create_quota_cooldown,
-                download_outputs=download_outputs,
-                studio_quota_blocks=studio_quota_blocks,
-                reporter=reporter,
-                job_index=job_index,
-                job_total=job_total,
-            )
-    if lock is not None:
-        async with lock:
-            return await _run_single_studio_locked(
-                client,
-                rpc_module,
-                notebook_id=notebook_id,
-                studio_name=studio_name,
-                studio_config=studio_config,
-                studio_output_dir=studio_output_dir,
-                source_ids=source_ids,
-                source_file=source_file,
-                source_remote_title=source_remote_title,
-                studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-                studio_create_retries=studio_create_retries,
-                studio_create_backoff_seconds=studio_create_backoff_seconds,
-                rename_remote_titles=rename_remote_titles,
-                run_state=run_state,
-                create_semaphore=create_semaphore,
-                create_quota_cooldown=create_quota_cooldown,
-                download_outputs=download_outputs,
-                studio_quota_blocks=studio_quota_blocks,
-                reporter=reporter,
-                job_index=job_index,
-                job_total=job_total,
-            )
-    return await _run_single_studio_locked(
-        client,
-        rpc_module,
-        notebook_id=notebook_id,
-        studio_name=studio_name,
-        studio_config=studio_config,
-        studio_output_dir=studio_output_dir,
-        source_ids=source_ids,
-        source_file=source_file,
-        source_remote_title=source_remote_title,
-        studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-        studio_create_retries=studio_create_retries,
-        studio_create_backoff_seconds=studio_create_backoff_seconds,
-        rename_remote_titles=rename_remote_titles,
-        run_state=run_state,
-        create_semaphore=create_semaphore,
-        create_quota_cooldown=create_quota_cooldown,
-        download_outputs=download_outputs,
-        studio_quota_blocks=studio_quota_blocks,
-        reporter=reporter,
-        job_index=job_index,
-        job_total=job_total,
-    )
+    async with (semaphore or nullcontext()), (lock or nullcontext()):
+        return await _run_single_studio_locked(
+            client,
+            rpc_module,
+            notebook_id=notebook_id,
+            studio_name=studio_name,
+            studio_config=studio_config,
+            studio_output_dir=studio_output_dir,
+            source_ids=source_ids,
+            source_file=source_file,
+            source_remote_title=source_remote_title,
+            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
+            studio_create_retries=studio_create_retries,
+            studio_create_backoff_seconds=studio_create_backoff_seconds,
+            rename_remote_titles=rename_remote_titles,
+            run_state=run_state,
+            create_semaphore=create_semaphore,
+            create_quota_cooldown=create_quota_cooldown,
+            download_outputs=download_outputs,
+            studio_quota_blocks=studio_quota_blocks,
+            reporter=reporter,
+            job_index=job_index,
+            job_total=job_total,
+        )
 
 
 async def _run_single_studio_locked(
@@ -1363,33 +1552,15 @@ async def _run_single_studio_locked(
     if remote_title is not None:
         known_artifact_ids = await _list_artifact_ids_for_studio(client, notebook_id, studio_name)
 
-    if studio_name == "audio":
+    spec = _STUDIO_SPECS.get(studio_name)
+    if spec is not None:
 
-        async def create_audio() -> Any:
-            return await client.artifacts.generate_audio(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                instructions=studio_config.prompt,
-                audio_format=_enum_value(
-                    rpc_module,
-                    "AudioFormat",
-                    _AUDIO_FORMAT_TO_MEMBER,
-                    studio_config.format or "deep-dive",
-                ),
-                audio_length=_enum_value(
-                    rpc_module,
-                    "AudioLength",
-                    _AUDIO_LENGTH_TO_MEMBER,
-                    studio_config.length or "long",
-                ),
-            )
+        async def create_operation() -> Any:
+            return await spec.create(client, rpc_module, notebook_id, source_ids, studio_config)
 
-        async def download_audio(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_audio(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
+        async def download_operation(artifact_id: str | None, resolved_output_path: Path) -> str:
+            return await spec.download(
+                client, notebook_id, artifact_id, resolved_output_path, studio_config
             )
 
         return await _run_artifact_studio_job(
@@ -1410,378 +1581,9 @@ async def _run_single_studio_locked(
             reporter=reporter,
             job_index=job_index,
             job_total=job_total,
-            wait_label="audio",
-            create_operation=create_audio,
-            download_operation=download_audio,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "video":
-
-        async def create_video() -> Any:
-            return await client.artifacts.generate_video(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                instructions=studio_config.prompt,
-                video_format=_enum_value(
-                    rpc_module,
-                    "VideoFormat",
-                    _VIDEO_FORMAT_TO_MEMBER,
-                    studio_config.format or "explainer",
-                ),
-                video_style=_enum_value(
-                    rpc_module,
-                    "VideoStyle",
-                    _VIDEO_STYLE_TO_MEMBER,
-                    studio_config.style or "whiteboard",
-                ),
-            )
-
-        async def download_video(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_video(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="video",
-            create_operation=create_video,
-            download_operation=download_video,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "report":
-        report_format = _enum_value(
-            rpc_module,
-            "ReportFormat",
-            _REPORT_FORMAT_TO_MEMBER,
-            studio_config.format or "study-guide",
-        )
-
-        async def create_report() -> Any:
-            return await client.artifacts.generate_report(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                report_format=report_format,
-                custom_prompt=studio_config.prompt
-                if (studio_config.format or "study-guide") == "custom"
-                else None,
-                extra_instructions=studio_config.prompt
-                if (studio_config.format or "study-guide") != "custom"
-                else None,
-            )
-
-        async def download_report(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_report(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="report",
-            create_operation=create_report,
-            download_operation=download_report,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "slide_deck":
-
-        async def create_slide_deck() -> Any:
-            return await client.artifacts.generate_slide_deck(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                instructions=studio_config.prompt,
-                slide_format=_enum_value(
-                    rpc_module,
-                    "SlideDeckFormat",
-                    _SLIDE_FORMAT_TO_MEMBER,
-                    studio_config.format or "detailed",
-                ),
-                slide_length=_enum_value(
-                    rpc_module,
-                    "SlideDeckLength",
-                    _SLIDE_LENGTH_TO_MEMBER,
-                    studio_config.length or "default",
-                ),
-            )
-
-        download_format = studio_config.download_format or "pdf"
-
-        async def download_slide_deck(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_slide_deck(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-                output_format=download_format,
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="slide deck",
-            create_operation=create_slide_deck,
-            download_operation=download_slide_deck,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "quiz":
-
-        async def create_quiz() -> Any:
-            return await client.artifacts.generate_quiz(
-                notebook_id,
-                source_ids=source_ids,
-                instructions=studio_config.prompt,
-                quantity=_enum_value(
-                    rpc_module,
-                    "QuizQuantity",
-                    _QUIZ_QUANTITY_TO_MEMBER,
-                    studio_config.quantity or "more",
-                ),
-                difficulty=_enum_value(
-                    rpc_module,
-                    "QuizDifficulty",
-                    _QUIZ_DIFFICULTY_TO_MEMBER,
-                    studio_config.difficulty or "hard",
-                ),
-            )
-
-        async def download_quiz(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_quiz(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-                output_format=studio_config.download_format or "json",
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="quiz",
-            create_operation=create_quiz,
-            download_operation=download_quiz,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "flashcards":
-
-        async def create_flashcards() -> Any:
-            return await client.artifacts.generate_flashcards(
-                notebook_id,
-                source_ids=source_ids,
-                instructions=studio_config.prompt,
-                quantity=_enum_value(
-                    rpc_module,
-                    "QuizQuantity",
-                    _QUIZ_QUANTITY_TO_MEMBER,
-                    studio_config.quantity or "more",
-                ),
-                difficulty=_enum_value(
-                    rpc_module,
-                    "QuizDifficulty",
-                    _QUIZ_DIFFICULTY_TO_MEMBER,
-                    studio_config.difficulty or "hard",
-                ),
-            )
-
-        async def download_flashcards(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_flashcards(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-                output_format=studio_config.download_format or "markdown",
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="flashcards",
-            create_operation=create_flashcards,
-            download_operation=download_flashcards,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "infographic":
-
-        async def create_infographic() -> Any:
-            return await client.artifacts.generate_infographic(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                instructions=studio_config.prompt,
-                orientation=_enum_value(
-                    rpc_module,
-                    "InfographicOrientation",
-                    _INFOGRAPHIC_ORIENTATION_TO_MEMBER,
-                    studio_config.orientation or "portrait",
-                ),
-                detail_level=_enum_value(
-                    rpc_module,
-                    "InfographicDetail",
-                    _INFOGRAPHIC_DETAIL_TO_MEMBER,
-                    studio_config.detail or "detailed",
-                ),
-            )
-
-        async def download_infographic(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_infographic(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="infographic",
-            create_operation=create_infographic,
-            download_operation=download_infographic,
-            download_outputs=download_outputs,
-            studio_quota_blocks=studio_quota_blocks,
-        )
-
-    if studio_name == "data_table":
-
-        async def create_data_table() -> Any:
-            return await client.artifacts.generate_data_table(
-                notebook_id,
-                source_ids=source_ids,
-                language=studio_config.language or "en",
-                instructions=studio_config.prompt or _DEFAULT_DATA_TABLE_PROMPT,
-            )
-
-        async def download_data_table(artifact_id: str | None, resolved_output_path: Path) -> str:
-            return await client.artifacts.download_data_table(  # type: ignore[no-any-return]
-                notebook_id,
-                str(resolved_output_path),
-                artifact_id=artifact_id,
-            )
-
-        return await _run_artifact_studio_job(
-            client,
-            notebook_id=notebook_id,
-            studio_name=studio_name,
-            studio_attempt_label=studio_attempt_label,
-            source_file=source_file,
-            output_path=output_path,
-            remote_title=remote_title,
-            known_artifact_ids=known_artifact_ids,
-            run_state=run_state,
-            create_semaphore=create_semaphore,
-            create_quota_cooldown=create_quota_cooldown,
-            studio_wait_timeout_seconds=studio_wait_timeout_seconds,
-            studio_create_retries=studio_create_retries,
-            studio_create_backoff_seconds=studio_create_backoff_seconds,
-            reporter=reporter,
-            job_index=job_index,
-            job_total=job_total,
-            wait_label="data table",
-            create_operation=create_data_table,
-            download_operation=download_data_table,
+            wait_label=spec.wait_label,
+            create_operation=create_operation,
+            download_operation=download_operation,
             download_outputs=download_outputs,
             studio_quota_blocks=studio_quota_blocks,
         )
@@ -1791,7 +1593,12 @@ async def _run_single_studio_locked(
             notebook_id,
             source_ids=source_ids,
         )
-        note_id = result.get("note_id") if isinstance(result, dict) else None
+        # notebooklm-py >= 0.7 returns a typed MindMapResult; older versions a dict.
+        if isinstance(result, dict):
+            note_id = result.get("note_id")
+        else:
+            note_id = getattr(result, "note_id", None)
+        note_id = str(note_id) if note_id is not None else None
         downloaded: str | None = None
         if download_outputs:
             downloaded = await client.artifacts.download_mind_map(
@@ -1817,6 +1624,78 @@ async def _run_single_studio_locked(
         )
 
     raise UploadError(f"Unsupported studio type: {studio_name}")
+
+
+async def _record_studio_quota_interruption(
+    run_state: RunStateStore | None,
+    *,
+    studio_name: str,
+    source_file: str | None,
+    task_id: str | None,
+    output_path: Path,
+    remote_title: str | None,
+    download_outputs: bool,
+    exc: QuotaExceededError,
+    reporter: Callable[[str], None] | None,
+    studio_attempt_label: str,
+) -> None:
+    if run_state is not None:
+        await _record_pending_studio(
+            run_state,
+            studio_name=studio_name,
+            source_file=source_file,
+            task_id=task_id,
+            output_path=str(output_path) if download_outputs else None,
+            remote_title=remote_title,
+            error=str(exc),
+            status="quota_blocked",
+            next_retry_at=exc.blocked_until,
+        )
+        await run_state.record_quota_block(
+            blocked_until=exc.blocked_until,
+            error=str(exc),
+            studio_name=studio_name,
+            source_file=source_file,
+        )
+    _emit(reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}")
+
+
+async def _record_studio_pending_interruption(
+    run_state: RunStateStore,
+    *,
+    studio_name: str,
+    source_file: str | None,
+    task_id: str | None,
+    output_path: Path,
+    remote_title: str | None,
+    download_outputs: bool,
+    error: str,
+    status: str,
+    reporter: Callable[[str], None] | None,
+    job_index: int,
+    job_total: int,
+    studio_attempt_label: str,
+) -> StudioResult:
+    await _record_pending_studio(
+        run_state,
+        studio_name=studio_name,
+        source_file=source_file,
+        task_id=task_id,
+        output_path=str(output_path) if download_outputs else None,
+        remote_title=remote_title,
+        error=error,
+        status=status,
+    )
+    _emit(
+        reporter,
+        f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}",
+    )
+    return _pending_studio_result(
+        studio_name=studio_name,
+        source_file=source_file,
+        remote_title=remote_title,
+        output_path=output_path if download_outputs else None,
+    )
 
 
 async def _run_artifact_studio_job(
@@ -1871,50 +1750,36 @@ async def _run_artifact_studio_job(
                 reporter=reporter,
             )
         except QuotaExceededError as exc:
-            if run_state is not None:
-                await _record_pending_studio(
-                    run_state,
-                    studio_name=studio_name,
-                    source_file=source_file,
-                    task_id=None,
-                    output_path=str(output_path) if download_outputs else None,
-                    remote_title=remote_title,
-                    error=str(exc),
-                    status="quota_blocked",
-                    next_retry_at=exc.blocked_until,
-                )
-                await run_state.record_quota_block(
-                    blocked_until=exc.blocked_until,
-                    error=str(exc),
-                    studio_name=studio_name,
-                    source_file=source_file,
-                )
-            _emit(
-                reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}"
+            await _record_studio_quota_interruption(
+                run_state,
+                studio_name=studio_name,
+                source_file=source_file,
+                task_id=None,
+                output_path=output_path,
+                remote_title=remote_title,
+                download_outputs=download_outputs,
+                exc=exc,
+                reporter=reporter,
+                studio_attempt_label=studio_attempt_label,
             )
             raise
         except UploadError as exc:
             if run_state is None:
                 raise
-            await _record_pending_studio(
+            return await _record_studio_pending_interruption(
                 run_state,
                 studio_name=studio_name,
                 source_file=source_file,
                 task_id=None,
-                output_path=str(output_path) if download_outputs else None,
+                output_path=output_path,
                 remote_title=remote_title,
+                download_outputs=download_outputs,
                 error=str(exc),
                 status="create_failed",
-            )
-            _emit(
-                reporter,
-                f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}",
-            )
-            return _pending_studio_result(
-                studio_name=studio_name,
-                source_file=source_file,
-                remote_title=remote_title,
-                output_path=output_path if download_outputs else None,
+                reporter=reporter,
+                job_index=job_index,
+                job_total=job_total,
+                studio_attempt_label=studio_attempt_label,
             )
         await _record_pending_studio(
             run_state,
@@ -1934,47 +1799,36 @@ async def _run_artifact_studio_job(
     except QuotaExceededError as exc:
         if run_state is None:
             raise
-        await _record_pending_studio(
+        await _record_studio_quota_interruption(
             run_state,
             studio_name=studio_name,
             source_file=source_file,
             task_id=_read_attr(status, "task_id"),
-            output_path=str(output_path) if download_outputs else None,
+            output_path=output_path,
             remote_title=remote_title,
-            error=str(exc),
-            status="quota_blocked",
-            next_retry_at=exc.blocked_until,
+            download_outputs=download_outputs,
+            exc=exc,
+            reporter=reporter,
+            studio_attempt_label=studio_attempt_label,
         )
-        await run_state.record_quota_block(
-            blocked_until=exc.blocked_until,
-            error=str(exc),
-            studio_name=studio_name,
-            source_file=source_file,
-        )
-        _emit(reporter, f"studio: quota exhausted {studio_attempt_label} -> {exc.blocked_until}")
         raise
     except Exception as exc:
         if run_state is None:
             raise
-        await _record_pending_studio(
+        return await _record_studio_pending_interruption(
             run_state,
             studio_name=studio_name,
             source_file=source_file,
             task_id=_read_attr(status, "task_id"),
-            output_path=str(output_path) if download_outputs else None,
+            output_path=output_path,
             remote_title=remote_title,
+            download_outputs=download_outputs,
             error=str(exc),
             status="pending",
-        )
-        _emit(
-            reporter,
-            f"studio: pending {job_index}/{job_total} {studio_attempt_label} -> {run_state.path.name}",
-        )
-        return _pending_studio_result(
-            studio_name=studio_name,
-            source_file=source_file,
-            remote_title=remote_title,
-            output_path=output_path if download_outputs else None,
+            reporter=reporter,
+            job_index=job_index,
+            job_total=job_total,
+            studio_attempt_label=studio_attempt_label,
         )
 
     artifact_id = await _resolve_artifact_id(
@@ -2100,7 +1954,7 @@ async def _create_artifact_with_retry(
         except Exception as exc:
             last_error = f"{studio_label} create failed before a task ID was returned: {_describe_exception(exc)}"
             rate_limited = _is_rate_limited_error(exc)
-            quota_exhausted = _is_quota_exhausted_error(exc)
+            quota_exhausted = _looks_like_quota_exhausted_message(_describe_exception(exc))
         else:
             task_id = _read_attr(status, "task_id")
             if task_id:
@@ -2111,8 +1965,8 @@ async def _create_artifact_with_retry(
                     )
                 return status
             last_error = _describe_create_failure(studio_label, status)
-            rate_limited = _is_rate_limited_status(status)
-            quota_exhausted = _is_quota_exhausted_status(status)
+            rate_limited = _looks_like_rate_limit_message(_read_attr(status, "error"))
+            quota_exhausted = _looks_like_quota_exhausted_message(_read_attr(status, "error"))
 
         if quota_exhausted:
             blocked_until = _quota_blocked_until()
@@ -2175,20 +2029,6 @@ def _is_rate_limited_error(exc: Exception) -> bool:
     if retry_after is not None:
         return True
     return _looks_like_rate_limit_message(_describe_exception(exc))
-
-
-def _is_rate_limited_status(status: Any) -> bool:
-    error = _read_attr(status, "error")
-    return _looks_like_rate_limit_message(error)
-
-
-def _is_quota_exhausted_error(exc: Exception) -> bool:
-    return _looks_like_quota_exhausted_message(_describe_exception(exc))
-
-
-def _is_quota_exhausted_status(status: Any) -> bool:
-    error = _read_attr(status, "error")
-    return _looks_like_quota_exhausted_message(error)
 
 
 def _looks_like_rate_limit_message(message: str | None) -> bool:
@@ -2274,21 +2114,6 @@ def _describe_notebook_verification_failure(
         resume_state_path=resume_state_path,
         details=_describe_exception(exc),
     )
-
-
-async def _rename_source(
-    client: Any,
-    *,
-    notebook_id: str,
-    source_id: str,
-    remote_title: str,
-    reporter: Callable[[str], None] | None,
-) -> None:
-    rename_method = getattr(client.sources, "rename", None)
-    if rename_method is None:
-        raise UploadError("notebooklm-py does not expose `client.sources.rename` in this version.")
-    await rename_method(notebook_id, source_id, remote_title)
-    _emit(reporter, f'source: renamed {source_id} -> "{remote_title}"')
 
 
 async def _maybe_rename_artifact(
@@ -2610,25 +2435,12 @@ def _collect_manifest_markdown_files(directory: Path, manifest_path: Path) -> li
 
 
 def _default_output_filename(studio_name: str, studio_config: StudioConfig) -> str:
-    if studio_name == "audio":
-        return "audio-overview.mp4"
-    if studio_name == "video":
-        return "video-overview.mp4"
-    if studio_name == "report":
-        return "report.md"
-    if studio_name == "slide_deck":
-        return f"slide-deck.{studio_config.download_format or 'pdf'}"
-    if studio_name == "quiz":
-        return f"quiz.{_interactive_extension(studio_config.download_format or 'json')}"
-    if studio_name == "flashcards":
-        return f"flashcards.{_interactive_extension(studio_config.download_format or 'markdown')}"
-    if studio_name == "infographic":
-        return "infographic.png"
-    if studio_name == "data_table":
-        return "data-table.csv"
     if studio_name == "mind_map":
         return "mind-map.json"
-    raise UploadError(f"Unsupported studio type: {studio_name}")
+    spec = _STUDIO_SPECS.get(studio_name)
+    if spec is None:
+        raise UploadError(f"Unsupported studio type: {studio_name}")
+    return spec.default_filename(studio_config)
 
 
 def _per_chunk_output_filename(
@@ -2703,7 +2515,14 @@ def _enum_value(
     if enum_class is None:
         raise UploadError(f"notebooklm-py is missing enum {class_name}.")
     member_name = member_map[value]
-    return getattr(enum_class, member_name)
+    member = getattr(enum_class, member_name, None)
+    if member is None:
+        raise UploadError(
+            f"notebooklm-py enum {class_name} has no member {member_name} "
+            f"(requested value: {value!r}). The installed notebooklm-py version "
+            "may no longer support this option."
+        )
+    return member
 
 
 def _load_notebooklm_client_class() -> Any:

@@ -126,12 +126,15 @@ def _parse_pdf_with_fitz(
 
     document = fitz.open(path)
     try:
+        toc_entries = _usable_pdf_toc(document)
         page_entries: list[tuple[int, list[str]]] = []
         for page_number in _pdf_page_numbers(len(document), skip_ranges=skip_ranges):
             page = document.load_page(page_number - 1)
             page_entries.append((page_number, page.get_text("text").splitlines()))
     finally:
         document.close()
+    if toc_entries:
+        return _blocks_from_pdf_pages_with_toc(page_entries, toc_entries)
     return _blocks_from_pdf_pages(page_entries)
 
 
@@ -242,6 +245,130 @@ def _blocks_from_pdf_pages(page_entries: list[tuple[int, list[str]]]) -> list[Bl
     return blocks
 
 
+_MIN_USABLE_TOC_ENTRIES = 3
+
+
+def _usable_pdf_toc(document: object) -> list[tuple[int, str, int]]:
+    """Read the PDF's embedded outline (bookmarks) if it is rich enough to trust.
+
+    A publisher-authored table of contents is authoritative for both heading
+    text and hierarchy level, so when present it replaces the text heuristics.
+    """
+    get_toc = getattr(document, "get_toc", None)
+    if get_toc is None:
+        return []
+    try:
+        raw_toc = get_toc(simple=True)
+    except Exception:
+        return []
+
+    entries: list[tuple[int, str, int]] = []
+    for item in raw_toc or []:
+        if not isinstance(item, (list, tuple)) or len(item) < 3:
+            continue
+        level, title, page = item[0], item[1], item[2]
+        if not isinstance(level, int) or level < 1:
+            continue
+        if not isinstance(page, int) or page < 1:
+            continue
+        normalized_title = _normalize_space(str(title or ""))
+        if not normalized_title:
+            continue
+        entries.append((level, normalized_title, page))
+
+    if len(entries) < _MIN_USABLE_TOC_ENTRIES:
+        return []
+    return entries
+
+
+def _blocks_from_pdf_pages_with_toc(
+    page_entries: list[tuple[int, list[str]]],
+    toc_entries: list[tuple[int, str, int]],
+) -> list[Block]:
+    included_pages = {page_number for page_number, _ in page_entries}
+    headings_by_page: dict[int, list[tuple[int, str]]] = {}
+    for level, title, page in toc_entries:
+        if page in included_pages:
+            headings_by_page.setdefault(page, []).append((level, title))
+
+    blocks: list[Block] = []
+    for page_number, lines in _clean_pdf_page_entries(page_entries):
+        page_headings = headings_by_page.get(page_number, [])
+        blocks.extend(_page_blocks_with_toc_headings(lines, page_headings, page=page_number))
+    return blocks
+
+
+def _page_blocks_with_toc_headings(
+    lines: list[str],
+    page_headings: list[tuple[int, str]],
+    *,
+    page: int,
+) -> list[Block]:
+    blocks: list[Block] = []
+    paragraph: list[str] = []
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            text = "\n".join(paragraph).strip()
+            if text:
+                blocks.append(Block(kind="paragraph", text=text, page=page))
+            paragraph.clear()
+
+    # Headings whose text cannot be located on the page still belong to it;
+    # emit them at the top so the following body lands under them.
+    pending = list(page_headings)
+    unmatched = [
+        heading for heading in pending if not _find_toc_heading_line(lines, heading[1])
+    ]
+    for level, title in unmatched:
+        blocks.append(Block(kind="heading", text=title, level=level, page=page))
+    matched = [heading for heading in pending if heading not in unmatched]
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            flush_paragraph()
+            continue
+        matched_heading = None
+        for heading in matched:
+            if _line_matches_toc_title(stripped, heading[1]):
+                matched_heading = heading
+                break
+        if matched_heading is not None:
+            matched.remove(matched_heading)
+            flush_paragraph()
+            blocks.append(
+                Block(
+                    kind="heading",
+                    text=matched_heading[1],
+                    level=matched_heading[0],
+                    page=page,
+                )
+            )
+            continue
+        paragraph.append(stripped)
+
+    flush_paragraph()
+    return blocks
+
+
+def _find_toc_heading_line(lines: list[str], title: str) -> bool:
+    return any(_line_matches_toc_title(line.strip(), title) for line in lines if line.strip())
+
+
+_TOC_NUMBERING_PREFIX = re.compile(r"^\d+(?:\.\d+)*\.?\s+")
+
+
+def _line_matches_toc_title(line: str, title: str) -> bool:
+    normalized_line = _normalize_space(line).casefold()
+    normalized_title = title.casefold()
+    if normalized_line == normalized_title:
+        return True
+    stripped_line = _TOC_NUMBERING_PREFIX.sub("", normalized_line)
+    stripped_title = _TOC_NUMBERING_PREFIX.sub("", normalized_title)
+    return bool(stripped_title) and stripped_line == stripped_title
+
+
 def _clean_pdf_page_entries(
     page_entries: list[tuple[int, list[str]]],
 ) -> list[tuple[int, list[str]]]:
@@ -264,8 +391,15 @@ def _repeated_edge_titles(page_entries: list[tuple[int, list[str]]]) -> set[str]
     for _, lines in page_entries:
         for line in _edge_candidates(lines):
             if _looks_like_running_title(line):
-                counts[line] = counts.get(line, 0) + 1
-    return {line for line, count in counts.items() if count >= 3}
+                key = _running_title_key(line)
+                counts[key] = counts.get(key, 0) + 1
+    return {key for key, count in counts.items() if count >= 3}
+
+
+def _running_title_key(line: str) -> str:
+    # Running headers often embed the page number ("16|Book Title"), so the
+    # raw lines never repeat exactly; compare with digits collapsed instead.
+    return re.sub(r"\d+", "#", line)
 
 
 def _edge_candidates(lines: list[str]) -> set[str]:
@@ -293,7 +427,7 @@ def _is_pdf_edge_noise(line: str, repeated_titles: set[str]) -> bool:
         return True
     if re.fullmatch(r"\d+", line):
         return True
-    if line in repeated_titles:
+    if _running_title_key(line) in repeated_titles:
         return True
     return False
 
@@ -428,17 +562,11 @@ def _blocks_from_text(lines: list[str], page: int | None = None) -> list[Block]:
 
 
 def _looks_like_heading(line: str, next_line: str) -> bool:
-    if len(line) > 90 or len(line.split()) > 10:
+    if next_line and len(next_line.split()) <= 8:
         return False
-    if line.endswith((".", "!", "?", ";", ",")):
+    if not _passes_heading_gates(line):
         return False
-    letters = [char for char in line if char.isalpha()]
-    if len(letters) < 3:
-        return False
-
-    words = line.split()
-    title_like = sum(word[:1].isupper() for word in words) >= max(1, len(words) - 1)
-    return (line.isupper() or title_like) and (not next_line or len(next_line.split()) > 8)
+    return line.isupper() or _title_case_like(line)
 
 
 def _looks_like_numbered_heading_prefix(line: str) -> bool:
@@ -446,15 +574,19 @@ def _looks_like_numbered_heading_prefix(line: str) -> bool:
 
 
 def _looks_like_heading_title(line: str) -> bool:
-    if not line:
-        return False
-    if len(line) > 90 or len(line.split()) > 10:
+    return _passes_heading_gates(line) and _title_case_like(line)
+
+
+def _passes_heading_gates(line: str) -> bool:
+    if not line or len(line) > 90 or len(line.split()) > 10:
         return False
     if line.endswith((".", "!", "?", ";", ",")):
         return False
     letters = [char for char in line if char.isalpha()]
-    if len(letters) < 3:
-        return False
+    return len(letters) >= 3
+
+
+def _title_case_like(line: str) -> bool:
     words = line.split()
     return sum(word[:1].isupper() for word in words) >= max(1, len(words) - 1)
 

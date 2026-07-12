@@ -4,7 +4,12 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from notebooklm_chunker.config import load_config, resolve_config_path, write_config_template
+from notebooklm_chunker.config import (
+    ConfigError,
+    load_config,
+    resolve_config_path,
+    write_config_template,
+)
 
 
 class ConfigTests(TestCase):
@@ -27,7 +32,7 @@ class ConfigTests(TestCase):
             config = load_config(config_path)
 
         self.assertEqual(config.chunking.words_per_page, 450)
-        self.assertEqual(config.source_path, str(config_path.resolve()))
+        self.assertEqual(config.config_path, str(config_path.resolve()))
 
     def test_resolve_config_path_finds_local_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -171,3 +176,51 @@ class ConfigTests(TestCase):
             config.studios.report.output_path,
             str((root / "output" / "aviation" / "studio" / "report.md").resolve()),
         )
+
+    def test_load_config_accepts_new_studio_style_options(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[studios.video]",
+                        "enabled = true",
+                        'format = "cinematic"',
+                        'style = "custom"',
+                        'style_prompt = "Retro sci-fi paperback illustration"',
+                        "",
+                        "[studios.infographic]",
+                        "enabled = true",
+                        'style = "bento-grid"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(config_path)
+
+        self.assertEqual(config.studios.video.format, "cinematic")
+        self.assertEqual(config.studios.video.style, "custom")
+        self.assertEqual(config.studios.video.style_prompt, "Retro sci-fi paperback illustration")
+        self.assertEqual(config.studios.infographic.style, "bento-grid")
+
+    def test_load_config_rejects_unknown_infographic_style(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = root / "nblm.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "[studios.infographic]",
+                        "enabled = true",
+                        'style = "vaporwave"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ConfigError):
+                load_config(config_path)

@@ -12,9 +12,10 @@ DEFAULT_CONFIG_BASENAMES = ("nblm.toml", ".nblm.toml", "pyproject.toml")
 
 _AUDIO_FORMATS = ("deep-dive", "brief", "critique", "debate")
 _AUDIO_LENGTHS = ("short", "default", "long")
-_VIDEO_FORMATS = ("explainer", "brief")
+_VIDEO_FORMATS = ("explainer", "brief", "cinematic")
 _VIDEO_STYLES = (
     "auto",
+    "custom",
     "classic",
     "whiteboard",
     "kawaii",
@@ -33,6 +34,19 @@ _QUIZ_DIFFICULTIES = ("easy", "medium", "hard")
 _INTERACTIVE_OUTPUT_FORMATS = ("json", "markdown", "html")
 _INFOGRAPHIC_ORIENTATIONS = ("landscape", "portrait", "square")
 _INFOGRAPHIC_DETAILS = ("concise", "standard", "detailed")
+_INFOGRAPHIC_STYLES = (
+    "auto",
+    "sketch-note",
+    "professional",
+    "bento-grid",
+    "editorial",
+    "instructional",
+    "bricks",
+    "clay",
+    "anime",
+    "kawaii",
+    "scientific",
+)
 
 
 class ConfigError(ChunkerError):
@@ -84,6 +98,7 @@ class StudioConfig:
     format: str | None = None
     length: str | None = None
     style: str | None = None
+    style_prompt: str | None = None
     quantity: str | None = None
     difficulty: str | None = None
     orientation: str | None = None
@@ -129,10 +144,6 @@ class AppConfig:
     runtime: RuntimeConfig = RuntimeConfig()
     studios: StudiosConfig = StudiosConfig()
     config_path: str | None = None
-
-    @property
-    def source_path(self) -> str | None:
-        return self.config_path
 
 
 def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = None) -> AppConfig:
@@ -279,6 +290,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 source_path=source_path,
                 allowed_orientations=_INFOGRAPHIC_ORIENTATIONS,
                 allowed_details=_INFOGRAPHIC_DETAILS,
+                allowed_styles=_INFOGRAPHIC_STYLES,
             ),
             data_table=_load_studio_config(
                 studios,
@@ -400,7 +412,7 @@ def write_config_template(
             "Ask concept-check questions that reveal whether",
             "the learner really understood the text.",
             '"""',
-            'quantity = "more"',
+            'quantity = "standard"',
             'difficulty = "hard"',
             'download_format = "json"',
             "",
@@ -454,6 +466,7 @@ def _load_studio_config(
         format=_optional_choice(raw.get("format"), f"{label}.format", allowed_formats),
         length=_optional_choice(raw.get("length"), f"{label}.length", allowed_lengths),
         style=_optional_choice(raw.get("style"), f"{label}.style", allowed_styles),
+        style_prompt=_optional_str(raw.get("style_prompt"), f"{label}.style_prompt"),
         quantity=_optional_choice(raw.get("quantity"), f"{label}.quantity", allowed_quantities),
         difficulty=_optional_choice(
             raw.get("difficulty"),

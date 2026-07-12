@@ -48,6 +48,14 @@ class _FakeGenerationStatus:
         return self.status == "failed"
 
 
+class _FakeMindMapResult:
+    """Typed result object, mirroring notebooklm-py >= 0.7 MindMapResult."""
+
+    def __init__(self, note_id: str) -> None:
+        self.note_id = note_id
+        self.mind_map = {"root": "fake"}
+
+
 class _FakeNotebooksAPI:
     def __init__(self, events: list[str]) -> None:
         self.created_titles: list[str] = []
@@ -77,6 +85,7 @@ class _FakeSourcesAPI:
 
     def __init__(self, events: list[str]) -> None:
         self.calls: list[tuple[str, str, bool]] = []
+        self.title_calls: list[tuple[str, str, str | None]] = []
         self.rename_calls: list[tuple[str, str, str]] = []
         self.events = events
 
@@ -86,7 +95,13 @@ class _FakeSourcesAPI:
         cls.active_uploads = 0
         cls.max_active_uploads = 0
 
-    async def add_file(self, notebook_id: str, path: Path, wait: bool = False) -> _FakeSource:
+    async def add_file(
+        self,
+        notebook_id: str,
+        path: Path,
+        wait: bool = False,
+        title: str | None = None,
+    ) -> _FakeSource:
         type(self).active_uploads += 1
         type(self).max_active_uploads = max(
             type(self).max_active_uploads, type(self).active_uploads
@@ -95,6 +110,7 @@ class _FakeSourcesAPI:
             if type(self).delay_seconds:
                 await asyncio.sleep(type(self).delay_seconds)
             self.calls.append((notebook_id, path.name, wait))
+            self.title_calls.append((notebook_id, path.name, title))
             self.events.append(f"upload:{path.name}")
             return _FakeSource(f"src-{path.stem}")
         finally:
@@ -116,6 +132,16 @@ class _FakeArtifactsAPI:
         self.slide_download_calls: list[tuple[str, str, str | None, str]] = []
         self.quiz_generate_calls: list[dict[str, object]] = []
         self.quiz_download_calls: list[tuple[str, str, str | None, str]] = []
+        self.mind_map_generate_calls: list[dict[str, object]] = []
+        self.mind_map_download_calls: list[tuple[str, str, str | None]] = []
+        self.video_generate_calls: list[dict[str, object]] = []
+        self.video_download_calls: list[tuple[str, str, str | None]] = []
+        self.flashcards_generate_calls: list[dict[str, object]] = []
+        self.flashcards_download_calls: list[tuple[str, str, str | None, str]] = []
+        self.infographic_generate_calls: list[dict[str, object]] = []
+        self.infographic_download_calls: list[tuple[str, str, str | None]] = []
+        self.data_table_generate_calls: list[dict[str, object]] = []
+        self.data_table_download_calls: list[tuple[str, str, str | None]] = []
         self.rename_calls: list[tuple[str, str, str]] = []
         self._artifacts: list[_FakeArtifact] = []
         self.events = events
@@ -154,6 +180,177 @@ class _FakeArtifactsAPI:
     ) -> _FakeGenerationStatus:
         self.wait_calls.append((notebook_id, task_id, timeout))
         return _FakeGenerationStatus(task_id)
+
+    async def generate_video(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        language: str = "en",
+        instructions: str | None = None,
+        video_format=None,
+        video_style=None,
+        style_prompt: str | None = None,
+    ) -> _FakeGenerationStatus:
+        artifact_id = f"art-video-{len(self.video_generate_calls) + 1}"
+        self.video_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "language": language,
+                "instructions": instructions,
+                "video_format": video_format,
+                "video_style": video_style,
+                "style_prompt": style_prompt,
+            }
+        )
+        self._artifacts.append(
+            _FakeArtifact(artifact_id, "video", f"Video {len(self.video_generate_calls)}")
+        )
+        self.events.append("video:" + ",".join(source_ids or []))
+        return _FakeGenerationStatus(artifact_id)
+
+    async def download_video(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+    ) -> str:
+        self.video_download_calls.append((notebook_id, output_path, artifact_id))
+        return output_path
+
+    async def generate_flashcards(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        instructions: str | None = None,
+        quantity=None,
+        difficulty=None,
+    ) -> _FakeGenerationStatus:
+        artifact_id = f"art-flashcards-{len(self.flashcards_generate_calls) + 1}"
+        self.flashcards_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "instructions": instructions,
+                "quantity": quantity,
+                "difficulty": difficulty,
+            }
+        )
+        self._artifacts.append(
+            _FakeArtifact(
+                artifact_id, "flashcards", f"Flashcards {len(self.flashcards_generate_calls)}"
+            )
+        )
+        self.events.append("flashcards:" + ",".join(source_ids or []))
+        return _FakeGenerationStatus(artifact_id)
+
+    async def download_flashcards(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+        output_format: str = "json",
+    ) -> str:
+        self.flashcards_download_calls.append(
+            (notebook_id, output_path, artifact_id, output_format)
+        )
+        return output_path
+
+    async def generate_infographic(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        language: str = "en",
+        instructions: str | None = None,
+        orientation=None,
+        detail_level=None,
+        style=None,
+    ) -> _FakeGenerationStatus:
+        artifact_id = f"art-infographic-{len(self.infographic_generate_calls) + 1}"
+        self.infographic_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "language": language,
+                "instructions": instructions,
+                "orientation": orientation,
+                "detail_level": detail_level,
+                "style": style,
+            }
+        )
+        self._artifacts.append(
+            _FakeArtifact(
+                artifact_id, "infographic", f"Infographic {len(self.infographic_generate_calls)}"
+            )
+        )
+        self.events.append("infographic:" + ",".join(source_ids or []))
+        return _FakeGenerationStatus(artifact_id)
+
+    async def download_infographic(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+    ) -> str:
+        self.infographic_download_calls.append((notebook_id, output_path, artifact_id))
+        return output_path
+
+    async def generate_data_table(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        language: str = "en",
+        instructions: str | None = None,
+    ) -> _FakeGenerationStatus:
+        artifact_id = f"art-data-table-{len(self.data_table_generate_calls) + 1}"
+        self.data_table_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "language": language,
+                "instructions": instructions,
+            }
+        )
+        self._artifacts.append(
+            _FakeArtifact(
+                artifact_id, "data_table", f"Data Table {len(self.data_table_generate_calls)}"
+            )
+        )
+        self.events.append("data_table:" + ",".join(source_ids or []))
+        return _FakeGenerationStatus(artifact_id)
+
+    async def download_data_table(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+    ) -> str:
+        self.data_table_download_calls.append((notebook_id, output_path, artifact_id))
+        return output_path
+
+    async def generate_mind_map(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+    ) -> _FakeMindMapResult:
+        note_id = f"note-mind-map-{len(self.mind_map_generate_calls) + 1}"
+        self.mind_map_generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+            }
+        )
+        self.events.append("mind_map:" + ",".join(source_ids or []))
+        return _FakeMindMapResult(note_id)
+
+    async def download_mind_map(
+        self,
+        notebook_id: str,
+        output_path: str,
+        artifact_id: str | None = None,
+    ) -> str:
+        self.mind_map_download_calls.append((notebook_id, output_path, artifact_id))
+        return output_path
 
     async def download_audio(
         self,
@@ -351,13 +548,13 @@ class _FakeRpcModule:
             "SHORT": "SHORT",
         },
     )
+    # Mirrors notebooklm-py 0.7.x: the MORE member was removed upstream.
     QuizQuantity = type(
         "QuizQuantity",
         (),
         {
             "FEWER": "FEWER",
             "STANDARD": "STANDARD",
-            "MORE": "MORE",
         },
     )
     QuizDifficulty = type(
@@ -367,6 +564,41 @@ class _FakeRpcModule:
             "EASY": "EASY",
             "MEDIUM": "MEDIUM",
             "HARD": "HARD",
+        },
+    )
+    VideoFormat = type(
+        "VideoFormat",
+        (),
+        {
+            "EXPLAINER": "EXPLAINER",
+            "BRIEF": "BRIEF",
+        },
+    )
+    VideoStyle = type(
+        "VideoStyle",
+        (),
+        {
+            "AUTO_SELECT": "AUTO_SELECT",
+            "CLASSIC": "CLASSIC",
+            "WHITEBOARD": "WHITEBOARD",
+        },
+    )
+    InfographicOrientation = type(
+        "InfographicOrientation",
+        (),
+        {
+            "LANDSCAPE": "LANDSCAPE",
+            "PORTRAIT": "PORTRAIT",
+            "SQUARE": "SQUARE",
+        },
+    )
+    InfographicDetail = type(
+        "InfographicDetail",
+        (),
+        {
+            "CONCISE": "CONCISE",
+            "STANDARD": "STANDARD",
+            "DETAILED": "DETAILED",
         },
     )
 
@@ -398,10 +630,12 @@ class UploaderTests(TestCase):
             _FakeNotebookLMClient.last_client.sources.calls,
             [("nb1", "c001-test.md", True)],
         )
+        # The remote title travels with the upload itself; no separate rename RPC.
         self.assertEqual(
-            _FakeNotebookLMClient.last_client.sources.rename_calls,
-            [("nb1", "src-c001-test", "C001 Title")],
+            _FakeNotebookLMClient.last_client.sources.title_calls,
+            [("nb1", "c001-test.md", "C001 Title")],
         )
+        self.assertEqual(_FakeNotebookLMClient.last_client.sources.rename_calls, [])
 
     def test_upload_directory_respects_max_parallel_chunks(self) -> None:
         uploader = NotebookLMPyUploader()
@@ -447,8 +681,8 @@ class UploaderTests(TestCase):
                 )
 
         self.assertEqual(
-            _FakeNotebookLMClient.last_client.sources.rename_calls,
-            [("nb1", "src-c001-test", "C001 Origins")],
+            _FakeNotebookLMClient.last_client.sources.title_calls,
+            [("nb1", "c001-test.md", "C001 Origins")],
         )
 
     def test_upload_directory_does_not_rename_remote_titles_by_default(self) -> None:
@@ -464,7 +698,10 @@ class UploaderTests(TestCase):
                 _, uploads = uploader.upload_directory(chunks_dir, notebook_title="Notebook")
 
         self.assertEqual(len(uploads), 1)
-        self.assertEqual(_FakeNotebookLMClient.last_client.sources.rename_calls, [])
+        self.assertEqual(
+            _FakeNotebookLMClient.last_client.sources.title_calls,
+            [("nb1", "c001-test.md", None)],
+        )
 
     def test_run_studios_passes_long_wait_timeout(self) -> None:
         uploader = NotebookLMPyUploader()
@@ -570,14 +807,14 @@ class UploaderTests(TestCase):
                     "notebook_id": "nb1",
                     "source_ids": ["src-c001-intro"],
                     "instructions": None,
-                    "quantity": "MORE",
+                    "quantity": "STANDARD",
                     "difficulty": "HARD",
                 },
                 {
                     "notebook_id": "nb1",
                     "source_ids": ["src-c002-summary"],
                     "instructions": None,
-                    "quantity": "MORE",
+                    "quantity": "STANDARD",
                     "difficulty": "HARD",
                 },
             ],
@@ -599,6 +836,164 @@ class UploaderTests(TestCase):
                 ),
             ],
         )
+
+    def test_run_studios_covers_video_flashcards_infographic_and_data_table(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            intro_path = chunks_dir / "c001-intro.md"
+            intro_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 4,
+                "notebook_id": "nb1",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "c001-intro.md": {
+                        "content_hash": chunk_content_hash(intro_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c001-intro",
+                            "remote_title": "C001 Intro",
+                        },
+                        "studios": {},
+                    },
+                },
+                "notebook_studios": {},
+                "quota_blocks": {},
+            }
+            state_path = chunks_dir / ".nblm-run-state.json"
+            state_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+
+            with (
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                    return_value=_FakeNotebookLMClient,
+                ),
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                    return_value=_FakeRpcModule,
+                ),
+            ):
+                results = uploader.run_studios(
+                    notebook_id=None,
+                    run_state_path=state_path,
+                    studios=StudiosConfig(
+                        video=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "videos").resolve()),
+                            format="explainer",
+                            style="whiteboard",
+                        ),
+                        flashcards=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "flashcards").resolve()),
+                            download_format="markdown",
+                        ),
+                        infographic=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "infographics").resolve()),
+                            orientation="portrait",
+                            detail="detailed",
+                        ),
+                        data_table=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "data-tables").resolve()),
+                        ),
+                    ),
+                )
+
+        self.assertEqual(len(results), 4)
+        self.assertEqual({result.studio for result in results},
+                         {"video", "flashcards", "infographic", "data_table"})
+        artifacts = _FakeNotebookLMClient.last_client.artifacts
+        self.assertEqual(len(artifacts.video_generate_calls), 1)
+        self.assertEqual(artifacts.video_generate_calls[0]["video_format"], "EXPLAINER")
+        self.assertEqual(artifacts.video_generate_calls[0]["video_style"], "WHITEBOARD")
+        self.assertEqual(len(artifacts.video_download_calls), 1)
+        self.assertEqual(len(artifacts.flashcards_generate_calls), 1)
+        self.assertEqual(artifacts.flashcards_generate_calls[0]["quantity"], "STANDARD")
+        self.assertEqual(len(artifacts.flashcards_download_calls), 1)
+        self.assertEqual(artifacts.flashcards_download_calls[0][3], "markdown")
+        self.assertTrue(artifacts.flashcards_download_calls[0][1].endswith(".md"))
+        self.assertEqual(len(artifacts.infographic_generate_calls), 1)
+        self.assertEqual(artifacts.infographic_generate_calls[0]["orientation"], "PORTRAIT")
+        self.assertEqual(artifacts.infographic_generate_calls[0]["detail_level"], "DETAILED")
+        self.assertEqual(len(artifacts.infographic_download_calls), 1)
+        self.assertTrue(artifacts.infographic_download_calls[0][1].endswith(".png"))
+        self.assertEqual(len(artifacts.data_table_generate_calls), 1)
+        self.assertIsNotNone(artifacts.data_table_generate_calls[0]["instructions"])
+        self.assertEqual(len(artifacts.data_table_download_calls), 1)
+        self.assertTrue(artifacts.data_table_download_calls[0][1].endswith(".csv"))
+
+    def test_run_studios_mind_map_reads_note_id_from_typed_result(self) -> None:
+        uploader = NotebookLMPyUploader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            intro_path = chunks_dir / "c001-intro.md"
+            intro_path.write_text("# Intro\n\nBody\n", encoding="utf-8")
+            state_payload = {
+                "version": 4,
+                "notebook_id": "nb1",
+                "notebook_title": "Notebook",
+                "chunks": {
+                    "c001-intro.md": {
+                        "content_hash": chunk_content_hash(intro_path),
+                        "source": {
+                            "status": "uploaded",
+                            "source_id": "src-c001-intro",
+                            "remote_title": "C001 Intro",
+                        },
+                        "studios": {},
+                    },
+                },
+                "notebook_studios": {},
+                "quota_blocks": {},
+            }
+            state_path = chunks_dir / ".nblm-run-state.json"
+            state_path.write_text(json.dumps(state_payload, indent=2) + "\n", encoding="utf-8")
+
+            with (
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                    return_value=_FakeNotebookLMClient,
+                ),
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                    return_value=_FakeRpcModule,
+                ),
+            ):
+                results = uploader.run_studios(
+                    notebook_id=None,
+                    run_state_path=state_path,
+                    studios=StudiosConfig(
+                        mind_map=StudioConfig(
+                            enabled=True,
+                            per_chunk=True,
+                            output_dir=str((root / "studio" / "mind-maps").resolve()),
+                        )
+                    ),
+                )
+            saved_state = json.loads(state_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(results), 1)
+        # The typed result's note_id must flow through to the download call
+        # and the recorded artifact (regression: dict-only handling left it None).
+        self.assertEqual(results[0].artifact_id, "note-mind-map-1")
+        artifacts = _FakeNotebookLMClient.last_client.artifacts
+        self.assertEqual(len(artifacts.mind_map_download_calls), 1)
+        self.assertEqual(artifacts.mind_map_download_calls[0][2], "note-mind-map-1")
+        chunk_studios = saved_state["chunks"]["c001-intro.md"]["studios"]
+        self.assertEqual(chunk_studios["mind_map"]["artifact_id"], "note-mind-map-1")
 
     def test_run_studios_can_complete_without_downloading_outputs(self) -> None:
         uploader = NotebookLMPyUploader()
@@ -1235,8 +1630,8 @@ class UploaderTests(TestCase):
             [("nb1", "c001-test.md", True)],
         )
         self.assertEqual(
-            _FakeNotebookLMClient.last_client.sources.rename_calls,
-            [("nb1", "src-c001-test", "C001 Title")],
+            _FakeNotebookLMClient.last_client.sources.title_calls,
+            [("nb1", "c001-test.md", "C001 Title")],
         )
 
     def test_ingest_directory_generates_audio_from_uploaded_sources(self) -> None:
@@ -1443,10 +1838,10 @@ class UploaderTests(TestCase):
             ],
         )
         self.assertEqual(
-            _FakeNotebookLMClient.last_client.sources.rename_calls,
+            _FakeNotebookLMClient.last_client.sources.title_calls,
             [
-                ("nb1", "src-c001-intro", "C001 Intro"),
-                ("nb1", "src-c002-summary", "C002 Summary"),
+                ("nb1", "c001-intro.md", "C001 Intro"),
+                ("nb1", "c002-summary.md", "C002 Summary"),
             ],
         )
         self.assertEqual(

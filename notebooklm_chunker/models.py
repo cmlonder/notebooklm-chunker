@@ -53,10 +53,6 @@ class ChunkingSettings:
     words_per_page: int = 500
 
     @property
-    def target_words(self) -> int:
-        return max(1, int(self.target_pages * self.words_per_page))
-
-    @property
     def min_words(self) -> int:
         return max(1, int(self.min_pages * self.words_per_page))
 

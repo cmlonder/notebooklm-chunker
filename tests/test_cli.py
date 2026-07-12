@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
 
+from notebooklm_chunker import __version__
 from notebooklm_chunker.cli import main
 from notebooklm_chunker.doctor import DoctorCheck, DoctorReport
 from notebooklm_chunker.models import Block
@@ -22,7 +23,9 @@ class CliTests(TestCase):
                 main(["--version"])
 
         self.assertEqual(exit_context.exception.code, 0)
-        self.assertIn("nblm 0.2.1", stdout.getvalue())
+        # Compare against the package version so version drift fails loudly
+        # instead of a hardcoded literal going stale.
+        self.assertIn(f"nblm {__version__}", stdout.getvalue())
 
     def test_prepare_command_exports_chunks(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

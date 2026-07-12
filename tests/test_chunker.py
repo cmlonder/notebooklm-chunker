@@ -52,6 +52,59 @@ class ChunkerTests(TestCase):
         self.assertIn("# Section 3", chunks[0].markdown)
         self.assertNotIn("# Section 4", chunks[0].markdown)
 
+    def test_chunk_document_prefers_cutting_at_shallow_headings(self) -> None:
+        blocks = [
+            Block(kind="heading", text="Chapter 1", level=1, page=1),
+            Block(kind="paragraph", text="Body", page=1),
+            Block(kind="heading", text="Section 1.1", level=2, page=2),
+            Block(kind="paragraph", text="Body", page=2),
+            Block(kind="heading", text="Chapter 2", level=1, page=3),
+            Block(kind="paragraph", text="Body", page=3),
+            Block(kind="heading", text="Section 2.1", level=2, page=4),
+            Block(kind="paragraph", text="Body", page=4),
+        ]
+
+        # Both a 2+2 split at "Chapter 2" (depth 1) and an equally sized split
+        # at "Section 2.1" (depth 2) satisfy the size constraints; the depth
+        # penalty must steer the cut to the chapter boundary.
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=ChunkingSettings(
+                target_pages=2.0, min_pages=1.0, max_pages=3.0, words_per_page=100
+            ),
+        )
+
+        self.assertEqual(len(chunks), 2)
+        self.assertEqual((chunks[0].start_page, chunks[0].end_page), (1, 2))
+        self.assertEqual((chunks[1].start_page, chunks[1].end_page), (3, 4))
+        self.assertIn("Chapter 2", chunks[1].markdown.splitlines()[0])
+
+    def test_chunk_document_raises_target_to_min_pages_when_target_is_below_min(self) -> None:
+        blocks = []
+        for page in range(1, 8):
+            blocks.extend(
+                [
+                    Block(kind="heading", text=f"Section {page}", level=1, page=page),
+                    Block(kind="paragraph", text="Body text", page=page),
+                ]
+            )
+
+        # target below the hard min bound is unsatisfiable; the chunker must
+        # treat min_pages as the effective target instead of failing.
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=ChunkingSettings(
+                target_pages=2.0, min_pages=3.0, max_pages=4.0, words_per_page=250
+            ),
+        )
+
+        self.assertTrue(chunks)
+        for chunk in chunks[:-1]:
+            span = (chunk.end_page or 0) - (chunk.start_page or 0) + 1
+            self.assertGreaterEqual(span, 3)
+
     def test_chunk_document_splits_large_sections(self) -> None:
         text = " ".join(["word"] * 1200)
         blocks = [

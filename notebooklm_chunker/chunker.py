@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 from notebooklm_chunker.models import Block, Chunk, ChunkingSettings, Section
@@ -64,6 +65,7 @@ def chunk_document(
 ) -> list[Chunk]:
     resolved_settings = settings or ChunkingSettings()
     _validate_settings(resolved_settings)
+    resolved_settings = _clamp_settings(resolved_settings)
 
     sections = build_sections(
         blocks, source_path.stem.replace("_", " ").strip() or source_path.stem
@@ -93,13 +95,16 @@ def _validate_settings(settings: ChunkingSettings) -> None:
     if settings.min_pages <= 0 or settings.max_pages <= 0 or settings.target_pages <= 0:
         raise ChunkerError("`target_pages`, `min_pages`, and `max_pages` must be greater than 0.")
 
-    # Otomatik düzeltme: min_pages target'tan büyükse target'a eşitle
-    if settings.min_pages > settings.target_pages:
-        # Hata fırlatmak yerine sessizce düzeltiyoruz ki akış bozulmasın
-        pass
-
     if settings.min_pages > settings.max_pages:
         raise ChunkerError("`min_pages` cannot be greater than `max_pages`.")
+
+
+def _clamp_settings(settings: ChunkingSettings) -> ChunkingSettings:
+    # min_pages is a hard bound while target_pages is only a preference, so a
+    # target below min is unsatisfiable; raise it to min instead of erroring.
+    if settings.min_pages > settings.target_pages:
+        return replace(settings, target_pages=settings.min_pages)
+    return settings
 
 
 def _split_oversized_sections(
@@ -186,6 +191,12 @@ def _split_paragraph(paragraph: str, max_words: int) -> list[str]:
     return parts
 
 
+# Extra cost per heading level of depth for cutting a chunk boundary at a
+# deeper heading. Keeps boundaries preferring chapter starts over sub-sections
+# without overriding the page-size constraints.
+_BOUNDARY_DEPTH_PENALTY = 0.75
+
+
 def _group_sections(
     sections: list[Section],
     settings: ChunkingSettings,
@@ -193,10 +204,19 @@ def _group_sections(
     if not sections:
         return []
 
+    depths = [len(section.heading_path) for section in sections]
+    min_depth = min(depths)
+
+    def boundary_cost(start: int) -> float:
+        if start == 0:
+            return 0.0
+        return (depths[start] - min_depth) * _BOUNDARY_DEPTH_PENALTY
+
     ranges = _choose_ranges(
         len(sections),
         settings,
         range_pages_fn=lambda start, end: _chunk_pages(sections[start:end], settings),
+        boundary_cost_fn=boundary_cost,
     )
     return [sections[start:end] for start, end in ranges]
 
@@ -206,6 +226,7 @@ def _choose_ranges(
     settings: ChunkingSettings,
     *,
     range_pages_fn: Callable[[int, int], float],
+    boundary_cost_fn: Callable[[int], float] | None = None,
 ) -> list[tuple[int, int]]:
     if count == 0:
         return []
@@ -215,12 +236,13 @@ def _choose_ranges(
     best_costs[count] = 0.0
 
     for start in range(count - 1, -1, -1):
+        start_cost = boundary_cost_fn(start) if boundary_cost_fn is not None else 0.0
         for end in range(start + 1, count + 1):
             pages = range_pages_fn(start, end)
             if pages > settings.max_pages and end > start + 1:
                 break
 
-            local_cost = _range_cost(
+            local_cost = start_cost + _range_cost(
                 pages,
                 settings,
                 is_last=(end == count),

@@ -7,7 +7,9 @@ from pathlib import Path
 from unittest import TestCase
 
 from notebooklm_chunker.parsers import (
+    _blocks_from_pdf_pages_with_toc,
     _clean_pdf_page_entries,
+    _line_matches_toc_title,
     _pdf_page_numbers,
     inspect_pdf_page_selection,
     parse_document,
@@ -153,6 +155,91 @@ class ParserTests(TestCase):
         self.assertEqual(selection.total_pages, 10)
         self.assertEqual(selection.included_pages, (3, 4, 6, 7, 8, 9, 10))
         self.assertEqual(selection.skipped_pages, (1, 2, 5))
+
+    def test_pdf_with_embedded_toc_uses_outline_headings_and_levels(self) -> None:
+        fitz = __import__("fitz")
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "book.pdf"
+            document = fitz.open()
+            page_texts = [
+                "Chapter One\nIntro body text about the first chapter.",
+                "1.1 History\nDetails about history that go on for a while.",
+                "Chapter Two\nSecond chapter body text.",
+            ]
+            for text in page_texts:
+                page = document.new_page()
+                page.insert_text((72, 72), text)
+            document.set_toc(
+                [
+                    [1, "Chapter One", 1],
+                    [2, "History", 2],
+                    [1, "Chapter Two", 3],
+                ]
+            )
+            document.save(str(source))
+            document.close()
+
+            blocks = parse_document(source)
+
+        headings = [(block.level, block.text, block.page) for block in blocks if block.kind == "heading"]
+        self.assertEqual(
+            headings,
+            [
+                (1, "Chapter One", 1),
+                (2, "History", 2),
+                (1, "Chapter Two", 3),
+            ],
+        )
+        paragraphs = [block for block in blocks if block.kind == "paragraph"]
+        self.assertTrue(any("first chapter" in block.text for block in paragraphs))
+
+    def test_blocks_from_pdf_pages_with_toc_places_unmatched_heading_at_page_top(self) -> None:
+        blocks = _blocks_from_pdf_pages_with_toc(
+            [
+                (1, ["Some body text", "More body text"]),
+                (2, ["Continuation text"]),
+            ],
+            [(1, "Missing Heading Title", 1)],
+        )
+
+        self.assertEqual(blocks[0].kind, "heading")
+        self.assertEqual(blocks[0].text, "Missing Heading Title")
+        self.assertEqual(blocks[0].level, 1)
+        self.assertEqual(blocks[0].page, 1)
+        self.assertEqual(blocks[1].kind, "paragraph")
+
+    def test_blocks_from_pdf_pages_with_toc_skips_headings_on_skipped_pages(self) -> None:
+        blocks = _blocks_from_pdf_pages_with_toc(
+            [(5, ["Chapter Three", "Body text"])],
+            [
+                (1, "Chapter One", 1),
+                (1, "Chapter Three", 5),
+                (1, "Chapter Nine", 99),
+            ],
+        )
+
+        headings = [block.text for block in blocks if block.kind == "heading"]
+        self.assertEqual(headings, ["Chapter Three"])
+
+    def test_line_matches_toc_title_ignores_case_and_numbering(self) -> None:
+        self.assertTrue(_line_matches_toc_title("1.2 Airline Deregulation", "Airline Deregulation"))
+        self.assertTrue(_line_matches_toc_title("AIRLINE DEREGULATION", "Airline Deregulation"))
+        self.assertTrue(_line_matches_toc_title("Airline Deregulation", "1.2 Airline Deregulation"))
+        self.assertFalse(_line_matches_toc_title("Airline Deregulation Act", "Airline Deregulation"))
+
+    def test_clean_pdf_page_entries_removes_running_titles_with_embedded_page_numbers(self) -> None:
+        cleaned = _clean_pdf_page_entries(
+            [
+                (2, ["2|Domain Driven Design Quickly", "Body line A"]),
+                (4, ["4|Domain Driven Design Quickly", "Body line B"]),
+                (6, ["6|Domain Driven Design Quickly", "Body line C"]),
+            ]
+        )
+
+        self.assertEqual(cleaned[0][1], ["Body line A"])
+        self.assertEqual(cleaned[1][1], ["Body line B"])
+        self.assertEqual(cleaned[2][1], ["Body line C"])
 
     def test_clean_pdf_page_entries_removes_repeated_running_titles_and_page_numbers(self) -> None:
         cleaned = _clean_pdf_page_entries(

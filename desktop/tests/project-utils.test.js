@@ -2,6 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  escapeHtml,
+  attrArg,
+  matchesQuery,
   slugifyStem,
   nextVersionRawName,
   deriveProjectStatus,
@@ -98,4 +101,46 @@ test("buildStudiosToml omits per_chunk when disabled explicitly", () => {
 test("parseNotebookId extracts notebook id from CLI output", () => {
   assert.equal(parseNotebookId("Notebook ID: abc-123\nUploaded sources: 5"), "abc-123");
   assert.equal(parseNotebookId("no notebook"), null);
+});
+
+test("escapeHtml escapes all HTML-sensitive characters", () => {
+  assert.equal(
+    escapeHtml(`<img src=x onerror="alert('xss')">`),
+    "&lt;img src=x onerror=&quot;alert(&#39;xss&#39;)&quot;&gt;",
+  );
+  assert.equal(escapeHtml("Tom & Jerry"), "Tom &amp; Jerry");
+  assert.equal(escapeHtml("plain text"), "plain text");
+});
+
+test("escapeHtml coerces non-strings with String()", () => {
+  assert.equal(escapeHtml(42), "42");
+  assert.equal(escapeHtml(true), "true");
+  assert.equal(escapeHtml(null), "null");
+  assert.equal(escapeHtml(undefined), "undefined");
+});
+
+test("attrArg produces attribute-safe JS string literals", () => {
+  assert.equal(attrArg("plain"), "&quot;plain&quot;");
+  assert.equal(attrArg(`a"b'c`), "&quot;a\\&quot;b&#39;c&quot;");
+  assert.equal(attrArg("</script><b>"), "&quot;&lt;/script&gt;&lt;b&gt;&quot;");
+});
+
+test("matchesQuery does case-insensitive substring matching", () => {
+  assert.equal(matchesQuery("Hello World", "world"), true);
+  assert.equal(matchesQuery("Hello World", "WORLD"), true);
+  assert.equal(matchesQuery("Hello World", "mars"), false);
+  assert.equal(matchesQuery("Hello World", "  world  "), true);
+});
+
+test("matchesQuery treats empty or missing query as a match", () => {
+  assert.equal(matchesQuery("anything", ""), true);
+  assert.equal(matchesQuery("anything", "   "), true);
+  assert.equal(matchesQuery("anything", null), true);
+  assert.equal(matchesQuery("anything", undefined), true);
+});
+
+test("matchesQuery handles missing text safely", () => {
+  assert.equal(matchesQuery(null, "x"), false);
+  assert.equal(matchesQuery(undefined, "x"), false);
+  assert.equal(matchesQuery(null, ""), true);
 });

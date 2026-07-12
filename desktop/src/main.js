@@ -133,6 +133,29 @@ function buildNblmEnv() {
   };
 }
 
+let cachedNblmBinary = null;
+
+// Prefer the bundled PyInstaller sidecar so end users do not need a Python
+// install; fall back to `nblm` on PATH (dev setups, power users).
+function nblmBinary() {
+  if (cachedNblmBinary) return cachedNblmBinary;
+  const exeName = process.platform === 'win32' ? 'nblm.exe' : 'nblm';
+  const candidates = [
+    path.join(process.resourcesPath || '', 'sidecar', exeName),
+    path.resolve(__dirname, '../sidecar/dist', exeName),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        cachedNblmBinary = candidate;
+        return cachedNblmBinary;
+      }
+    } catch (e) {}
+  }
+  cachedNblmBinary = 'nblm';
+  return cachedNblmBinary;
+}
+
 function activeStudioWorkers(projectPath) {
   return studioQueueWorkers.get(projectPath) || 0;
 }
@@ -153,7 +176,7 @@ function runNextStudioJob(projectPath) {
   setActiveStudioWorkers(projectPath, activeStudioWorkers(projectPath) + 1);
   const tempConfigPath = path.join(app.getPath('temp'), `nblm-studio-${Date.now()}-${Math.random().toString(16).slice(2, 8)}.toml`);
   fs.writeFileSync(tempConfigPath, nextJob.configToml, 'utf-8');
-  const proc = spawn('nblm', ['studios', ...nextJob.args, '--config', tempConfigPath], {
+  const proc = spawn(nblmBinary(), ['studios', ...nextJob.args, '--config', tempConfigPath], {
     env: buildNblmEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -341,7 +364,7 @@ ipcMain.handle('get-app-paths', () => {
 ipcMain.handle('check-nblm', async () => {
   return new Promise((resolve) => {
     const env = buildNblmEnv();
-    const proc = spawn('nblm', ['--version'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn(nblmBinary(), ['--version'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     let errorOutput = '';
     proc.stdout.on('data', (data) => { output += data.toString(); });
@@ -490,12 +513,8 @@ ipcMain.handle('run-nblm', async (event, { command, args = [], config }) => {
       fs.writeFileSync(tempConfigPath, config);
       spawnArgs.push('--config', tempConfigPath);
     }
-    if (command === 'internal-write-file') {
-      try { fs.writeFileSync(args[0], args[1], 'utf-8'); return resolve({ success: true }); }
-      catch (err) { return resolve({ success: false, error: err.message }); }
-    }
     const env = buildNblmEnv();
-    pythonProcess = spawn('nblm', spawnArgs, { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    pythonProcess = spawn(nblmBinary(), spawnArgs, { env, stdio: ['pipe', 'pipe', 'pipe'] });
     let output = '', errorOutput = '';
     pythonProcess.stdout.on('data', (data) => {
       const text = data.toString(); output += text;
@@ -523,6 +542,7 @@ ipcMain.handle('send-nblm-input', async (event, input) => {
 
 ipcMain.handle('get-version', async () => app.getVersion());
 ipcMain.handle('read-file', async (event, filePath) => { try { return { success: true, content: fs.readFileSync(filePath, 'utf-8') }; } catch (err) { return { success: false, error: err.message }; } });
+ipcMain.handle('write-file', async (event, filePath, content) => { try { fs.writeFileSync(filePath, content, 'utf-8'); return { success: true }; } catch (err) { return { success: false, error: err.message }; } });
 ipcMain.handle('read-dir', async (event, dirPath) => { try { return { success: true, files: fs.readdirSync(dirPath) }; } catch (err) { return { success: false, error: err.message }; } });
 ipcMain.handle('stop-nblm', async () => { if (pythonProcess) { pythonProcess.kill(); pythonProcess = null; } return { success: true }; });
 ipcMain.handle('open-external', async (event, url) => {

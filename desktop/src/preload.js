@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectPDF: () => ipcRenderer.invoke('select-pdf'),
   selectOutputDir: () => ipcRenderer.invoke('select-output-dir'),
   readFile: (path) => ipcRenderer.invoke('read-file', path),
+  writeFile: (path, content) => ipcRenderer.invoke('write-file', path, content),
   readDir: (path) => ipcRenderer.invoke('read-dir', path),
   dirExists: (path) => ipcRenderer.invoke('dir-exists', path),
   listProjects: (rootPath) => ipcRenderer.invoke('list-projects', rootPath),

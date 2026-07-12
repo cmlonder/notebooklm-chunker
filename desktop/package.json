@@ -40,6 +40,13 @@
       "renderer/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "sidecar/dist/",
+        "to": "sidecar/",
+        "filter": ["nblm*"]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": ["dmg", "zip"]

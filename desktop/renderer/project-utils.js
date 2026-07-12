@@ -1,4 +1,23 @@
 (function initProjectUtils(globalScope) {
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function attrArg(value) {
+    return escapeHtml(JSON.stringify(value));
+  }
+
+  function matchesQuery(text, query) {
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    if (!normalizedQuery) return true;
+    return String(text || "").toLowerCase().includes(normalizedQuery);
+  }
+
   function slugifyStem(fileName) {
     return String(fileName || "")
       .replace(/\.[^.]+$/, "")
@@ -131,6 +150,9 @@
   }
 
   const exported = {
+    escapeHtml,
+    attrArg,
+    matchesQuery,
     slugifyStem,
     nextVersionRawName,
     deriveProjectStatus,

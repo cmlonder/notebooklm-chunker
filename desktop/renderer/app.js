@@ -112,7 +112,7 @@ async function init() {
   applyOfflineIcons();
   hideLoading();
   appState.paths = await window.electronAPI.getAppPaths();
-  await refreshSetupStatus();
+  await refreshSetupStatus({ showSpinner: true });
   if (appState.setupStatus?.readyForLiveRun) {
     switchView("history");
   } else if (appState.setupStatus?.readyForApp) {

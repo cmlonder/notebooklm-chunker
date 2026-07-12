@@ -7,12 +7,14 @@ function doctorShowsReadyAuth(output) {
 }
 
 function parseDoctorStatus(output, label) {
-  const match = String(output || "").match(new RegExp(`^(OK|FAIL)\\s+${label}\\s+(.+)$`, "im"));
+  const match = String(output || "").match(
+    new RegExp(`^(OK|WARN|FAIL)\\s+${label}\\s+(.+)$`, "im")
+  );
   if (!match) {
     return { ok: false, detail: "Not checked" };
   }
   return {
-    ok: match[1] === "OK",
+    ok: match[1].toUpperCase() === "OK",
     detail: match[2].trim(),
   };
 }

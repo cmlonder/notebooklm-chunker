@@ -25,8 +25,10 @@ fi
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
 "$VENV_DIR/bin/pip" install --quiet "$REPO_ROOT" pyinstaller
 
+# --onedir instead of --onefile: onefile unpacks itself on EVERY invocation
+# (7-10s per command on macOS), which makes the desktop app feel frozen.
 "$VENV_DIR/bin/pyinstaller" \
-  --onefile \
+  --onedir \
   --name nblm \
   --distpath "$BUILD_DIR/dist" \
   --workpath "$BUILD_DIR/build" \
@@ -38,5 +40,5 @@ fi
   "$REPO_ROOT/scripts/sidecar_entry.py"
 
 echo
-echo "Sidecar binary: $BUILD_DIR/dist/nblm"
-"$BUILD_DIR/dist/nblm" --version
+echo "Sidecar binary: $BUILD_DIR/dist/nblm/nblm"
+"$BUILD_DIR/dist/nblm/nblm" --version

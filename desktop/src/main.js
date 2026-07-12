@@ -141,6 +141,10 @@ function nblmBinary() {
   if (cachedNblmBinary) return cachedNblmBinary;
   const exeName = process.platform === 'win32' ? 'nblm.exe' : 'nblm';
   const candidates = [
+    // onedir layout: sidecar/nblm/<exe> next to its _internal directory
+    path.join(process.resourcesPath || '', 'sidecar', 'nblm', exeName),
+    path.resolve(__dirname, '../sidecar/dist/nblm', exeName),
+    // legacy onefile layout
     path.join(process.resourcesPath || '', 'sidecar', exeName),
     path.resolve(__dirname, '../sidecar/dist', exeName),
   ];

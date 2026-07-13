@@ -647,15 +647,70 @@ class NotebookLMPyUploader:
             ) from exc
 
 
-def run_notebooklm_login() -> None:
+def run_notebooklm_login(
+    *,
+    profile: str | None = None,
+    account: str | None = None,
+    all_accounts: bool = False,
+) -> None:
+    command = ["notebooklm"]
+    if profile:
+        command += ["--profile", profile]
+    command.append("login")
+    if account:
+        command += ["--account", account]
+    if all_accounts:
+        command.append("--all-accounts")
     try:
-        subprocess.run(["notebooklm", "login"], check=True)
+        subprocess.run(command, check=True)
     except FileNotFoundError as exc:
         raise UploadError(
             "The `notebooklm` CLI was not found. Install `notebooklm-chunker` first."
         ) from exc
     except subprocess.CalledProcessError as exc:
         raise UploadError("`notebooklm login` failed.") from exc
+
+
+def run_notebooklm_profile(args: list[str]) -> None:
+    """Pass through to `notebooklm profile ...` for multi-account management."""
+
+    try:
+        subprocess.run(["notebooklm", "profile", *args], check=True)
+    except FileNotFoundError as exc:
+        raise UploadError(
+            "The `notebooklm` CLI was not found. Install `notebooklm-chunker` first."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise UploadError("`notebooklm profile` failed.") from exc
+
+
+def list_notebooklm_profiles() -> list[dict[str, Any]]:
+    """Return notebooklm-py auth profiles with account email and active flag."""
+
+    try:
+        from notebooklm import paths
+        from notebooklm._auth.account import get_account_email_for_storage
+    except Exception:
+        return []
+
+    try:
+        names = list(paths.list_profiles())
+    except Exception:
+        names = []
+    try:
+        active = paths.get_active_profile() or "default"
+    except Exception:
+        active = "default"
+
+    profiles: list[dict[str, Any]] = []
+    for name in names:
+        email = None
+        try:
+            email = get_account_email_for_storage(paths.get_storage_path(name))
+        except Exception:
+            email = None
+        profiles.append({"name": name, "email": email, "active": name == active})
+    return profiles
 
 
 def run_notebooklm_logout() -> tuple[list[str], str | None]:

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runNBLM: (options) => ipcRenderer.invoke('run-nblm', options),
   sendNBLMInput: (input) => ipcRenderer.invoke('send-nblm-input', input),
   stopNBLM: () => ipcRenderer.invoke('stop-nblm'),
+  setActiveProfile: (name) => ipcRenderer.invoke('set-active-profile', name),
   
   // App info
   getVersion: () => ipcRenderer.invoke('get-version'),

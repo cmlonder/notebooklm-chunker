@@ -1,5 +1,10 @@
-import { appState, clearLocalSessionState } from "./state.js";
-import { showLoading, hideLoading, updateLoginPromptUI, showToast } from "./dom.js";
+import {
+  appState,
+  clearLocalSessionState,
+  loadActiveProfile,
+  persistActiveProfile,
+} from "./state.js";
+import { showLoading, hideLoading, updateLoginPromptUI, showToast, escapeHtml } from "./dom.js";
 import { switchView, closeUserMenu } from "./navigation.js";
 
 function doctorShowsReadyAuth(output) {
@@ -122,6 +127,7 @@ function renderSetupView() {
   if (signInButton) {
     signInButton.disabled = !status.readyForApp;
   }
+  renderProfileSelector();
 }
 
 async function refreshSetupStatus({ showSpinner = false } = {}) {
@@ -136,12 +142,121 @@ async function refreshSetupStatus({ showSpinner = false } = {}) {
     }
     appState.setupStatus = summarizeSetupStatus(cliCheck, doctorResult);
     appState.isAuthenticated = Boolean(appState.setupStatus.readyForLiveRun);
+    if (cliCheck.success) {
+      await loadProfiles();
+    }
     renderSetupView();
     return appState.setupStatus;
   } finally {
     if (showSpinner) {
       hideLoading();
     }
+  }
+}
+
+async function applyActiveProfile(name) {
+  appState.activeProfile = name || null;
+  persistActiveProfile(appState.activeProfile);
+  try {
+    await window.electronAPI.setActiveProfile(appState.activeProfile);
+  } catch (error) {
+    // Non-fatal: the engine falls back to the default profile.
+  }
+}
+
+async function loadProfiles() {
+  try {
+    const result = await window.electronAPI.runNBLM({ command: "list-profiles", args: [] });
+    if (!result.success) return;
+    const profiles = JSON.parse(String(result.output || "[]").trim() || "[]");
+    appState.profiles = Array.isArray(profiles) ? profiles : [];
+  } catch (error) {
+    appState.profiles = [];
+    return;
+  }
+
+  // Reconcile the persisted selection with what actually exists on disk.
+  const stored = appState.activeProfile || loadActiveProfile();
+  const names = appState.profiles.map((p) => p.name);
+  let chosen = stored && names.includes(stored) ? stored : null;
+  if (!chosen) {
+    const active = appState.profiles.find((p) => p.active);
+    chosen = active ? active.name : names[0] || null;
+  }
+  if (chosen !== appState.activeProfile) {
+    await applyActiveProfile(chosen);
+  } else {
+    await window.electronAPI.setActiveProfile(chosen);
+  }
+  renderProfileSelector();
+}
+
+function renderProfileSelector() {
+  const row = document.getElementById("setup-account-row");
+  const select = document.getElementById("setup-profile-select");
+  if (!row || !select) return;
+  const profiles = appState.profiles || [];
+  // Only worth showing once there is a real choice to make.
+  if (profiles.length < 1) {
+    row.classList.add("hidden");
+    return;
+  }
+  row.classList.remove("hidden");
+  select.innerHTML = profiles
+    .map((p) => {
+      const label = p.email ? `${p.name} · ${p.email}` : p.name;
+      const selected = p.name === appState.activeProfile ? " selected" : "";
+      return `<option value="${escapeHtml(p.name)}"${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
+async function switchProfile(name) {
+  if (!name || name === appState.activeProfile) return;
+  showLoading(`Switching to ${name}...`);
+  try {
+    await applyActiveProfile(name);
+    await refreshSetupStatus();
+    showToast(`Active account: ${name}`);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    hideLoading();
+  }
+}
+
+async function addAccount() {
+  const name = (window.prompt(
+    "New profile name (e.g. work, personal). You'll sign into Google for this account:",
+  ) || "").trim();
+  if (!name) return;
+  if ((appState.profiles || []).some((p) => p.name === name)) {
+    alert(`A profile named "${name}" already exists. Pick it from the list to use it.`);
+    return;
+  }
+  appState.loginProcessActive = true;
+  appState.loginAwaitingEnter = false;
+  updateLoginPromptUI();
+  showLoading(`Complete the Google login for "${name}" in your browser.`);
+  try {
+    const result = await window.electronAPI.runNBLM({
+      command: "login",
+      args: ["--profile", name],
+    });
+    if (!result.success) {
+      throw new Error(result.error || result.output || "NotebookLM login failed.");
+    }
+    await applyActiveProfile(name);
+    appState.loginProcessActive = false;
+    appState.loginAwaitingEnter = false;
+    updateLoginPromptUI();
+    await confirmLogin();
+  } catch (error) {
+    appState.loginProcessActive = false;
+    appState.loginAwaitingEnter = false;
+    hideLoading();
+    updateLoginPromptUI();
+    alert(error.message);
   }
 }
 
@@ -260,4 +375,8 @@ export {
   switchAccount,
   openSetupView,
   recheckDesktopSetup,
+  switchProfile,
+  addAccount,
+  loadProfiles,
+  applyActiveProfile,
 };

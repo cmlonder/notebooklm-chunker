@@ -1,6 +1,8 @@
 const appState = {
   isAuthenticated: false,
   setupStatus: null,
+  profiles: [],
+  activeProfile: null,
   currentView: "auth",
   userMenuOpen: false,
   isResumeMode: false,
@@ -161,6 +163,26 @@ function loadNblmSettings() {
 
 function persistNblmSettings(settings) {
   localStorage.setItem(nblmSettingsStorageKey(), JSON.stringify(settings));
+}
+
+function activeProfileStorageKey() {
+  return "nblm-desktop-active-profile-v1";
+}
+
+function loadActiveProfile() {
+  try {
+    return localStorage.getItem(activeProfileStorageKey()) || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function persistActiveProfile(name) {
+  if (name) {
+    localStorage.setItem(activeProfileStorageKey(), name);
+  } else {
+    localStorage.removeItem(activeProfileStorageKey());
+  }
 }
 
 function getMaxParallel(studioName) {
@@ -352,6 +374,8 @@ export {
   nblmSettingsStorageKey,
   loadNblmSettings,
   persistNblmSettings,
+  loadActiveProfile,
+  persistActiveProfile,
   getMaxParallel,
   getMaxParallelChunks,
   chunkOutputRoot,

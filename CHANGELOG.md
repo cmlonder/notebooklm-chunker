@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Multi-account support: `nblm --profile <name>` on every auth-touching command,
+  `nblm login --account <email>` / `--all-accounts`, and `nblm profile ...`
+  passthrough (list, create, switch, rename, delete)
+- `nblm list-profiles` prints auth profiles with account email and active flag
+  as JSON for desktop integrations
+- Desktop account switcher: pick the active account on the setup screen or add a
+  new one; every engine call is scoped to the selected profile
 - PDF chunking now uses the document's embedded table of contents (bookmarks)
   when present: heading text and hierarchy levels come from the publisher's
   outline instead of text heuristics
@@ -44,6 +51,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow split into distinct jobs
 
 ### Fixed
+- Auth detection failed against notebooklm-py 0.7, which moved auth state into
+  per-profile directories (`profiles/<name>/`); `nblm doctor` reported "not
+  signed in" and the desktop app showed "login is not ready" even after a
+  successful login. Logout also silently failed to clear the new-layout session.
+  `nblm doctor` now also reports which profile/account is active
 - Quiz and flashcards generation crashed against notebooklm-py 0.7.x because
   the upstream `QuizQuantity.MORE` option was removed; `quantity = "more"` in
   existing configs now maps to `standard`

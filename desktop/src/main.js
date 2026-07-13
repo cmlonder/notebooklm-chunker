@@ -121,16 +121,27 @@ function appendStudioQueueLog(projectPath, jobId, channel, text) {
   return writeStudioQueueState(projectPath, state);
 }
 
+// The account/profile the whole app operates on. Set from the renderer so
+// every `nblm` spawn (login, sync, studios, listings) targets one account and
+// they never cross-contaminate.
+let activeProfile = null;
+
 function buildNblmEnv() {
   const projectRoot = path.resolve(__dirname, '../..');
   const venvBin = path.join(projectRoot, '.venv/bin');
   const basePath = resolvedShellPath || process.env.PATH || '';
   const pathParts = fs.existsSync(venvBin) ? [venvBin, basePath] : [basePath];
-  return {
+  const env = {
     ...process.env,
     PYTHONPATH: projectRoot,
     PATH: pathParts.join(path.delimiter),
   };
+  if (activeProfile) {
+    env.NOTEBOOKLM_PROFILE = activeProfile;
+  } else {
+    delete env.NOTEBOOKLM_PROFILE;
+  }
+  return env;
 }
 
 let cachedNblmBinary = null;
@@ -544,6 +555,10 @@ ipcMain.handle('send-nblm-input', async (event, input) => {
   return { success: false, error: 'No process' };
 });
 
+ipcMain.handle('set-active-profile', async (event, name) => {
+  activeProfile = (typeof name === 'string' && name.trim()) ? name.trim() : null;
+  return { success: true, activeProfile };
+});
 ipcMain.handle('get-version', async () => app.getVersion());
 ipcMain.handle('read-file', async (event, filePath) => { try { return { success: true, content: fs.readFileSync(filePath, 'utf-8') }; } catch (err) { return { success: false, error: err.message }; } });
 ipcMain.handle('write-file', async (event, filePath, content) => { try { fs.writeFileSync(filePath, content, 'utf-8'); return { success: true }; } catch (err) { return { success: false, error: err.message }; } });

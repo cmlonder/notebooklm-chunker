@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import tempfile
 import textwrap
 from contextlib import redirect_stderr, redirect_stdout
@@ -206,7 +207,34 @@ class CliTests(TestCase):
                     exit_code = main(["login"])
 
         self.assertEqual(exit_code, 0)
-        mocked_login.assert_called_once_with()
+        mocked_login.assert_called_once_with(profile=None, account=None, all_accounts=False)
+
+    def test_login_command_forwards_profile_and_account(self) -> None:
+        stdout = io.StringIO()
+        with patch("notebooklm_chunker.cli.run_notebooklm_login") as mocked_login:
+            with patch.dict("os.environ", {}, clear=False):
+                with redirect_stdout(stdout):
+                    exit_code = main(["login", "--profile", "work", "--account", "a@b.com"])
+                self.assertEqual(os.environ.get("NOTEBOOKLM_PROFILE"), "work")
+
+        self.assertEqual(exit_code, 0)
+        mocked_login.assert_called_once_with(
+            profile="work", account="a@b.com", all_accounts=False
+        )
+
+    def test_profile_command_passes_through(self) -> None:
+        with patch("notebooklm_chunker.cli.run_notebooklm_profile") as mocked_profile:
+            exit_code = main(["profile", "list"])
+
+        self.assertEqual(exit_code, 0)
+        mocked_profile.assert_called_once_with(["list"])
+
+    def test_profile_command_defaults_to_list(self) -> None:
+        with patch("notebooklm_chunker.cli.run_notebooklm_profile") as mocked_profile:
+            exit_code = main(["profile"])
+
+        self.assertEqual(exit_code, 0)
+        mocked_profile.assert_called_once_with(["list"])
 
     def test_logout_command_clears_local_auth_state(self) -> None:
         stdout = io.StringIO()

@@ -173,11 +173,14 @@ def _auth_check() -> DoctorCheck:
         )
 
     notebooklm_home = _resolve_notebooklm_home()
-    if notebooklm_auth_paths(notebooklm_home):
+    auth_paths = notebooklm_auth_paths(notebooklm_home)
+    if auth_paths:
+        account = _active_account_summary(auth_paths)
+        summary = f"Signed in as {account}" if account else "Local auth state found"
         return DoctorCheck(
             name="auth",
             status="ok",
-            summary=f"Local auth state found under {notebooklm_home.expanduser()}",
+            summary=summary,
         )
 
     return DoctorCheck(
@@ -186,6 +189,33 @@ def _auth_check() -> DoctorCheck:
         summary="No NotebookLM auth state found.",
         hint="Run `nblm login` before live uploads.",
     )
+
+
+def _active_account_summary(auth_paths: list[Path]) -> str | None:
+    """Best-effort 'profile · email' label for the signed-in account."""
+
+    profile = os.getenv("NOTEBOOKLM_PROFILE")
+    if not profile:
+        # Infer the profile name from the storage path (`profiles/<name>/...`).
+        for path in auth_paths:
+            if path.parent.parent.name == "profiles":
+                profile = path.parent.name
+                break
+
+    email: str | None = None
+    try:
+        from notebooklm._auth.account import get_account_email_for_storage
+
+        for path in auth_paths:
+            if path.name == "storage_state.json":
+                email = get_account_email_for_storage(path)
+                if email:
+                    break
+    except Exception:
+        email = None
+
+    parts = [part for part in (profile, email) if part]
+    return " · ".join(dict.fromkeys(parts)) if parts else None
 
 
 def _playwright_check() -> DoctorCheck:

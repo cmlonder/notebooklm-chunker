@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -18,8 +19,10 @@ from notebooklm_chunker.uploaders.notebooklm_py import (
     RUN_STATE_BASENAME,
     NotebookLMPyUploader,
     StudioResult,
+    list_notebooklm_profiles,
     run_notebooklm_login,
     run_notebooklm_logout,
+    run_notebooklm_profile,
 )
 
 
@@ -34,26 +37,56 @@ def build_parser() -> argparse.ArgumentParser:
     login_parser = subparsers.add_parser(
         "login", help="Run `notebooklm login` for notebooklm-py authentication."
     )
+    _add_profile_argument(login_parser)
+    login_parser.add_argument(
+        "--account",
+        help="Pick a specific signed-in Google account by email during login.",
+    )
+    login_parser.add_argument(
+        "--all-accounts",
+        action="store_true",
+        help="Extract every signed-in Google account into its own auto-named profile.",
+    )
     login_parser.set_defaults(handler=_handle_login)
 
     logout_parser = subparsers.add_parser(
         "logout",
         help="Clear notebooklm-py local authentication state from disk.",
     )
+    _add_profile_argument(logout_parser)
     logout_parser.set_defaults(handler=_handle_logout)
+
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="Manage NotebookLM authentication profiles (create, list, switch, ...).",
+    )
+    profile_parser.add_argument(
+        "profile_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments passed through to `notebooklm profile` (e.g. list, create work).",
+    )
+    profile_parser.set_defaults(handler=_handle_profile)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
         help="Check config discovery, auth, Playwright, PDF parser, and notebooklm CLI readiness.",
     )
     _add_config_argument(doctor_parser)
+    _add_profile_argument(doctor_parser)
     doctor_parser.set_defaults(handler=_handle_doctor)
 
     list_notebooks_parser = subparsers.add_parser(
         "list-notebooks",
         help="List available NotebookLM notebooks as JSON for desktop integrations.",
     )
+    _add_profile_argument(list_notebooks_parser)
     list_notebooks_parser.set_defaults(handler=_handle_list_notebooks)
+
+    list_profiles_parser = subparsers.add_parser(
+        "list-profiles",
+        help="List NotebookLM auth profiles (accounts) as JSON for desktop integrations.",
+    )
+    list_profiles_parser.set_defaults(handler=_handle_list_profiles)
 
     list_artifacts_parser = subparsers.add_parser(
         "list-artifacts",
@@ -62,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     list_artifacts_parser.add_argument(
         "--notebook-id", required=True, help="Notebook ID to inspect."
     )
+    _add_profile_argument(list_artifacts_parser)
     list_artifacts_parser.set_defaults(handler=_handle_list_artifacts)
 
     delete_artifacts_parser = subparsers.add_parser(
@@ -77,6 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Artifact ID to delete. Repeat as needed.",
     )
+    _add_profile_argument(delete_artifacts_parser)
     delete_artifacts_parser.set_defaults(handler=_handle_delete_artifacts)
 
     inspect_parser = subparsers.add_parser(
@@ -141,6 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reuse saved run state and upload only chunks whose content changed since the last upload.",
     )
+    _add_profile_argument(upload_parser)
     upload_parser.set_defaults(handler=_handle_upload)
 
     studios_parser = subparsers.add_parser(
@@ -162,6 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Restrict Studio generation to the given NotebookLM source ID. Repeat as needed.",
     )
+    _add_profile_argument(studios_parser)
     studios_parser.set_defaults(handler=_handle_studios)
 
     run_parser = subparsers.add_parser(
@@ -180,6 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="How many chunk upload + per-chunk Studio pipelines to process at once.",
     )
+    _add_profile_argument(run_parser)
     run_parser.set_defaults(handler=_handle_run)
 
     resume_parser = subparsers.add_parser(
@@ -197,6 +235,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="How many chunk upload + per-chunk Studio pipelines to process at once.",
     )
+    _add_profile_argument(resume_parser)
     resume_parser.set_defaults(handler=_handle_resume)
     return parser
 
@@ -250,13 +289,40 @@ def _add_config_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", help="Path to nblm.toml, .nblm.toml, or pyproject.toml.")
 
 
+def _add_profile_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--profile",
+        help="NotebookLM auth profile (account) to use. Defaults to the active profile.",
+    )
+
+
+def _apply_profile(args: argparse.Namespace) -> None:
+    """Scope this invocation to a named notebooklm-py profile via the env var."""
+
+    profile = getattr(args, "profile", None)
+    if profile:
+        os.environ["NOTEBOOKLM_PROFILE"] = profile
+
+
 def _handle_login(args: argparse.Namespace) -> int:
-    run_notebooklm_login()
+    _apply_profile(args)
+    run_notebooklm_login(
+        profile=getattr(args, "profile", None),
+        account=getattr(args, "account", None),
+        all_accounts=getattr(args, "all_accounts", False),
+    )
     print("NotebookLM login completed.")
     return 0
 
 
+def _handle_profile(args: argparse.Namespace) -> int:
+    passthrough = list(getattr(args, "profile_args", None) or [])
+    run_notebooklm_profile(passthrough or ["list"])
+    return 0
+
+
 def _handle_logout(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     removed_paths, auth_json_note = run_notebooklm_logout()
     if removed_paths:
         print("Removed local NotebookLM auth state:")
@@ -270,24 +336,33 @@ def _handle_logout(args: argparse.Namespace) -> int:
 
 
 def _handle_doctor(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     report = run_doctor(_path_or_none(args.config))
     print(format_doctor_report(report))
     return report.exit_code
 
 
+def _handle_list_profiles(args: argparse.Namespace) -> int:
+    print(json.dumps(list_notebooklm_profiles(), ensure_ascii=False))
+    return 0
+
+
 def _handle_list_notebooks(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     uploader = NotebookLMPyUploader()
     print(json.dumps(uploader.list_notebooks(), ensure_ascii=False))
     return 0
 
 
 def _handle_list_artifacts(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     uploader = NotebookLMPyUploader()
     print(json.dumps(uploader.list_artifacts(args.notebook_id), ensure_ascii=False))
     return 0
 
 
 def _handle_delete_artifacts(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     artifact_ids = list(args.artifact_id or [])
     if not artifact_ids:
         raise ChunkerError("At least one `--artifact-id` is required for `delete-artifacts`.")
@@ -356,6 +431,7 @@ def _handle_prepare(args: argparse.Namespace) -> int:
 
 
 def _handle_upload(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     config = load_config(_path_or_none(args.config))
     directory = _resolve_chunks_directory(args.directory, config)
     _require_directory(directory, label="Chunks directory")
@@ -377,6 +453,7 @@ def _handle_upload(args: argparse.Namespace) -> int:
 
 
 def _handle_studios(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     config = load_config(_path_or_none(args.config))
     notebook_id = args.notebook_id or config.notebook.id
     run_state_path = _resolve_run_state_path(config)
@@ -422,10 +499,12 @@ def _handle_studios(args: argparse.Namespace) -> int:
 
 
 def _handle_run(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     return _run_pipeline(args, resume=False)
 
 
 def _handle_resume(args: argparse.Namespace) -> int:
+    _apply_profile(args)
     return _run_pipeline(args, resume=True)
 
 

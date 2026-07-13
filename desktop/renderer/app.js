@@ -1,4 +1,9 @@
-import { appState, loadPromptLibrary, loadStudioSettings } from "./modules/state.js";
+import {
+  appState,
+  loadPromptLibrary,
+  loadStudioSettings,
+  loadActiveProfile,
+} from "./modules/state.js";
 import {
   applyOfflineIcons,
   hideLoading,
@@ -20,6 +25,9 @@ import {
   switchAccount,
   openSetupView,
   recheckDesktopSetup,
+  switchProfile,
+  addAccount,
+  applyActiveProfile,
 } from "./modules/setup.js";
 import {
   renderPromptsView,
@@ -112,6 +120,12 @@ async function init() {
   applyOfflineIcons();
   hideLoading();
   appState.paths = await window.electronAPI.getAppPaths();
+  // Restore the last-used account before any engine call so every command
+  // targets the right profile from the very first request.
+  const savedProfile = loadActiveProfile();
+  if (savedProfile) {
+    await applyActiveProfile(savedProfile);
+  }
   await refreshSetupStatus({ showSpinner: true });
   if (appState.setupStatus?.readyForLiveRun) {
     switchView("history");
@@ -197,6 +211,8 @@ Object.assign(window, {
   login,
   confirmLogin,
   recheckDesktopSetup,
+  switchProfile,
+  addAccount,
   toggleUserMenu,
   closeUserMenu,
   openSetupView,

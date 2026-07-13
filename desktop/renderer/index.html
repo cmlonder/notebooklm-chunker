@@ -102,6 +102,16 @@
               </div>
               <span id="setup-auth-badge" class="setup-status-pill">Checking</span>
             </div>
+            <div id="setup-account-row" class="setup-account-row hidden">
+              <div class="setup-account-head">
+                <span class="material-symbols-outlined !text-base">switch_account</span>
+                <span>Active account</span>
+              </div>
+              <div class="setup-account-controls">
+                <select id="setup-profile-select" onchange="window.switchProfile(this.value)" class="setup-profile-select"></select>
+                <button onclick="window.addAccount()" class="secondary-action-btn inline-flex items-center gap-1 !py-2 !px-3"><span class="material-symbols-outlined !text-sm">add</span><span>Add account</span></button>
+              </div>
+            </div>
             <div class="setup-status-card">
               <div class="setup-status-head">
                 <span class="material-symbols-outlined">auto_stories</span>

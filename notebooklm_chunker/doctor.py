@@ -173,10 +173,7 @@ def _auth_check() -> DoctorCheck:
         )
 
     notebooklm_home = _resolve_notebooklm_home()
-    storage_state = notebooklm_home / "storage_state.json"
-    context_json = notebooklm_home / "context.json"
-    browser_profile = notebooklm_home / "browser_profile"
-    if storage_state.exists() or context_json.exists() or browser_profile.exists():
+    if notebooklm_auth_paths(notebooklm_home):
         return DoctorCheck(
             name="auth",
             status="ok",
@@ -285,3 +282,27 @@ def _resolve_notebooklm_home() -> Path:
     if configured:
         return Path(configured).expanduser()
     return Path.home() / ".notebooklm"
+
+
+# notebooklm-py 0.7 moved auth state from the home root into per-profile
+# subdirectories (`profiles/<name>/...`). Detect both so a successful login on
+# a current notebooklm-py isn't reported as "not signed in".
+_AUTH_ARTIFACT_NAMES = ("storage_state.json", "context.json", "browser_profile")
+
+
+def notebooklm_auth_paths(notebooklm_home: Path) -> list[Path]:
+    """Return existing notebooklm-py auth artifacts under both layouts."""
+
+    home = notebooklm_home.expanduser()
+    roots = [home]
+    profiles_dir = home / "profiles"
+    if profiles_dir.is_dir():
+        roots.extend(child for child in profiles_dir.iterdir() if child.is_dir())
+
+    found: list[Path] = []
+    for root in roots:
+        for name in _AUTH_ARTIFACT_NAMES:
+            candidate = root / name
+            if candidate.exists():
+                found.append(candidate)
+    return found

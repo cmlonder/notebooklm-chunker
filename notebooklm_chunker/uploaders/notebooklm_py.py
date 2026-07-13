@@ -659,21 +659,22 @@ def run_notebooklm_login() -> None:
 
 
 def run_notebooklm_logout() -> tuple[list[str], str | None]:
+    from ..doctor import notebooklm_auth_paths
+
     notebooklm_home = _notebooklm_home()
     removed_paths: list[str] = []
 
-    for candidate in (
-        notebooklm_home / "storage_state.json",
-        notebooklm_home / "context.json",
-    ):
-        if candidate.exists():
-            candidate.unlink()
-            removed_paths.append(str(candidate))
-
-    browser_profile = notebooklm_home / "browser_profile"
-    if browser_profile.exists():
-        shutil.rmtree(browser_profile)
-        removed_paths.append(str(browser_profile))
+    # Covers both the pre-0.7 home-root layout and the newer per-profile
+    # (`profiles/<name>/...`) layout so sign-out actually clears the session.
+    for candidate in notebooklm_auth_paths(notebooklm_home):
+        try:
+            if candidate.is_dir():
+                shutil.rmtree(candidate)
+            else:
+                candidate.unlink()
+        except FileNotFoundError:
+            continue
+        removed_paths.append(str(candidate))
 
     auth_json_note = None
     if os.getenv("NOTEBOOKLM_AUTH_JSON"):

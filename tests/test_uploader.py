@@ -1720,6 +1720,29 @@ class UploaderTests(TestCase):
                 },
             )
 
+    def test_run_logout_removes_profile_layout_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            profile = root / "profiles" / "default"
+            profile.mkdir(parents=True)
+            (profile / "storage_state.json").write_text("{}", encoding="utf-8")
+            browser_profile = profile / "browser_profile"
+            browser_profile.mkdir()
+            (browser_profile / "cookies").write_text("data", encoding="utf-8")
+
+            with patch.dict("os.environ", {"NOTEBOOKLM_HOME": str(root)}, clear=False):
+                removed_paths, _ = run_notebooklm_logout()
+
+            self.assertFalse((profile / "storage_state.json").exists())
+            self.assertFalse(browser_profile.exists())
+            self.assertEqual(
+                set(removed_paths),
+                {
+                    str(profile / "storage_state.json"),
+                    str(browser_profile),
+                },
+            )
+
     def test_ingest_directory_generates_report_and_slide_per_chunk(self) -> None:
         uploader = NotebookLMPyUploader()
 

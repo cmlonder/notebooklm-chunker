@@ -128,13 +128,22 @@ def _parse_pdf_with_fitz(
     try:
         toc_entries = _usable_pdf_toc(document)
         page_entries: list[tuple[int, list[str]]] = []
+        page_font_records: list[tuple[int, list[tuple[str, float]]]] = []
         for page_number in _pdf_page_numbers(len(document), skip_ranges=skip_ranges):
             page = document.load_page(page_number - 1)
             page_entries.append((page_number, page.get_text("text").splitlines()))
+            # Font sizes only matter for the heuristic path; skip the extra
+            # `dict` extraction entirely when a trusted TOC is present.
+            if not toc_entries:
+                page_font_records.append((page_number, _page_font_records(page)))
     finally:
         document.close()
     if toc_entries:
         return _blocks_from_pdf_pages_with_toc(page_entries, toc_entries)
+
+    heading_map = _font_heading_map(page_font_records)
+    if heading_map:
+        return _blocks_from_pdf_pages_with_fonts(page_entries, heading_map)
     return _blocks_from_pdf_pages(page_entries)
 
 
@@ -242,6 +251,162 @@ def _blocks_from_pdf_pages(page_entries: list[tuple[int, list[str]]]) -> list[Bl
     blocks: list[Block] = []
     for page_number, lines in _clean_pdf_page_entries(page_entries):
         blocks.extend(_blocks_from_text(lines, page=page_number))
+    return blocks
+
+
+# Heading levels are assigned by how far a line's font exceeds body text,
+# relative to the body size (largest jump -> level 1). Ratio bands are used
+# rather than a global ranking of every distinct size on purpose: PDFs are full
+# of one-off decorative sizes (cover art, drop caps, pull quotes) that are larger
+# than real chapter headings, and ranking them would bury genuine headings at
+# deep levels and invert the hierarchy. Bands keep the mapping shallow and stable
+# across documents. Ordered largest-first; the smallest band ratio doubles as the
+# heading-candidacy threshold.
+_FONT_LEVEL_BANDS: tuple[tuple[float, int], ...] = ((1.4, 1), (1.2, 2))
+_FONT_HEADING_RATIO = _FONT_LEVEL_BANDS[-1][0]
+
+
+def _round_font_size(size: float) -> float:
+    """Quantize raw span sizes so near-identical fonts collapse to one bucket."""
+    return round(float(size) * 2) / 2
+
+
+def _page_font_records(page: object) -> list[tuple[str, float]]:
+    """Return `(line_text, representative_size)` for each visual line on a page.
+
+    Guarded so a page with no extractable structure simply contributes nothing
+    to the font analysis rather than raising.
+    """
+    get_text = getattr(page, "get_text", None)
+    if get_text is None:
+        return []
+    try:
+        page_dict = get_text("dict")
+    except Exception:
+        return []
+    if not isinstance(page_dict, dict):
+        return []
+    return _page_font_lines(page_dict)
+
+
+def _page_font_lines(page_dict: dict) -> list[tuple[str, float]]:
+    """Walk a PyMuPDF ``dict`` page into per-line text + dominant font size.
+
+    A line's representative size is the size covering the most characters, so a
+    single oversized drop-cap does not drag a body line into heading territory.
+    """
+    records: list[tuple[str, float]] = []
+    for block in page_dict.get("blocks", []) or []:
+        for line in block.get("lines", []) or []:
+            spans = line.get("spans", []) or []
+            size_weights: dict[float, int] = {}
+            texts: list[str] = []
+            for span in spans:
+                text = span.get("text", "") or ""
+                texts.append(text)
+                size = span.get("size")
+                if size is None:
+                    continue
+                char_count = len(text.strip())
+                if char_count <= 0:
+                    continue
+                rounded = _round_font_size(size)
+                size_weights[rounded] = size_weights.get(rounded, 0) + char_count
+            line_text = _normalize_space("".join(texts))
+            if not line_text or not size_weights:
+                continue
+            representative = max(size_weights.items(), key=lambda item: (item[1], item[0]))[0]
+            records.append((line_text, representative))
+    return records
+
+
+def _dominant_font_size(line_records: list[tuple[str, float]]) -> float | None:
+    """Character-weighted modal size across the document — i.e. the body size."""
+    weights: dict[float, int] = {}
+    for text, size in line_records:
+        weights[size] = weights.get(size, 0) + len(text)
+    if not weights:
+        return None
+    # Prefer the most common size; on ties prefer the smaller one, since body
+    # text is more prevalent and smaller than headings.
+    return max(weights.items(), key=lambda item: (item[1], -item[0]))[0]
+
+
+def _font_size_level(size: float, body_size: float) -> int | None:
+    """Level for a single font size via ratio bands, or None if not heading-sized."""
+    if body_size <= 0:
+        return None
+    ratio = size / body_size
+    for min_ratio, level in _FONT_LEVEL_BANDS:
+        if ratio >= min_ratio:
+            return level
+    return None
+
+
+def _font_heading_levels(
+    line_records: list[tuple[str, float]],
+    body_size: float | None,
+) -> dict[float, int]:
+    """Map each heading-sized font present in the document to a level.
+
+    Returns an empty mapping when nothing is meaningfully larger than body
+    (e.g. a single-size document), so callers fall back to the text heuristic
+    instead of flagging everything.
+    """
+    if body_size is None or body_size <= 0:
+        return {}
+    levels: dict[float, int] = {}
+    for _, size in line_records:
+        level = _font_size_level(size, body_size)
+        if level is not None:
+            levels[size] = level
+    return levels
+
+
+def _font_heading_map(
+    page_font_records: list[tuple[int, list[tuple[str, float]]]],
+) -> dict[tuple[int, str], int]:
+    """Decide which `(page, line_text)` pairs are font-based headings + levels.
+
+    Pure decision seam: given per-page line/size records, compute the body size,
+    bucket larger sizes into levels, and return the heading level for each
+    qualifying line. Sanity gates (length/punctuation/letters) are applied later,
+    at the point the line is turned into a block, so this stays a size-only view.
+    """
+    all_records = [record for _, records in page_font_records for record in records]
+    body_size = _dominant_font_size(all_records)
+    size_levels = _font_heading_levels(all_records, body_size)
+    if not size_levels:
+        return {}
+
+    heading_map: dict[tuple[int, str], int] = {}
+    for page_number, records in page_font_records:
+        for text, size in records:
+            level = size_levels.get(size)
+            if level is None:
+                continue
+            key = (page_number, text)
+            existing = heading_map.get(key)
+            # A repeated line keeps its strongest (largest-font) level.
+            if existing is None or level < existing:
+                heading_map[key] = level
+    return heading_map
+
+
+def _blocks_from_pdf_pages_with_fonts(
+    page_entries: list[tuple[int, list[str]]],
+    heading_map: dict[tuple[int, str], int],
+) -> list[Block]:
+    blocks: list[Block] = []
+    for page_number, lines in _clean_pdf_page_entries(page_entries):
+        page_font_headings = {
+            text: level
+            for (record_page, text), level in heading_map.items()
+            if record_page == page_number
+        }
+        blocks.extend(
+            _blocks_from_text(lines, page=page_number, font_heading_levels=page_font_headings)
+        )
     return blocks
 
 
@@ -499,7 +664,12 @@ def _blocks_from_markdown_lines(lines: list[str]) -> list[Block]:
     return blocks
 
 
-def _blocks_from_text(lines: list[str], page: int | None = None) -> list[Block]:
+def _blocks_from_text(
+    lines: list[str],
+    page: int | None = None,
+    *,
+    font_heading_levels: dict[str, int] | None = None,
+) -> list[Block]:
     blocks: list[Block] = []
     paragraph: list[str] = []
     index = 0
@@ -543,6 +713,25 @@ def _blocks_from_text(lines: list[str], page: int | None = None) -> list[Block]:
                 )
             )
             index += 2
+            continue
+
+        # Font signal (fitz path only): a line rendered noticeably larger than
+        # body text is very likely a heading even when the text heuristic would
+        # veto it (e.g. two short heading lines in a row). Its size also gives a
+        # real level. We still require the textual sanity gates so oversized body
+        # sentences (promo blurbs, pull quotes) are not mistaken for headings.
+        font_level = (
+            font_heading_levels.get(_normalize_space(current)) if font_heading_levels else None
+        )
+        if font_level is not None and _passes_heading_gates(current) and _title_case_like_or_upper(
+            current
+        ):
+            flush_paragraph()
+            normalized = current.title() if current.isupper() else current
+            blocks.append(
+                Block(kind="heading", text=_normalize_space(normalized), level=font_level, page=page)
+            )
+            index += 1
             continue
 
         if _looks_like_heading(current, next_line):
@@ -589,6 +778,10 @@ def _passes_heading_gates(line: str) -> bool:
 def _title_case_like(line: str) -> bool:
     words = line.split()
     return sum(word[:1].isupper() for word in words) >= max(1, len(words) - 1)
+
+
+def _title_case_like_or_upper(line: str) -> bool:
+    return line.isupper() or _title_case_like(line)
 
 
 def _normalize_space(text: str) -> str:

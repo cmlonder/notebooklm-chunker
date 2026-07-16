@@ -10,6 +10,11 @@ const {
   deriveProjectStatus,
   buildStudiosToml,
   parseNotebookId,
+  parseSkipRanges,
+  skipRangesToArgs,
+  countSkippedPages,
+  stripLeadingNumbering,
+  normalizeTitleCase,
 } = require("../renderer/project-utils.js");
 
 test("slugifyStem creates stable lowercase project stems", () => {
@@ -143,4 +148,84 @@ test("matchesQuery handles missing text safely", () => {
   assert.equal(matchesQuery(null, "x"), false);
   assert.equal(matchesQuery(undefined, "x"), false);
   assert.equal(matchesQuery(null, ""), true);
+});
+
+test("parseSkipRanges parses ranges and single pages", () => {
+  assert.deepEqual(parseSkipRanges("1-8, 12, 399-420"), [[1, 8], [12, 12], [399, 420]]);
+  assert.deepEqual(parseSkipRanges("5"), [[5, 5]]);
+  assert.deepEqual(parseSkipRanges("1 - 8"), [[1, 8]]);
+});
+
+test("parseSkipRanges ignores blanks and empty input", () => {
+  assert.deepEqual(parseSkipRanges(""), []);
+  assert.deepEqual(parseSkipRanges("   "), []);
+  assert.deepEqual(parseSkipRanges(null), []);
+  assert.deepEqual(parseSkipRanges(undefined), []);
+  assert.deepEqual(parseSkipRanges("1-8, , 12"), [[1, 8], [12, 12]]);
+});
+
+test("parseSkipRanges sorts, merges overlaps and adjacency", () => {
+  assert.deepEqual(parseSkipRanges("12, 1-8"), [[1, 8], [12, 12]]);
+  assert.deepEqual(parseSkipRanges("1-8, 5-10"), [[1, 10]]);
+  assert.deepEqual(parseSkipRanges("1-8, 9-10"), [[1, 10]]);
+  assert.deepEqual(parseSkipRanges("1-8, 10-12"), [[1, 8], [10, 12]]);
+});
+
+test("parseSkipRanges drops malformed tokens and normalizes reversed ranges", () => {
+  assert.deepEqual(parseSkipRanges("x-y"), []);
+  assert.deepEqual(parseSkipRanges("abc, 1-8"), [[1, 8]]);
+  assert.deepEqual(parseSkipRanges("0, -5, 1-8"), [[1, 8]]);
+  assert.deepEqual(parseSkipRanges("20-10"), [[10, 20]]);
+  assert.deepEqual(parseSkipRanges(["1-8", "12"]), [[1, 8], [12, 12]]);
+});
+
+test("skipRangesToArgs collapses single-page ranges to a bare page", () => {
+  assert.deepEqual(skipRangesToArgs([[1, 8], [12, 12], [399, 420]]), ["1-8", "12", "399-420"]);
+  assert.deepEqual(skipRangesToArgs([]), []);
+});
+
+test("countSkippedPages counts a distinct union of skipped pages", () => {
+  assert.equal(countSkippedPages({ totalPages: 100, skipStart: 8, skipEnd: 5 }), 13);
+  assert.equal(
+    countSkippedPages({ totalPages: 100, skipStart: 8, skipEnd: 5, ranges: [[20, 24]] }),
+    18,
+  );
+  // Overlapping lead skip and a mid range are counted once.
+  assert.equal(
+    countSkippedPages({ totalPages: 100, skipStart: 8, ranges: [[5, 12]] }),
+    12,
+  );
+  // Ranges are clamped to the document bounds.
+  assert.equal(countSkippedPages({ totalPages: 10, ranges: [[5, 999]] }), 6);
+  assert.equal(countSkippedPages({ totalPages: 0, skipStart: 5 }), 0);
+});
+
+test("stripLeadingNumbering removes leading section numbers", () => {
+  assert.equal(stripLeadingNumbering("4.4.2.13 Aggregate Roots"), "Aggregate Roots");
+  assert.equal(stripLeadingNumbering("1.1 Introduction"), "Introduction");
+  assert.equal(stripLeadingNumbering("1. Overview"), "Overview");
+  assert.equal(stripLeadingNumbering("12) Getting Started"), "Getting Started");
+  assert.equal(stripLeadingNumbering("3.5 - Value Objects"), "Value Objects");
+});
+
+test("stripLeadingNumbering is conservative and preserves content", () => {
+  assert.equal(stripLeadingNumbering("Domain-Driven Design"), "Domain-Driven Design");
+  assert.equal(stripLeadingNumbering("42"), "42");
+  assert.equal(stripLeadingNumbering("1.1"), "1.1");
+  assert.equal(stripLeadingNumbering("  1.2 Bounded Contexts  "), "Bounded Contexts");
+  assert.equal(stripLeadingNumbering(""), "");
+});
+
+test("normalizeTitleCase title-cases ALL-CAPS titles", () => {
+  assert.equal(normalizeTitleCase("AGGREGATE ROOTS AND VALUE OBJECTS"), "Aggregate Roots and Value Objects");
+  assert.equal(normalizeTitleCase("DOMAIN-DRIVEN DESIGN"), "Domain-Driven Design");
+  assert.equal(normalizeTitleCase("THE CONTEXT MAP"), "The Context Map");
+});
+
+test("normalizeTitleCase leaves mixed-case titles and acronyms untouched", () => {
+  assert.equal(normalizeTitleCase("Bounded Contexts"), "Bounded Contexts");
+  assert.equal(normalizeTitleCase("iOS Development"), "iOS Development");
+  assert.equal(normalizeTitleCase("Using DDD in Practice"), "Using DDD in Practice");
+  assert.equal(normalizeTitleCase("  Extra   spaces  here  "), "Extra spaces here");
+  assert.equal(normalizeTitleCase(""), "");
 });

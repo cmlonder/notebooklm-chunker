@@ -161,6 +161,134 @@
     return match ? match[1].trim() : null;
   }
 
+  // Parse a free-form skip-range string like "1-8, 12, 399-420" into a
+  // normalized, sorted, overlap-merged list of inclusive [start, end] pairs.
+  // Blank tokens are ignored; malformed tokens (non-numeric, zero/negative,
+  // reversed) are dropped or corrected gracefully rather than throwing.
+  function parseSkipRanges(input) {
+    const source = Array.isArray(input) ? input.join(",") : input;
+    const text = String(source == null ? "" : source);
+    const ranges = [];
+    for (const rawToken of text.split(/[,;\n]+/)) {
+      const token = String(rawToken || "").trim();
+      if (!token) continue;
+      const single = token.match(/^(\d+)$/);
+      const pair = token.match(/^(\d+)\s*-\s*(\d+)$/);
+      let start;
+      let end;
+      if (single) {
+        start = Number(single[1]);
+        end = start;
+      } else if (pair) {
+        start = Number(pair[1]);
+        end = Number(pair[2]);
+        if (start > end) {
+          const swap = start;
+          start = end;
+          end = swap;
+        }
+      } else {
+        continue;
+      }
+      if (!(start >= 1) || !(end >= 1)) continue;
+      ranges.push([start, end]);
+    }
+    ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const merged = [];
+    for (const [start, end] of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && start <= last[1] + 1) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        merged.push([start, end]);
+      }
+    }
+    return merged;
+  }
+
+  // Convert normalized [start, end] pairs into `nblm --skip-range` CLI tokens,
+  // collapsing single-page ranges to a bare page number ("12" instead of "12-12").
+  function skipRangesToArgs(ranges) {
+    return (Array.isArray(ranges) ? ranges : []).map(([start, end]) =>
+      start === end ? String(start) : `${start}-${end}`,
+    );
+  }
+
+  // Count the number of distinct pages that will be excluded from a document of
+  // `totalPages`, given leading/trailing skip counts and mid-document ranges.
+  // Overlaps between the three sources are counted only once.
+  function countSkippedPages({ totalPages = 0, skipStart = 0, skipEnd = 0, ranges = [] } = {}) {
+    const total = Math.max(0, Math.floor(Number(totalPages) || 0));
+    if (total <= 0) return 0;
+    const intervals = [];
+    const lead = Math.max(0, Math.floor(Number(skipStart) || 0));
+    const tail = Math.max(0, Math.floor(Number(skipEnd) || 0));
+    if (lead > 0) intervals.push([1, Math.min(lead, total)]);
+    if (tail > 0) intervals.push([Math.max(1, total - tail + 1), total]);
+    for (const range of Array.isArray(ranges) ? ranges : []) {
+      if (!Array.isArray(range)) continue;
+      const start = Math.max(1, Math.floor(Number(range[0]) || 0));
+      const end = Math.min(total, Math.floor(Number(range[1]) || 0));
+      if (start >= 1 && end >= start) intervals.push([start, end]);
+    }
+    intervals.sort((a, b) => a[0] - b[0]);
+    let covered = 0;
+    let lastEnd = 0;
+    for (const [start, end] of intervals) {
+      const from = Math.max(start, lastEnd + 1);
+      if (end >= from) {
+        covered += end - from + 1;
+        lastEnd = end;
+      }
+    }
+    return covered;
+  }
+
+  // Remove a leading section-number token (e.g. "4.4.2.13", "1.1", "12)", "3.5 -")
+  // from a chunk title. Conservative: only strips when a numbering token is
+  // followed by whitespace and real content remains; otherwise returns the input.
+  function stripLeadingNumbering(title) {
+    const original = String(title == null ? "" : title).trim();
+    const stripped = original
+      .replace(/^\d+(?:\.\d+)*(?:[.)])?(?:\s*[-–—:.)])?\s+/, "")
+      .trim();
+    return stripped.length > 0 ? stripped : original;
+  }
+
+  const TITLE_SMALL_WORDS = new Set([
+    "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "nor",
+    "of", "on", "or", "per", "the", "to", "vs", "via", "with",
+  ]);
+
+  function capitalizeToken(token) {
+    if (!token) return token;
+    return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+  }
+
+  // Normalize messy / ALL-CAPS titles to Title Case. Conservative: leaves titles
+  // that already contain lowercase letters untouched (to preserve acronyms and
+  // intentional casing like "iOS" or "DDD"); only collapses whitespace and
+  // title-cases strings that are entirely uppercase.
+  function normalizeTitleCase(title) {
+    const collapsed = String(title == null ? "" : title).replace(/\s+/g, " ").trim();
+    if (!collapsed) return "";
+    const letters = collapsed.replace(/[^A-Za-z]/g, "");
+    if (letters.length === 0 || /[a-z]/.test(letters)) {
+      return collapsed;
+    }
+    const words = collapsed.split(" ");
+    return words
+      .map((word, index) => {
+        const lower = word.toLowerCase();
+        const isEdge = index === 0 || index === words.length - 1;
+        if (!isEdge && TITLE_SMALL_WORDS.has(lower)) {
+          return lower;
+        }
+        return word.split("-").map(capitalizeToken).join("-");
+      })
+      .join(" ");
+  }
+
   const exported = {
     escapeHtml,
     attrArg,
@@ -170,6 +298,11 @@
     deriveProjectStatus,
     buildStudiosToml,
     parseNotebookId,
+    parseSkipRanges,
+    skipRangesToArgs,
+    countSkippedPages,
+    stripLeadingNumbering,
+    normalizeTitleCase,
   };
 
   if (typeof module !== "undefined" && module.exports) {

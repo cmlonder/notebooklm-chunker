@@ -570,6 +570,11 @@
                   <span class="text-[10px] text-slate-400">Number of pages to skip from the end</span>
                 </label>
               </div>
+              <label class="space-y-2 text-left">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Skip Mid-Document Ranges</span>
+                <input id="skip-ranges-input" oninput="window.handleStructureSettingChange()" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="text" value="" placeholder="e.g. 1-8, 12, 399-420" />
+                <span class="text-[10px] text-slate-400">Comma-separated inclusive page ranges (or single pages) to exclude from anywhere in the document.</span>
+              </label>
             </div>
             <p id="partition-range-note" class="text-sm text-slate-500 text-left">The chunker prefers heading boundaries, so the exact split is best-effort rather than a hard guarantee. Actual chunk count may vary.</p>
           </div>
@@ -582,6 +587,10 @@
           <div class="p-4 border-b border-slate-100 flex items-center justify-between"><h2 class="font-bold text-slate-900">Catalog</h2><div id="bulk-actions" class="hidden flex items-center gap-2"><button onclick="window.deleteSelected()" class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><span class="material-symbols-outlined !text-xl">delete_sweep</span></button></div></div>
           <div class="px-4 py-3 border-b border-slate-50 space-y-3">
             <div id="catalog-select-row" class="flex items-center gap-3"><input type="checkbox" id="select-all-chunks" onchange="window.toggleAllChunks(this.checked)" class="rounded text-primary size-4 cursor-pointer"/><label for="select-all-chunks" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer">Select All</label></div>
+            <div id="catalog-title-actions" class="flex items-center gap-2">
+              <button onclick="window.bulkStripNumbering()" title="Remove leading section numbers (e.g. &quot;4.4.2&quot;) from titles. Applies to selected chunks, or all chunks if none are selected." class="flex-1 inline-flex items-center justify-center gap-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl px-2 py-2 text-[11px] font-bold transition-all"><span class="material-symbols-outlined !text-sm">format_list_numbered</span><span>Strip numbering</span></button>
+              <button onclick="window.bulkFixCapitalization()" title="Normalize ALL-CAPS titles to Title Case. Applies to selected chunks, or all chunks if none are selected." class="flex-1 inline-flex items-center justify-center gap-1 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl px-2 py-2 text-[11px] font-bold transition-all"><span class="material-symbols-outlined !text-sm">match_case</span><span>Fix caps</span></button>
+            </div>
             <input id="chunk-search-input" oninput="window.handleChunkSearch(this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" type="text" placeholder="Search chunks..." />
           </div>
           <div id="chunk-list" class="flex-1 overflow-y-auto divide-y divide-slate-100"></div>

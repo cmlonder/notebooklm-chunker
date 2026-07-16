@@ -29,8 +29,10 @@ function syncStructureInputs({ force = false } = {}) {
     maxInput.value = String(DEFAULT_CHUNK_MAX_PAGES);
     const skipStartInput = document.getElementById("skip-start-input");
     const skipEndInput = document.getElementById("skip-end-input");
+    const skipRangesInput = document.getElementById("skip-ranges-input");
     if (skipStartInput) skipStartInput.value = "0";
     if (skipEndInput) skipEndInput.value = "0";
+    if (skipRangesInput) skipRangesInput.value = "";
   }
   updateEstimatedChunkCount();
 }
@@ -47,7 +49,16 @@ function updateEstimatedChunkCount() {
   const maxPages = Number(document.getElementById("max-pages-input")?.value || DEFAULT_CHUNK_MAX_PAGES);
   const skipStart = Number(document.getElementById("skip-start-input")?.value || 0);
   const skipEnd = Number(document.getElementById("skip-end-input")?.value || 0);
-  const effectivePages = Math.max(0, appState.totalPages - skipStart - skipEnd);
+  const skipRanges = window.projectUtils.parseSkipRanges(
+    document.getElementById("skip-ranges-input")?.value || "",
+  );
+  const skippedPages = window.projectUtils.countSkippedPages({
+    totalPages: appState.totalPages,
+    skipStart,
+    skipEnd,
+    ranges: skipRanges,
+  });
+  const effectivePages = Math.max(0, appState.totalPages - skippedPages);
   if (effectivePages <= 0 || minPages <= 0 || maxPages <= 0) {
     el.textContent = "?";
     return;
@@ -81,10 +92,12 @@ function resetSourceUI() {
 function prepareSourcesView() {
   const readOnly = isReadOnlyProject();
   const selectRow = document.getElementById("catalog-select-row");
+  const titleActions = document.getElementById("catalog-title-actions");
   const continueButton = document.getElementById("continue-sync-btn");
   const readOnlyBanner = document.getElementById("sources-readonly-banner");
   const emptyHint = document.getElementById("sources-empty-hint");
   if (selectRow) selectRow.style.display = readOnly ? "none" : "flex";
+  if (titleActions) titleActions.style.display = readOnly ? "none" : "flex";
   if (continueButton) continueButton.style.display = readOnly ? "none" : "block";
   if (readOnlyBanner) readOnlyBanner.style.display = readOnly ? "block" : "none";
   if (emptyHint) emptyHint.style.display = readOnly ? "none" : "inline";
@@ -145,6 +158,7 @@ function prepareStructureView() {
   const maxInput = document.getElementById("max-pages-input");
   const skipStartInput = document.getElementById("skip-start-input");
   const skipEndInput = document.getElementById("skip-end-input");
+  const skipRangesInput = document.getElementById("skip-ranges-input");
   if (processButton) processButton.style.display = readOnly ? "none" : "block";
   if (banner) banner.style.display = readOnly ? "block" : "none";
   if (summary && readOnly) {
@@ -154,6 +168,7 @@ function prepareStructureView() {
   if (maxInput) maxInput.disabled = readOnly;
   if (skipStartInput) skipStartInput.disabled = readOnly;
   if (skipEndInput) skipEndInput.disabled = readOnly;
+  if (skipRangesInput) skipRangesInput.disabled = readOnly;
   if (!readOnly) {
     updateEstimatedChunkCount();
   }
@@ -273,6 +288,12 @@ async function forceRefine() {
       if (skipEndStart <= appState.totalPages) {
         args.push("--skip-range", `${skipEndStart}-${appState.totalPages}`);
       }
+    }
+    const midRanges = window.projectUtils.parseSkipRanges(
+      document.getElementById("skip-ranges-input")?.value || "",
+    );
+    for (const rangeArg of window.projectUtils.skipRangesToArgs(midRanges)) {
+      args.push("--skip-range", rangeArg);
     }
     const result = await window.electronAPI.runNBLM({
       command: "prepare",
@@ -408,6 +429,61 @@ function handleTitleEdit() {
   void saveManifest();
 }
 
+async function applyBulkTitleTransform(transform, actionLabel) {
+  if (isReadOnlyProject()) return;
+  const hasSelection = appState.selectedChunkIds.size > 0;
+  // Synced chunks are read-only in the single-title edit path (handleTitleEdit),
+  // so exclude them from bulk edits too.
+  const targets = appState.chunks.filter(
+    (chunk) =>
+      !chunk.synced && (!hasSelection || appState.selectedChunkIds.has(chunk.id)),
+  );
+  if (targets.length === 0) {
+    alert("No editable chunks to update. Synced chunks cannot be edited.");
+    return;
+  }
+  const scope = hasSelection
+    ? `${targets.length} selected chunk(s)`
+    : `all ${targets.length} chunk(s)`;
+  if (!confirm(`${actionLabel} for ${scope}?`)) return;
+
+  let changed = 0;
+  for (const chunk of targets) {
+    const nextTitle = transform(chunk.title);
+    if (nextTitle && nextTitle !== chunk.title) {
+      chunk.title = nextTitle;
+      chunk.synced = false;
+      changed += 1;
+    }
+  }
+  if (changed === 0) {
+    populateChunkList();
+    return;
+  }
+  // Reuse the same persistence path as single-title edits (handleTitleEdit).
+  await saveManifest();
+  const current = selectedChunk();
+  if (current) {
+    const titleEl = document.getElementById("current-chunk-title");
+    if (titleEl) titleEl.textContent = current.title;
+  }
+  populateChunkList();
+}
+
+function bulkStripNumbering() {
+  return applyBulkTitleTransform(
+    window.projectUtils.stripLeadingNumbering,
+    "Strip leading numbering",
+  );
+}
+
+function bulkFixCapitalization() {
+  return applyBulkTitleTransform(
+    window.projectUtils.normalizeTitleCase,
+    "Fix capitalization",
+  );
+}
+
 function handleEdit() {
   const chunk = selectedChunk();
   if (!chunk || chunk.synced || isReadOnlyProject()) return;
@@ -477,6 +553,15 @@ export {
   deleteChunk,
   deleteSelected,
   handleTitleEdit,
+  bulkStripNumbering,
+  bulkFixCapitalization,
   handleEdit,
   replaceSelectedPDF,
 };
+
+// app.js (which wires renderer handlers onto `window`) is not modified for these
+// bulk-title actions, so register them here where the module is loaded.
+if (typeof window !== "undefined") {
+  window.bulkStripNumbering = bulkStripNumbering;
+  window.bulkFixCapitalization = bulkFixCapitalization;
+}

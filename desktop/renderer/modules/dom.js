@@ -50,6 +50,8 @@ function iconSvg(iconName) {
     tune: '<path d="M3 8h4M11 8h10M3 16h10M17 16h4"/><circle cx="9" cy="8" r="2"/><circle cx="15" cy="16" r="2"/>',
     calculate: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h2M14 8h2M8 12h8M8 16h2M14 16h2"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    dark_mode: '<path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+    light_mode: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>',
   };
   const path = paths[iconName];
   if (!path) return null;
@@ -66,6 +68,60 @@ function applyOfflineIcons(root = document) {
     node.title = iconName.replace(/_/g, " ");
     node.setAttribute("aria-label", iconName.replace(/_/g, " "));
   });
+}
+
+const THEME_STORAGE_KEY = "nblm-desktop-theme-v1";
+
+function getPreferredTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+  } catch (e) {
+    /* localStorage unavailable */
+  }
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
+}
+
+function updateThemeToggleIcon(theme) {
+  const btn = document.getElementById("theme-toggle-btn");
+  if (!btn) return;
+  const iconEl = btn.querySelector(".material-symbols-outlined");
+  if (!iconEl) return;
+  // Show the icon of the mode you'd switch INTO: moon while light, sun while dark.
+  const iconName = theme === "dark" ? "light_mode" : "dark_mode";
+  iconEl.dataset.iconName = iconName;
+  iconEl.textContent = iconName;
+  applyOfflineIcons(btn);
+  const label = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
+}
+
+function applyTheme(theme) {
+  const normalized = theme === "dark" ? "dark" : "light";
+  const root = document.documentElement;
+  root.setAttribute("data-theme", normalized);
+  root.classList.remove("light", "dark");
+  root.classList.add(normalized);
+  updateThemeToggleIcon(normalized);
+}
+
+function initTheme() {
+  applyTheme(getPreferredTheme());
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  const next = current === "dark" ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (e) {
+    /* localStorage unavailable */
+  }
+  applyTheme(next);
 }
 
 function showToast(message) {
@@ -133,4 +189,14 @@ export {
   showLoading,
   hideLoading,
   updateLoginPromptUI,
+  applyTheme,
+  toggleTheme,
+  initTheme,
+  getPreferredTheme,
 };
+
+// Sync the toggle icon/label with the theme the inline <head> script already
+// applied, and wire the onclick="window.toggleTheme()" handler used in index.html.
+// This module is a deferred ES module, so the DOM is parsed by the time it runs.
+window.toggleTheme = toggleTheme;
+initTheme();

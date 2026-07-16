@@ -1195,3 +1195,322 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Theme toggle control (sidebar user area)
+   --------------------------------------------------------------------------- */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid var(--slate-200);
+  color: var(--slate-500);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.theme-toggle-btn:hover {
+  color: var(--primary);
+  border-color: rgba(0, 122, 255, 0.22);
+  background: rgba(239, 246, 255, 0.9);
+}
+
+/* ===========================================================================
+   DARK THEME
+   Activated via <html data-theme="dark">. Light mode (default / data-theme=
+   "light") intentionally has no rules here, so it stays visually identical.
+   Most color utilities reference the slate/surface CSS variables, so we remap
+   those first; hardcoded-white component and utility classes are overridden
+   explicitly below.
+   =========================================================================== */
+:root[data-theme="dark"] {
+  --primary: #3b9bff;
+  --primary-10: rgba(59, 155, 255, 0.14);
+  --primary-20: rgba(59, 155, 255, 0.26);
+  --primary-40: rgba(59, 155, 255, 0.44);
+  --primary-50: rgba(59, 155, 255, 0.55);
+
+  --surface: rgba(28, 37, 51, 0.72);
+  --surface-strong: rgba(28, 37, 51, 0.92);
+
+  /* Slate scale, remapped for dark. Semantics are preserved: --slate-900 is the
+     strongest text, --slate-50 the lightest surface (now the darkest). */
+  --slate-50: #131a25;
+  --slate-100: #1b2431;
+  --slate-200: #2a3546;
+  --slate-300: #3a4758;
+  --slate-400: #8b97a8;
+  --slate-500: #9fabbd;
+  --slate-700: #cdd6e2;
+  --slate-900: #e9eef5;
+
+  --green-500: #22c55e;
+  --green-700: #4ade80;
+  --green-50: rgba(34, 197, 94, 0.15);
+  --blue-500: #3b82f6;
+  --blue-700: #93c5fd;
+  --blue-50: rgba(59, 130, 246, 0.15);
+  --amber-700: #fcd34d;
+  --amber-50: rgba(245, 158, 11, 0.15);
+  --red-500: #f87171;
+
+  /* Dark-only helper tokens for hardcoded-white component overrides. */
+  --dark-page: #0d131c;
+  --dark-page-2: #0a0f16;
+  --dark-panel: #161e2a;
+  --dark-panel-2: #1b2431;
+  --dark-input: #10161f;
+  --dark-border: rgba(148, 163, 184, 0.16);
+  --dark-border-strong: rgba(148, 163, 184, 0.28);
+}
+
+/* Page surface */
+:root[data-theme="dark"] body {
+  background: linear-gradient(180deg, var(--dark-page) 0%, var(--dark-page-2) 100%);
+  color: var(--slate-900);
+}
+
+:root[data-theme="dark"] .bg-slate-50 { background: var(--dark-page); }
+
+/* Utility colors that hardcode white / light values */
+:root[data-theme="dark"] .bg-white { background: var(--dark-panel); }
+:root[data-theme="dark"] .bg-white\/80 { background: rgba(22, 30, 42, 0.8); }
+:root[data-theme="dark"] .bg-white\/95 { background: rgba(13, 19, 28, 0.95); }
+:root[data-theme="dark"] .bg-slate-50\/50 { background: rgba(27, 36, 49, 0.5); }
+:root[data-theme="dark"] .bg-slate-200\/50 { background: rgba(42, 53, 70, 0.5); }
+:root[data-theme="dark"] .bg-slate-900 { background: #0b1119; }
+:root[data-theme="dark"] .text-slate-600 { color: var(--slate-500); }
+:root[data-theme="dark"] .text-green-600 { color: #4ade80; }
+:root[data-theme="dark"] .text-blue-600 { color: #93c5fd; }
+:root[data-theme="dark"] .hover\:bg-red-50:hover { background: rgba(239, 68, 68, 0.16); }
+
+/* Glass / translucent surfaces */
+:root[data-theme="dark"] .sidebar-glass {
+  background: rgba(15, 21, 30, 0.7);
+  border-right: 1px solid var(--dark-border);
+}
+
+:root[data-theme="dark"] .header-glass {
+  background: rgba(15, 21, 30, 0.72);
+  border-bottom: 1px solid var(--dark-border);
+}
+
+:root[data-theme="dark"] .glass-panel {
+  background: var(--surface);
+  border: 1px solid var(--dark-border);
+}
+
+/* Buttons / pills / links */
+:root[data-theme="dark"] .notebook-link-btn {
+  background: rgba(28, 37, 51, 0.92);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-700);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .notebook-link-btn:hover {
+  background: rgba(38, 49, 66, 0.98);
+  border-color: rgba(59, 155, 255, 0.3);
+  color: var(--primary);
+}
+
+:root[data-theme="dark"] .secondary-action-btn {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-700);
+}
+
+:root[data-theme="dark"] .theme-toggle-btn {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-500);
+}
+
+:root[data-theme="dark"] .theme-toggle-btn:hover {
+  color: var(--primary);
+  border-color: rgba(59, 155, 255, 0.3);
+  background: rgba(38, 49, 66, 0.98);
+}
+
+:root[data-theme="dark"] .queue-settings-btn {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-500);
+}
+
+:root[data-theme="dark"] .queue-settings-btn:hover {
+  background: rgba(38, 49, 66, 0.98);
+  color: var(--slate-900);
+}
+
+/* Tabs */
+:root[data-theme="dark"] .workspace-tab-bar { background: rgba(42, 53, 70, 0.4); }
+
+:root[data-theme="dark"] .workspace-tab-active {
+  background: rgba(38, 49, 66, 0.96);
+  color: var(--primary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* User menu */
+:root[data-theme="dark"] .user-menu-panel {
+  background: rgba(24, 32, 44, 0.98);
+  border-color: var(--dark-border-strong);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="dark"] .user-menu-item:hover { background: rgba(38, 49, 66, 0.9); }
+:root[data-theme="dark"] .user-menu-danger { color: #f87171; }
+
+/* Setup screen */
+:root[data-theme="dark"] .setup-screen-shell {
+  background: linear-gradient(180deg, var(--dark-page) 0%, var(--dark-page-2) 100%);
+}
+
+:root[data-theme="dark"] .setup-status-card,
+:root[data-theme="dark"] .setup-command-note,
+:root[data-theme="dark"] .setup-account-row {
+  background: rgba(24, 32, 44, 0.72);
+  border-color: var(--dark-border);
+}
+
+:root[data-theme="dark"] .setup-account-head { color: var(--slate-500); }
+
+:root[data-theme="dark"] .setup-profile-select {
+  background: var(--dark-input);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-900);
+}
+
+/* Queue */
+:root[data-theme="dark"] .queue-note,
+:root[data-theme="dark"] .queue-log-preview {
+  background: rgba(24, 32, 44, 0.85);
+  border-color: var(--dark-border);
+  color: var(--slate-500);
+}
+
+:root[data-theme="dark"] .queue-log-preview.is-error {
+  background: rgba(80, 20, 20, 0.55);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+
+:root[data-theme="dark"] .queue-row {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border);
+}
+
+:root[data-theme="dark"] .queue-progress { background: rgba(42, 53, 70, 0.8); }
+
+/* Notebook dashboard */
+:root[data-theme="dark"] .notebook-overview-card {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border);
+}
+
+:root[data-theme="dark"] .notebook-overview-card:hover {
+  border-color: rgba(59, 155, 255, 0.35);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .notebook-overview-stat-pill { background: rgba(24, 32, 44, 0.85); }
+
+:root[data-theme="dark"] .notebook-dashboard-loading {
+  background: rgba(24, 32, 44, 0.85);
+  border-color: var(--dark-border);
+}
+
+/* Source rows */
+:root[data-theme="dark"] .source-list-card { background: rgba(28, 37, 51, 0.9); }
+:root[data-theme="dark"] .source-list-card.is-active,
+:root[data-theme="dark"] .dashboard-source-row.is-active {
+  background: rgba(30, 58, 95, 0.5);
+}
+
+:root[data-theme="dark"] .dashboard-source-row { background: rgba(28, 37, 51, 0.85); }
+:root[data-theme="dark"] .dashboard-source-row:hover { background: rgba(38, 49, 66, 0.85); }
+
+:root[data-theme="dark"] .dashboard-source-select,
+:root[data-theme="dark"] .dashboard-source-preview-btn {
+  background: rgba(28, 37, 51, 0.9);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-500);
+}
+
+:root[data-theme="dark"] .dashboard-source-select.is-selected {
+  background: rgba(30, 58, 95, 0.6);
+  color: var(--primary);
+  border-color: rgba(59, 155, 255, 0.35);
+}
+
+:root[data-theme="dark"] .dashboard-source-preview-btn:hover {
+  background: rgba(30, 58, 95, 0.6);
+  border-color: rgba(59, 155, 255, 0.3);
+  color: var(--primary);
+}
+
+/* Sync read-only stats */
+:root[data-theme="dark"] .sync-readonly-stat {
+  background: rgba(28, 37, 51, 0.7);
+  color: #4ade80;
+}
+
+/* Search input + studio search */
+:root[data-theme="dark"] .studio-search-input {
+  background: var(--dark-input);
+  border-color: var(--dark-border-strong);
+  color: var(--slate-900);
+}
+
+/* Modals */
+:root[data-theme="dark"] .preview-modal-body { background: rgba(20, 27, 38, 0.96); }
+
+/* Toast (kept as a raised contrasting chip) */
+:root[data-theme="dark"] .app-toast {
+  background: rgba(38, 49, 66, 0.96);
+  border: 1px solid var(--dark-border-strong);
+}
+
+/* Form controls */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  background: var(--dark-input);
+  color: var(--slate-900);
+  border-color: var(--dark-border-strong);
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder { color: var(--slate-400); }
+
+/* History status filter uses an inline light style; realign it for dark. */
+:root[data-theme="dark"] #history-status-filter {
+  background: var(--dark-input) !important;
+  border-color: var(--dark-border-strong) !important;
+  color: var(--slate-500) !important;
+}
+
+/* Scrollbar */
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--slate-300); }
+
+/* History cards are rendered from history.js with inline light colors we can't
+   edit here. Stylesheet !important beats non-important inline styles, so we
+   recolor the readability-critical bits (dark title, light border/background)
+   for dark mode via attribute selectors. */
+:root[data-theme="dark"] #project-history-list [style*="border-radius:16px"] {
+  background: rgba(28, 37, 51, 0.85) !important;
+  border-color: var(--dark-border) !important;
+}
+
+:root[data-theme="dark"] #project-history-list [style*="#0f172a"] {
+  color: var(--slate-900) !important;
+}
+
+:root[data-theme="dark"] #project-history-list [style*="#e2e8f0"] {
+  border-color: var(--dark-border) !important;
+}

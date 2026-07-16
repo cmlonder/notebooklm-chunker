@@ -1,0 +1,276 @@
+/* ==========================================================================
+   Studio job log panel (roadmap B9)
+   Replaces the raw red error box on queue job cards with a structured,
+   collapsible, filterable per-job log panel.
+
+   All colors use the CSS variables defined in styles.css (--slate-*, --red-500,
+   --amber-*, --green-*, --primary) so the panel flips automatically under
+   :root[data-theme="dark"]. Only a few extra dark overrides are added at the
+   bottom for surfaces that would otherwise be too light on a dark card.
+   ========================================================================== */
+
+.job-log {
+  margin-top: 0.55rem;
+}
+
+/* --- Toggle ("Show logs (N)") ------------------------------------------- */
+.job-log-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  color: var(--slate-500);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.job-log-toggle:hover {
+  color: var(--slate-700);
+  border-color: var(--slate-300);
+}
+
+.job-log.has-error .job-log-toggle {
+  color: var(--red-500);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.job-log.has-warn .job-log-toggle {
+  color: var(--amber-700);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* Caret: a pure-CSS triangle so we don't depend on the icon font, which may be
+   offline. It rotates from ▸ to ▾ when the panel opens. */
+.job-log-caret {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  transition: transform 0.18s ease;
+}
+
+.job-log.is-open .job-log-toggle .job-log-caret {
+  transform: rotate(90deg);
+}
+
+.job-log-copy-icon {
+  border-left-color: currentColor;
+}
+
+/* Severity count badges shown on the collapsed toggle. */
+.job-log-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.job-log-badge.is-error {
+  background: rgba(239, 68, 68, 0.16);
+  color: var(--red-500);
+}
+
+.job-log-badge.is-warn {
+  background: var(--amber-50);
+  color: var(--amber-700);
+}
+
+/* --- Expanded panel ----------------------------------------------------- */
+.job-log-panel {
+  margin-top: 0.5rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  overflow: hidden;
+}
+
+.job-log-panel[hidden] {
+  display: none;
+}
+
+.job-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--slate-200);
+  background: var(--slate-100);
+}
+
+.job-log-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* --- Filter pills (All / Errors / Warnings) ----------------------------- */
+.job-log-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--slate-500);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.job-log-pill:hover {
+  color: var(--slate-700);
+  background: var(--slate-200);
+}
+
+.job-log-pill.is-active {
+  background: var(--primary-10);
+  color: var(--primary);
+}
+
+.job-log-pill-count {
+  font-size: 0.6rem;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* --- Copy logs button --------------------------------------------------- */
+.job-log-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.24rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  color: var(--slate-500);
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.job-log-copy:hover {
+  color: var(--primary);
+  border-color: var(--primary-40);
+}
+
+.job-log-copy .job-log-copy-icon {
+  border-left: none;
+  border-top: none;
+  border-bottom: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+/* --- Log lines ---------------------------------------------------------- */
+.job-log-lines {
+  max-height: 12rem;
+  overflow-y: auto;
+  padding: 0.4rem 0.55rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.job-log-line {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.08rem 0;
+  color: var(--slate-500);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.job-log-line[hidden] {
+  display: none;
+}
+
+.job-log-time {
+  flex: 0 0 auto;
+  color: var(--slate-400);
+  opacity: 0.85;
+  user-select: none;
+}
+
+.job-log-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.job-log-line.is-error .job-log-text {
+  color: var(--red-500);
+  font-weight: 600;
+}
+
+.job-log-line.is-warn .job-log-text {
+  color: var(--amber-700);
+}
+
+.job-log-line.is-info .job-log-text {
+  color: var(--slate-500);
+}
+
+/* --- Scrollbar ---------------------------------------------------------- */
+.job-log-lines::-webkit-scrollbar {
+  width: 8px;
+}
+
+.job-log-lines::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.job-log-lines::-webkit-scrollbar-thumb {
+  background: var(--slate-300);
+  border-radius: 999px;
+}
+
+.job-log-lines::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-400);
+}
+
+/* --- Dark theme overrides ----------------------------------------------
+   The --slate-* / --amber-* / --red-500 / --primary vars already flip under
+   [data-theme="dark"], so most of the panel adapts on its own. These tweaks
+   lift the nested surfaces off the (already dark) job card so the panel reads
+   as a distinct layer. */
+:root[data-theme="dark"] .job-log-panel {
+  background: var(--dark-panel-2, #1b2431);
+  border-color: var(--dark-border, rgba(148, 163, 184, 0.16));
+}
+
+:root[data-theme="dark"] .job-log-toolbar {
+  background: var(--dark-panel, #161e2a);
+  border-bottom-color: var(--dark-border, rgba(148, 163, 184, 0.16));
+}
+
+:root[data-theme="dark"] .job-log-toggle,
+:root[data-theme="dark"] .job-log-copy {
+  background: var(--dark-panel, #161e2a);
+  border-color: var(--dark-border, rgba(148, 163, 184, 0.16));
+}
+
+:root[data-theme="dark"] .job-log-pill:hover {
+  background: var(--dark-border, rgba(148, 163, 184, 0.16));
+}

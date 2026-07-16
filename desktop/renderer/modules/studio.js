@@ -267,6 +267,148 @@ function syncStudioCountdowns() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Per-job log panel (roadmap B9)
+//
+// The queue re-renders its innerHTML on every 'studio-queue-update', so the
+// panel's open/filter state cannot live in the DOM. We keep it in a module-level
+// map keyed by job id; renderJobLogPanel() reads it on every render and the
+// toggle/filter handlers mutate it, then patch the DOM in place (no full
+// re-render) so scroll position and focus survive.
+// ---------------------------------------------------------------------------
+const studioLogPanelState = new Map();
+
+function getStudioLogState(jobId) {
+  const key = String(jobId);
+  let state = studioLogPanelState.get(key);
+  if (!state) {
+    state = { expanded: false, filter: "all" };
+    studioLogPanelState.set(key, state);
+  }
+  return state;
+}
+
+// Level is derived from channel + content. Quota / warnings win over the generic
+// stderr→error rule so a quota-blocked job reads as an (amber) warning rather
+// than a hard (red) error, matching the countdown/retry affordance beside it.
+function studioLogLevel(entry) {
+  const text = String(entry?.line || "");
+  if (/warn|quota/i.test(text)) return "warn";
+  if (entry?.channel === "stderr" || /error/i.test(text)) return "error";
+  return "info";
+}
+
+function formatStudioLogTime(at) {
+  if (at == null || at === "") return "";
+  const date = typeof at === "number" ? new Date(at) : new Date(String(at));
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function findStudioJobById(jobId) {
+  const project = currentDashboardProject();
+  const jobs = project?.queueState?.jobs || [];
+  return jobs.find((job) => String(job.id) === String(jobId)) || null;
+}
+
+function findStudioLogContainer(jobId) {
+  return (
+    Array.from(document.querySelectorAll("[data-job-log]")).find(
+      (node) => node.dataset.jobLog === String(jobId),
+    ) || null
+  );
+}
+
+function renderJobLogPanel(job) {
+  const logs = Array.isArray(job.logs) ? job.logs : [];
+  if (logs.length === 0) return "";
+  const state = getStudioLogState(job.id);
+  const filter = state.filter || "all";
+  const leveled = logs.map((entry) => ({ entry, level: studioLogLevel(entry) }));
+  const errorCount = leveled.filter((item) => item.level === "error").length;
+  const warnCount = leveled.filter((item) => item.level === "warn").length;
+
+  const lines = leveled
+    .map(({ entry, level }) => {
+      const hidden = filter !== "all" && level !== filter;
+      return `<div class="job-log-line is-${level}" data-level="${level}"${hidden ? " hidden" : ""}><span class="job-log-time">${escapeHtml(formatStudioLogTime(entry.at))}</span><span class="job-log-text">${escapeHtml(String(entry.line ?? ""))}</span></div>`;
+    })
+    .join("");
+
+  const pill = (level, label, count) =>
+    `<button type="button" class="job-log-pill${filter === level ? " is-active" : ""}" data-level="${level}" onclick="window.setStudioJobLogFilter(${attrArg(job.id)}, '${level}')">${label}<span class="job-log-pill-count">${count}</span></button>`;
+
+  const toggleLabel = `${state.expanded ? "Hide" : "Show"} logs (${logs.length})`;
+  const severity = errorCount > 0 ? " has-error" : warnCount > 0 ? " has-warn" : "";
+
+  return `
+    <div class="job-log${state.expanded ? " is-open" : ""}${severity}" data-job-log="${escapeHtml(String(job.id))}">
+      <button type="button" class="job-log-toggle" data-log-count="${logs.length}" onclick="window.toggleStudioJobLogs(${attrArg(job.id)})">
+        <span class="job-log-caret" aria-hidden="true"></span>
+        <span class="job-log-toggle-label">${toggleLabel}</span>
+        ${errorCount > 0 ? `<span class="job-log-badge is-error">${errorCount}</span>` : ""}
+        ${warnCount > 0 ? `<span class="job-log-badge is-warn">${warnCount}</span>` : ""}
+      </button>
+      <div class="job-log-panel"${state.expanded ? "" : " hidden"}>
+        <div class="job-log-toolbar">
+          <div class="job-log-filters">
+            ${pill("all", "All", logs.length)}
+            ${pill("error", "Errors", errorCount)}
+            ${pill("warn", "Warnings", warnCount)}
+          </div>
+          <button type="button" class="job-log-copy" onclick="window.copyStudioJobLogs(${attrArg(job.id)})"><span class="job-log-caret job-log-copy-icon" aria-hidden="true"></span>Copy logs</button>
+        </div>
+        <div class="job-log-lines">${lines}</div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleStudioJobLogs(jobId) {
+  const state = getStudioLogState(jobId);
+  state.expanded = !state.expanded;
+  const container = findStudioLogContainer(jobId);
+  if (!container) return;
+  container.classList.toggle("is-open", state.expanded);
+  const panel = container.querySelector(".job-log-panel");
+  if (panel) panel.hidden = !state.expanded;
+  const toggle = container.querySelector(".job-log-toggle");
+  const label = toggle?.querySelector(".job-log-toggle-label");
+  if (label) {
+    const count = toggle.getAttribute("data-log-count") || "0";
+    label.textContent = `${state.expanded ? "Hide" : "Show"} logs (${count})`;
+  }
+}
+
+function setStudioJobLogFilter(jobId, level) {
+  const state = getStudioLogState(jobId);
+  state.filter = level;
+  const container = findStudioLogContainer(jobId);
+  if (!container) return;
+  container.querySelectorAll(".job-log-pill").forEach((pill) => {
+    pill.classList.toggle("is-active", pill.dataset.level === level);
+  });
+  container.querySelectorAll(".job-log-line").forEach((line) => {
+    line.hidden = level !== "all" && line.dataset.level !== level;
+  });
+}
+
+async function copyStudioJobLogs(jobId) {
+  const job = findStudioJobById(jobId);
+  const logs = Array.isArray(job?.logs) ? job.logs : [];
+  if (logs.length === 0) return;
+  const text = logs
+    .map((entry) => `${formatStudioLogTime(entry.at)} [${entry.channel || "log"}] ${entry.line ?? ""}`.trim())
+    .join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("Logs copied to clipboard.");
+  } catch (error) {
+    showToast("Could not copy logs.");
+  }
+}
+
 function renderQueueJobRow(job) {
   const tone = job.status === "failed"
     ? "queue-progress-bar is-failed"
@@ -281,10 +423,7 @@ function renderQueueJobRow(job) {
   const statusLine = isBlocked
     ? `<p class="text-[11px] text-amber-600 font-semibold mt-2 queue-countdown" data-blocked-until="${escapeHtml(job.blockedUntil)}">${escapeHtml(studioCountdownText(job.blockedUntil))}</p>`
     : `<p class="text-[11px] text-slate-400 mt-2">${escapeHtml(job.message || job.status)}</p>`;
-  const logLines = job.status === "failed" ? 6 : 3;
-  const logPreview = Array.isArray(job.logs) && job.logs.length > 0
-    ? `<div class="queue-log-preview ${job.status === "failed" ? "is-error" : ""}">${job.logs.slice(-logLines).map((entry) => `<p>[${escapeHtml(entry.channel)}] ${escapeHtml(entry.line)}</p>`).join("")}</div>`
-    : "";
+  const logPreview = renderJobLogPanel(job);
   return `
     <div class="flex items-center justify-between gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
       <div class="min-w-0 flex items-start gap-3">
@@ -600,4 +739,16 @@ export {
   removeStudioQueueItem,
   runStudios,
   applyStudioQueueUpdate,
+  renderJobLogPanel,
+  studioLogLevel,
+  toggleStudioJobLogs,
+  setStudioJobLogFilter,
+  copyStudioJobLogs,
 };
+
+// The log-panel buttons are wired via inline onclick="window.*" (same pattern as
+// the queue's retry/remove buttons). app.js is off-limits, so these three
+// handlers self-register here rather than being attached there.
+window.toggleStudioJobLogs = toggleStudioJobLogs;
+window.setStudioJobLogFilter = setStudioJobLogFilter;
+window.copyStudioJobLogs = copyStudioJobLogs;

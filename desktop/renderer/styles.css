@@ -1514,3 +1514,209 @@ button:disabled {
 :root[data-theme="dark"] #project-history-list [style*="#e2e8f0"] {
   border-color: var(--dark-border) !important;
 }
+
+/* ===========================================================================
+   Section-tree preview (structure view). Collapsible heading hierarchy showing
+   each section's page range and covering chunk(s). Theme-aware: light is the
+   default; dark overrides mirror the surrounding components.
+   =========================================================================== */
+#section-tree-card:not(.hidden) {
+  display: flex;
+}
+
+.section-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--slate-200, #e2e8f0);
+  border-radius: 16px;
+  padding: 8px;
+  background: #fff;
+}
+
+.section-tree-status {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--slate-400, #94a3b8);
+}
+
+.section-tree-status.is-error {
+  color: #dc2626;
+  font-style: normal;
+}
+
+.section-node {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-node-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  padding-right: 8px;
+  border-radius: 10px;
+  min-height: 34px;
+}
+
+.section-node-row:hover {
+  background: var(--slate-50, #f8fafc);
+}
+
+.section-node.is-split > .section-node-row {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.section-node-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--slate-400, #94a3b8);
+}
+
+.section-node-toggle:hover {
+  background: var(--slate-100, #f1f5f9);
+  color: var(--slate-700, #334155);
+}
+
+.section-node-toggle.is-leaf {
+  cursor: default;
+}
+
+.section-node-level {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--slate-400, #94a3b8);
+  background: var(--slate-100, #f1f5f9);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.section-node-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate-900, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.section-node-pages {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--slate-400, #94a3b8);
+}
+
+.section-chunk-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--primary, #2563eb);
+  background: var(--primary-10, rgba(37, 99, 235, 0.1));
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.section-chunk-badge.is-split {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.section-chunk-badge.is-empty {
+  color: var(--slate-400, #94a3b8);
+  background: var(--slate-100, #f1f5f9);
+}
+
+.section-hint-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.section-hint-dot.is-split {
+  background: #f59e0b;
+}
+
+.section-hint-dot.is-merged {
+  background: #a855f7;
+}
+
+.section-node-children.is-collapsed {
+  display: none;
+}
+
+.section-tree-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--slate-500, #64748b);
+}
+
+.section-tree-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Dark overrides */
+:root[data-theme="dark"] .section-tree {
+  background: var(--dark-panel-2);
+  border-color: var(--dark-border);
+}
+
+:root[data-theme="dark"] .section-node-row:hover {
+  background: rgba(38, 49, 66, 0.6);
+}
+
+:root[data-theme="dark"] .section-node.is-split > .section-node-row {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+:root[data-theme="dark"] .section-node-toggle:hover {
+  background: rgba(42, 53, 70, 0.7);
+}
+
+:root[data-theme="dark"] .section-node-level {
+  background: rgba(42, 53, 70, 0.7);
+}
+
+:root[data-theme="dark"] .section-chunk-badge {
+  color: var(--primary);
+  background: var(--primary-10);
+}
+
+:root[data-theme="dark"] .section-chunk-badge.is-split {
+  color: var(--amber-700);
+  background: var(--amber-50);
+}
+
+:root[data-theme="dark"] .section-chunk-badge.is-empty {
+  background: rgba(42, 53, 70, 0.7);
+}
+
+:root[data-theme="dark"] .section-tree-status.is-error {
+  color: var(--red-500);
+}

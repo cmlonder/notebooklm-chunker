@@ -9,6 +9,8 @@
   >
   <title>NotebookLM Chunker</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="logs.css">
+  <link rel="stylesheet" href="artifact-preview.css">
   <script>
     // Apply the persisted (or OS-preferred) theme before first paint to avoid a flash.
     (function () {
@@ -577,6 +579,25 @@
               </label>
             </div>
             <p id="partition-range-note" class="text-sm text-slate-500 text-left">The chunker prefers heading boundaries, so the exact split is best-effort rather than a hard guarantee. Actual chunk count may vary.</p>
+          </div>
+          <div id="section-tree-card" class="glass-panel rounded-3xl p-6 shadow-sm flex-col gap-4 hidden">
+            <div class="flex items-start justify-between gap-4">
+              <div class="text-left">
+                <h3 class="text-lg font-bold text-slate-900">Section Preview</h3>
+                <p class="text-xs text-slate-500 mt-1">The document's heading hierarchy and how it maps to chunks. Review the split before you commit.</p>
+              </div>
+              <button id="section-tree-refresh" onclick="window.refreshSectionTree()" class="shrink-0 px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 flex items-center gap-1"><span class="material-symbols-outlined !text-sm">refresh</span>Refresh</button>
+            </div>
+            <div class="bg-primary/5 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-slate-600 text-left">
+              <span class="material-symbols-outlined text-primary !text-base">account_tree</span>
+              <span>This split produces <span id="section-tree-chunk-count" class="font-bold text-primary">?</span> chunk(s) across the sections below.</span>
+            </div>
+            <div id="section-tree" class="section-tree text-left"></div>
+            <div class="section-tree-legend">
+              <span class="section-tree-legend-item"><span class="section-chunk-badge">c1</span> covering chunk</span>
+              <span class="section-tree-legend-item"><span class="section-chunk-badge is-split">c1–c3</span> section split across chunks</span>
+              <span class="section-tree-legend-item"><span class="section-hint-dot is-merged"></span> many sections share one chunk</span>
+            </div>
           </div>
           <button id="process-btn" onclick="window.forceRefine()" class="w-full bg-primary text-white font-bold py-5 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">Process</button>
         </div>

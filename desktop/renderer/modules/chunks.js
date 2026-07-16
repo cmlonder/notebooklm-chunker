@@ -40,6 +40,7 @@ function syncStructureInputs({ force = false } = {}) {
 function handleStructureSettingChange() {
   appState.structureSettingsDirty = true;
   updateEstimatedChunkCount();
+  scheduleSectionTree();
 }
 
 function updateEstimatedChunkCount() {
@@ -169,9 +170,197 @@ function prepareStructureView() {
   if (skipStartInput) skipStartInput.disabled = readOnly;
   if (skipEndInput) skipEndInput.disabled = readOnly;
   if (skipRangesInput) skipRangesInput.disabled = readOnly;
-  if (!readOnly) {
+  const treeCard = document.getElementById("section-tree-card");
+  if (readOnly) {
+    if (treeCard) treeCard.style.display = "none";
+  } else {
     updateEstimatedChunkCount();
+    scheduleSectionTree({ immediate: true });
   }
+}
+
+// -- Section-tree preview -------------------------------------------------
+// Renders the document's heading hierarchy and how it maps to chunks so the
+// user can judge the split before committing. Backed by `nblm inspect --tree`.
+
+function collectStructureSettingArgs() {
+  const args = [];
+  const minPages = Number(document.getElementById("min-pages-input")?.value || 0);
+  const maxPages = Number(document.getElementById("max-pages-input")?.value || 0);
+  if (minPages > 0) args.push("--min-pages", String(minPages));
+  if (maxPages > 0) args.push("--max-pages", String(maxPages));
+  if (minPages > 0 && maxPages > 0) {
+    const target = Number(((minPages + maxPages) / 2).toFixed(2));
+    args.push("--target-pages", String(target));
+  }
+  const skipStart = Number(document.getElementById("skip-start-input")?.value || 0);
+  const skipEnd = Number(document.getElementById("skip-end-input")?.value || 0);
+  if (skipStart > 0) args.push("--skip-range", `1-${skipStart}`);
+  if (skipEnd > 0 && appState.totalPages > 0) {
+    const skipEndStart = appState.totalPages - skipEnd + 1;
+    if (skipEndStart <= appState.totalPages) {
+      args.push("--skip-range", `${skipEndStart}-${appState.totalPages}`);
+    }
+  }
+  const midRanges = window.projectUtils.parseSkipRanges(
+    document.getElementById("skip-ranges-input")?.value || "",
+  );
+  for (const rangeArg of window.projectUtils.skipRangesToArgs(midRanges)) {
+    args.push("--skip-range", rangeArg);
+  }
+  return args;
+}
+
+function scheduleSectionTree({ immediate = false } = {}) {
+  if (appState.sectionTreeTimeout) {
+    clearTimeout(appState.sectionTreeTimeout);
+    appState.sectionTreeTimeout = null;
+  }
+  if (isReadOnlyProject() || !appState.selectedPDF) {
+    const card = document.getElementById("section-tree-card");
+    if (card) card.style.display = "none";
+    return;
+  }
+  if (immediate) {
+    void loadStructureTree();
+    return;
+  }
+  appState.sectionTreeTimeout = setTimeout(() => {
+    void loadStructureTree();
+  }, 400);
+}
+
+function refreshSectionTree() {
+  scheduleSectionTree({ immediate: true });
+}
+
+async function loadStructureTree() {
+  const card = document.getElementById("section-tree-card");
+  const container = document.getElementById("section-tree");
+  if (!card || !container) return;
+  if (isReadOnlyProject() || !appState.selectedPDF) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "flex";
+  // Guard against overlapping runs (settings can change while one is in flight).
+  const token = (appState.sectionTreeToken = (appState.sectionTreeToken || 0) + 1);
+  container.innerHTML = '<p class="section-tree-status">Analyzing section structure…</p>';
+  try {
+    const result = await window.electronAPI.runNBLM({
+      command: "inspect",
+      args: [appState.selectedPDF, "--tree", ...collectStructureSettingArgs()],
+    });
+    if (token !== appState.sectionTreeToken) return;
+    if (!result.success) {
+      throw new Error(result.error || result.output || "Could not build the section preview.");
+    }
+    renderSectionTree(JSON.parse(result.output));
+  } catch (error) {
+    if (token !== appState.sectionTreeToken) return;
+    container.innerHTML = `<p class="section-tree-status is-error">${escapeHtml(error.message || "Could not build the section preview.")}</p>`;
+    const countEl = document.getElementById("section-tree-chunk-count");
+    if (countEl) countEl.textContent = "?";
+  }
+}
+
+function formatPageRange(start, end) {
+  if (start == null && end == null) return "—";
+  if (start == null) return `p. ${end}`;
+  if (end == null || end === start) return `p. ${start}`;
+  return `p. ${start}–${end}`;
+}
+
+function renderChunkBadge(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return '<span class="section-chunk-badge is-empty" title="Not covered by any chunk">—</span>';
+  }
+  if (ids.length === 1) {
+    return `<span class="section-chunk-badge">c${ids[0]}</span>`;
+  }
+  const min = ids[0];
+  const max = ids[ids.length - 1];
+  const label = escapeHtml(ids.map((id) => `c${id}`).join(", "));
+  return `<span class="section-chunk-badge is-split" title="Split across chunks ${label}">c${min}–c${max}</span>`;
+}
+
+function renderTreeNode(node, depth, spanningChunks, nextId) {
+  const children = Array.isArray(node.children) ? node.children : [];
+  const hasChildren = children.length > 0;
+  const nodeId = nextId();
+  const title = escapeHtml(node.title || "Untitled section");
+  const pages = formatPageRange(node.start_page, node.end_page);
+  const chunkIds = Array.isArray(node.chunk_ids) ? node.chunk_ids : [];
+  const isSplit = chunkIds.length > 1;
+  const isMerged = !isSplit && chunkIds.length === 1 && spanningChunks.has(chunkIds[0]);
+  const indent = 12 + depth * 18;
+  const toggle = hasChildren
+    ? `<button class="section-node-toggle" onclick="window.toggleTreeNode('${nodeId}')" aria-label="Toggle section"><span class="material-symbols-outlined !text-base">expand_more</span></button>`
+    : '<span class="section-node-toggle is-leaf"></span>';
+  let hint = "";
+  if (isSplit) {
+    hint = '<span class="section-hint-dot is-split" title="This section is split across multiple chunks"></span>';
+  } else if (isMerged) {
+    hint = '<span class="section-hint-dot is-merged" title="This chunk also covers other top-level sections"></span>';
+  }
+  const childHtml = hasChildren
+    ? `<div class="section-node-children" id="children-${nodeId}">${children.map((child) => renderTreeNode(child, depth + 1, spanningChunks, nextId)).join("")}</div>`
+    : "";
+  const nodeClasses = ["section-node"];
+  if (isSplit) nodeClasses.push("is-split");
+  if (isMerged) nodeClasses.push("is-merged");
+  return `
+    <div class="${nodeClasses.join(" ")}" data-node="${nodeId}">
+      <div class="section-node-row" style="padding-left:${indent}px">
+        ${toggle}
+        <span class="section-node-level">H${escapeHtml(node.level)}</span>
+        <span class="section-node-title" title="${title}">${title}</span>
+        ${hint}
+        <span class="section-node-pages">${pages}</span>
+        ${renderChunkBadge(chunkIds)}
+      </div>
+      ${childHtml}
+    </div>`;
+}
+
+function renderSectionTree(data) {
+  const container = document.getElementById("section-tree");
+  const countEl = document.getElementById("section-tree-chunk-count");
+  if (!container) return;
+  const tree = Array.isArray(data?.tree) ? data.tree : [];
+  if (countEl) {
+    countEl.textContent = data && data.chunk_count != null ? String(data.chunk_count) : "?";
+  }
+  if (tree.length === 0) {
+    container.innerHTML = '<p class="section-tree-status">No headings were detected — the document will be split by size only.</p>';
+    return;
+  }
+  // A chunk id that covers several top-level sections signals an under-split
+  // (one chunk swallowing many sections). Flag those sections subtly.
+  const topLevelCounts = new Map();
+  for (const node of tree) {
+    for (const id of node.chunk_ids || []) {
+      topLevelCounts.set(id, (topLevelCounts.get(id) || 0) + 1);
+    }
+  }
+  const spanningChunks = new Set(
+    [...topLevelCounts.entries()].filter(([, count]) => count >= 3).map(([id]) => id),
+  );
+  let counter = 0;
+  const nextId = () => `sec-node-${counter++}`;
+  container.innerHTML = tree
+    .map((node) => renderTreeNode(node, 0, spanningChunks, nextId))
+    .join("");
+  applyOfflineIcons(container);
+}
+
+function toggleTreeNode(nodeId) {
+  const children = document.getElementById(`children-${nodeId}`);
+  const node = document.querySelector(`.section-node[data-node="${nodeId}"]`);
+  if (!children || !node) return;
+  const collapsed = children.classList.toggle("is-collapsed");
+  const icon = node.querySelector(".section-node-toggle .material-symbols-outlined");
+  if (icon) icon.textContent = collapsed ? "chevron_right" : "expand_more";
 }
 
 function filteredChunks() {
@@ -557,6 +746,10 @@ export {
   bulkFixCapitalization,
   handleEdit,
   replaceSelectedPDF,
+  loadStructureTree,
+  scheduleSectionTree,
+  refreshSectionTree,
+  toggleTreeNode,
 };
 
 // app.js (which wires renderer handlers onto `window`) is not modified for these
@@ -564,4 +757,8 @@ export {
 if (typeof window !== "undefined") {
   window.bulkStripNumbering = bulkStripNumbering;
   window.bulkFixCapitalization = bulkFixCapitalization;
+  // Section-tree preview handlers are invoked from inline onclick in the
+  // structure view; register them here since app.js is not modified.
+  window.refreshSectionTree = refreshSectionTree;
+  window.toggleTreeNode = toggleTreeNode;
 }

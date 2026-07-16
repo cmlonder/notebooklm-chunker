@@ -125,6 +125,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also chunk the document and report per-chunk quality findings for review.",
     )
+    inspect_parser.add_argument(
+        "--tree",
+        action="store_true",
+        help=(
+            "Emit a nested section tree of the heading hierarchy with page ranges "
+            "and the chunk id(s) covering each section, for a pre-chunk preview."
+        ),
+    )
     _add_config_argument(inspect_parser)
     inspect_parser.add_argument(
         "--target-pages", type=float, default=None, help="Target estimated pages per chunk."
@@ -137,6 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument(
         "--words-per-page", type=int, default=None, help="Word heuristic for one page."
+    )
+    inspect_parser.add_argument(
+        "--skip-range",
+        action="append",
+        default=None,
+        help="Skip an inclusive PDF page range like `1-8` or a single page like `12`. Repeat as needed.",
     )
     inspect_parser.set_defaults(handler=_handle_inspect)
 
@@ -417,8 +431,10 @@ def _handle_inspect(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     _require_file(input_path, label="Input file")
     include_chunks = getattr(args, "chunks", False)
-    config = load_config(_path_or_none(args.config)) if include_chunks else None
-    skip_ranges = _resolve_skip_ranges(args, config) if include_chunks else ()
+    include_tree = getattr(args, "tree", False)
+    needs_config = include_chunks or include_tree
+    config = load_config(_path_or_none(args.config)) if needs_config else None
+    skip_ranges = _resolve_skip_ranges(args, config) if needs_config else ()
     blocks = parse_document(input_path, pdf_skip_ranges=skip_ranges)
     pages = sorted({block.page for block in blocks if block.page is not None})
     payload: dict[str, object] = {
@@ -428,13 +444,83 @@ def _handle_inspect(args: argparse.Namespace) -> int:
         "headings": sum(1 for block in blocks if block.kind == "heading"),
         "paragraphs": sum(1 for block in blocks if block.kind == "paragraph"),
     }
-    if include_chunks:
+    if include_chunks or include_tree:
         assert config is not None
         settings = _resolve_chunking_settings(args, config)
         chunks = chunk_document(blocks, input_path, settings=settings)
-        payload["chunks"] = _build_chunk_quality_report(chunks, settings)
+        if include_chunks:
+            payload["chunks"] = _build_chunk_quality_report(chunks, settings)
+        if include_tree:
+            payload["tree"] = _build_section_tree(
+                blocks, chunks, last_page=pages[-1] if pages else None
+            )
+            payload["chunk_count"] = len(chunks)
     print(json.dumps(payload, ensure_ascii=False))
     return 0
+
+
+def _chunks_for_range(chunks, start_page, end_page) -> list[int]:
+    """Chunk ids whose page span intersects the inclusive [start, end] range."""
+    if start_page is None:
+        return []
+    span_end = end_page if end_page is not None else start_page
+    ids: set[int] = set()
+    for chunk in chunks:
+        cs = chunk.start_page
+        ce = chunk.end_page
+        if cs is None or ce is None:
+            continue
+        if cs <= span_end and ce >= start_page:
+            ids.add(chunk.chunk_id)
+    return sorted(ids)
+
+
+def _build_section_tree(blocks, chunks, last_page) -> list[dict[str, object]]:
+    """Nest heading blocks into a deterministic section tree.
+
+    Each node carries its title, level, inclusive page range (the heading's page
+    through the page just before the next heading of the same or higher level),
+    and the chunk ids covering that range. Nesting is stack-based on ``level``.
+    """
+    headings = [block for block in blocks if block.kind == "heading"]
+
+    flat: list[dict[str, object]] = []
+    for index, heading in enumerate(headings):
+        start_page = heading.page
+        end_page = last_page
+        for following in headings[index + 1 :]:
+            if following.level <= heading.level:
+                if following.page is not None:
+                    end_page = following.page - 1
+                break
+        if (
+            start_page is not None
+            and end_page is not None
+            and end_page < start_page
+        ):
+            end_page = start_page
+        flat.append(
+            {
+                "title": heading.text,
+                "level": heading.level,
+                "start_page": start_page,
+                "end_page": end_page,
+                "chunk_ids": _chunks_for_range(chunks, start_page, end_page),
+                "children": [],
+            }
+        )
+
+    roots: list[dict[str, object]] = []
+    stack: list[dict[str, object]] = []
+    for node in flat:
+        while stack and stack[-1]["level"] >= node["level"]:
+            stack.pop()
+        if stack:
+            stack[-1]["children"].append(node)  # type: ignore[attr-defined]
+        else:
+            roots.append(node)
+        stack.append(node)
+    return roots
 
 
 def _build_chunk_quality_report(chunks, settings: ChunkingSettings) -> dict[str, object]:

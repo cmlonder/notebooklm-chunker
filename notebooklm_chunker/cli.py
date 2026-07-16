@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from notebooklm_chunker import __version__
+from notebooklm_chunker.anki import AnkiExportError, write_apkg_from_paths
 from notebooklm_chunker.chunker import chunk_document
 from notebooklm_chunker.config import AppConfig, load_config, write_config_template
 from notebooklm_chunker.doctor import format_doctor_report, run_doctor
@@ -237,6 +238,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_profile_argument(resume_parser)
     resume_parser.set_defaults(handler=_handle_resume)
+
+    export_anki_parser = subparsers.add_parser(
+        "export-anki",
+        help="Convert NotebookLM flashcard file(s) into an Anki .apkg deck.",
+    )
+    export_anki_parser.add_argument(
+        "input",
+        nargs="+",
+        help="Flashcard file(s) or director(ies) (.json/.md/.txt) to convert.",
+    )
+    export_anki_parser.add_argument(
+        "-o",
+        "--output",
+        required=True,
+        help="Destination .apkg path.",
+    )
+    export_anki_parser.add_argument(
+        "--deck-name",
+        default="NotebookLM Flashcards",
+        help="Name of the generated Anki deck.",
+    )
+    export_anki_parser.set_defaults(handler=_handle_export_anki)
     return parser
 
 
@@ -506,6 +529,26 @@ def _handle_run(args: argparse.Namespace) -> int:
 def _handle_resume(args: argparse.Namespace) -> int:
     _apply_profile(args)
     return _run_pipeline(args, resume=True)
+
+
+def _handle_export_anki(args: argparse.Namespace) -> int:
+    inputs = [Path(item) for item in args.input]
+    for path in inputs:
+        if not path.exists():
+            raise ChunkerError(f"Flashcard input not found: {path}")
+    output_path = Path(args.output)
+    try:
+        result_path, card_count = write_apkg_from_paths(
+            inputs,
+            output_path,
+            deck_name=args.deck_name,
+        )
+    except AnkiExportError as exc:
+        raise ChunkerError(str(exc)) from exc
+    print(f"Cards exported: {card_count}")
+    print(f"Deck name: {args.deck_name}")
+    print(f"Anki deck: {result_path}")
+    return 0
 
 
 def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:

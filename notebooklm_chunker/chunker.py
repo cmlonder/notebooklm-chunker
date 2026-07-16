@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from notebooklm_chunker.models import Block, Chunk, ChunkingSettings, Section
@@ -87,6 +87,182 @@ def chunk_document(
             )
         )
     return chunks
+
+
+# --- Chunk quality report (analysis only; does not affect chunk planning) ---
+
+
+@dataclass(frozen=True, slots=True)
+class QualityFinding:
+    """A single reviewable issue detected on one chunk.
+
+    ``code`` is a stable machine identifier, ``severity`` is ``"warn"`` (likely
+    needs a human fix) or ``"info"`` (worth a glance), and ``message`` is a
+    short human-readable explanation.
+    """
+
+    chunk_id: int
+    code: str
+    severity: str
+    message: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "chunk_id": self.chunk_id,
+            "code": self.code,
+            "severity": self.severity,
+            "message": self.message,
+        }
+
+
+# A title that is only a page number / running header, e.g. "12", "Page 7",
+# "3 of 40", "5/40".
+_RUNNING_HEADER_RE = re.compile(r"^(?:page\s+)?\d+(?:\s*(?:/|of)\s*\d+)?$", re.IGNORECASE)
+# Trailing "(Part N)" appended by the oversized-section splitter.
+_PART_SUFFIX_RE = re.compile(r"\(Part\s+(\d+)\)\s*$", re.IGNORECASE)
+
+
+def analyze_chunk_quality(
+    chunks: list[Chunk],
+    settings: ChunkingSettings | None = None,
+) -> list[QualityFinding]:
+    """Flag chunks that likely need human review before Studio generation.
+
+    Pure and deterministic: inspects already-planned chunks and never changes
+    the chunking algorithm. Returns findings sorted by ``(chunk_id, code)``.
+    """
+
+    resolved = settings or ChunkingSettings()
+    findings: list[QualityFinding] = []
+    last_index = len(chunks) - 1
+
+    heading_groups: dict[str, list[int]] = {}
+    for chunk in chunks:
+        key = _normalized_heading_key(chunk.primary_heading)
+        if key:
+            heading_groups.setdefault(key, []).append(chunk.chunk_id)
+
+    for index, chunk in enumerate(chunks):
+        findings.extend(_size_findings(chunk, resolved, is_last=(index == last_index)))
+        missing = _missing_heading_finding(chunk)
+        if missing is not None:
+            findings.append(missing)
+        mid_cut = _mid_section_cut_finding(chunk)
+        if mid_cut is not None:
+            findings.append(mid_cut)
+
+    for chunk_ids in heading_groups.values():
+        if len(chunk_ids) < 2:
+            continue
+        shared = ", ".join(str(cid) for cid in sorted(chunk_ids))
+        for chunk_id in chunk_ids:
+            findings.append(
+                QualityFinding(
+                    chunk_id=chunk_id,
+                    code="duplicate_heading",
+                    severity="info",
+                    message=(
+                        f"Heading is shared by {len(chunk_ids)} chunks (ids {shared}); "
+                        "consider disambiguating the titles."
+                    ),
+                )
+            )
+
+    findings.sort(key=lambda finding: (finding.chunk_id, finding.code))
+    return findings
+
+
+def _size_findings(
+    chunk: Chunk,
+    settings: ChunkingSettings,
+    *,
+    is_last: bool,
+) -> list[QualityFinding]:
+    pages = chunk.estimated_pages
+    if pages > settings.max_pages:
+        return [
+            QualityFinding(
+                chunk_id=chunk.chunk_id,
+                code="too_long",
+                severity="warn",
+                message=(
+                    f"Chunk spans ~{pages:.2f} pages, above the configured max of "
+                    f"{settings.max_pages:.2f}."
+                ),
+            )
+        ]
+    if pages < settings.min_pages:
+        # A short final chunk is the normal document tail, so it is only info.
+        severity = "info" if is_last else "warn"
+        prefix = "Final chunk" if is_last else "Chunk"
+        return [
+            QualityFinding(
+                chunk_id=chunk.chunk_id,
+                code="too_short",
+                severity=severity,
+                message=(
+                    f"{prefix} spans ~{pages:.2f} pages, below the configured min of "
+                    f"{settings.min_pages:.2f}."
+                ),
+            )
+        ]
+    return []
+
+
+def _missing_heading_finding(chunk: Chunk) -> QualityFinding | None:
+    heading = (chunk.primary_heading or "").strip()
+    if not heading:
+        return QualityFinding(
+            chunk_id=chunk.chunk_id,
+            code="no_heading",
+            severity="warn",
+            message="Chunk has no heading/title.",
+        )
+    if _RUNNING_HEADER_RE.match(heading):
+        return QualityFinding(
+            chunk_id=chunk.chunk_id,
+            code="no_heading",
+            severity="warn",
+            message=(
+                f"Chunk title {heading!r} looks like a page number or running header, "
+                "not a real heading."
+            ),
+        )
+    stem = Path(chunk.source_file).stem.replace("_", " ").strip()
+    if stem and heading.lower() == stem.lower():
+        return QualityFinding(
+            chunk_id=chunk.chunk_id,
+            code="no_heading",
+            severity="info",
+            message=(
+                f"Chunk title falls back to the source file name {heading!r}; no "
+                "in-document heading was detected for it."
+            ),
+        )
+    return None
+
+
+def _mid_section_cut_finding(chunk: Chunk) -> QualityFinding | None:
+    match = _PART_SUFFIX_RE.search(chunk.primary_heading or "")
+    if match is None:
+        return None
+    part_number = int(match.group(1))
+    if part_number < 2:
+        return None
+    return QualityFinding(
+        chunk_id=chunk.chunk_id,
+        code="mid_section_cut",
+        severity="warn",
+        message=(
+            f"Chunk starts mid-section (part {part_number} of a split section); its "
+            "first content is not a section heading."
+        ),
+    )
+
+
+def _normalized_heading_key(heading: str) -> str:
+    cleaned = _strip_heading_numbering(heading or "")
+    return re.sub(r"\s+", " ", cleaned).strip().lower()
 
 
 def _validate_settings(settings: ChunkingSettings) -> None:

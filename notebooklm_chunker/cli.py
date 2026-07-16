@@ -9,7 +9,7 @@ from pathlib import Path
 
 from notebooklm_chunker import __version__
 from notebooklm_chunker.anki import AnkiExportError, write_apkg_from_paths
-from notebooklm_chunker.chunker import chunk_document
+from notebooklm_chunker.chunker import analyze_chunk_quality, chunk_document
 from notebooklm_chunker.config import AppConfig, load_config, write_config_template
 from notebooklm_chunker.doctor import format_doctor_report, run_doctor
 from notebooklm_chunker.exporters import export_markdown_chunks
@@ -120,6 +120,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect a document and print lightweight JSON metadata for desktop integrations.",
     )
     inspect_parser.add_argument("input", help="Source document path to inspect.")
+    inspect_parser.add_argument(
+        "--chunks",
+        action="store_true",
+        help="Also chunk the document and report per-chunk quality findings for review.",
+    )
+    _add_config_argument(inspect_parser)
+    inspect_parser.add_argument(
+        "--target-pages", type=float, default=None, help="Target estimated pages per chunk."
+    )
+    inspect_parser.add_argument(
+        "--min-pages", type=float, default=None, help="Minimum estimated pages per chunk."
+    )
+    inspect_parser.add_argument(
+        "--max-pages", type=float, default=None, help="Maximum estimated pages per chunk."
+    )
+    inspect_parser.add_argument(
+        "--words-per-page", type=int, default=None, help="Word heuristic for one page."
+    )
     inspect_parser.set_defaults(handler=_handle_inspect)
 
     init_parser = subparsers.add_parser(
@@ -398,21 +416,76 @@ def _handle_delete_artifacts(args: argparse.Namespace) -> int:
 def _handle_inspect(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     _require_file(input_path, label="Input file")
-    blocks = parse_document(input_path)
+    include_chunks = getattr(args, "chunks", False)
+    config = load_config(_path_or_none(args.config)) if include_chunks else None
+    skip_ranges = _resolve_skip_ranges(args, config) if include_chunks else ()
+    blocks = parse_document(input_path, pdf_skip_ranges=skip_ranges)
     pages = sorted({block.page for block in blocks if block.page is not None})
-    print(
-        json.dumps(
-            {
-                "pages": len(pages),
-                "first_page": pages[0] if pages else None,
-                "last_page": pages[-1] if pages else None,
-                "headings": sum(1 for block in blocks if block.kind == "heading"),
-                "paragraphs": sum(1 for block in blocks if block.kind == "paragraph"),
-            },
-            ensure_ascii=False,
-        )
-    )
+    payload: dict[str, object] = {
+        "pages": len(pages),
+        "first_page": pages[0] if pages else None,
+        "last_page": pages[-1] if pages else None,
+        "headings": sum(1 for block in blocks if block.kind == "heading"),
+        "paragraphs": sum(1 for block in blocks if block.kind == "paragraph"),
+    }
+    if include_chunks:
+        assert config is not None
+        settings = _resolve_chunking_settings(args, config)
+        chunks = chunk_document(blocks, input_path, settings=settings)
+        payload["chunks"] = _build_chunk_quality_report(chunks, settings)
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
+
+
+def _build_chunk_quality_report(chunks, settings: ChunkingSettings) -> dict[str, object]:
+    findings = analyze_chunk_quality(chunks, settings)
+    findings_by_chunk: dict[int, list[dict[str, object]]] = {}
+    for finding in findings:
+        findings_by_chunk.setdefault(finding.chunk_id, []).append(finding.to_dict())
+
+    items = [
+        {
+            "chunk_id": chunk.chunk_id,
+            "primary_heading": chunk.primary_heading,
+            "word_count": chunk.word_count,
+            "estimated_pages": chunk.estimated_pages,
+            "start_page": chunk.start_page,
+            "end_page": chunk.end_page,
+            "findings": findings_by_chunk.get(chunk.chunk_id, []),
+        }
+        for chunk in chunks
+    ]
+
+    by_code: dict[str, int] = {}
+    warn = 0
+    info = 0
+    for finding in findings:
+        by_code[finding.code] = by_code.get(finding.code, 0) + 1
+        if finding.severity == "warn":
+            warn += 1
+        elif finding.severity == "info":
+            info += 1
+
+    return {
+        "count": len(chunks),
+        "settings": {
+            "target_pages": settings.target_pages,
+            "min_pages": settings.min_pages,
+            "max_pages": settings.max_pages,
+            "words_per_page": settings.words_per_page,
+        },
+        "items": items,
+        "findings": [finding.to_dict() for finding in findings],
+        "summary": {
+            "total": len(findings),
+            "warn": warn,
+            "info": info,
+            "needs_review": sorted(
+                {finding.chunk_id for finding in findings if finding.severity == "warn"}
+            ),
+            "by_code": by_code,
+        },
+    }
 
 
 def _handle_init(args: argparse.Namespace) -> int:

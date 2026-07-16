@@ -227,6 +227,46 @@ function filteredQueueJobs(backgroundJobs) {
   });
 }
 
+// Live "retry in mm:ss" text for a quota-blocked job, from its ISO blocked_until.
+function studioCountdownText(iso) {
+  const target = Date.parse(iso);
+  if (!Number.isFinite(target)) return "Waiting to retry";
+  const ms = target - Date.now();
+  if (ms <= 0) return "Retrying…";
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value) => String(value).padStart(2, "0");
+  const clock = hours > 0
+    ? `${hours}:${pad(minutes)}:${pad(seconds)}`
+    : `${pad(minutes)}:${pad(seconds)}`;
+  return `Retry in ${clock}`;
+}
+
+// A single interval refreshes every visible countdown once a second and stops
+// itself when no blocked jobs remain on screen.
+let studioCountdownTimer = null;
+function syncStudioCountdowns() {
+  const tick = () => {
+    const nodes = document.querySelectorAll(".queue-countdown[data-blocked-until]");
+    if (nodes.length === 0) {
+      if (studioCountdownTimer) {
+        clearInterval(studioCountdownTimer);
+        studioCountdownTimer = null;
+      }
+      return;
+    }
+    nodes.forEach((node) => {
+      node.textContent = studioCountdownText(node.getAttribute("data-blocked-until"));
+    });
+  };
+  tick();
+  if (!studioCountdownTimer) {
+    studioCountdownTimer = setInterval(tick, 1000);
+  }
+}
+
 function renderQueueJobRow(job) {
   const tone = job.status === "failed"
     ? "queue-progress-bar is-failed"
@@ -234,7 +274,13 @@ function renderQueueJobRow(job) {
     ? "queue-progress-bar is-complete"
     : job.status === "running"
     ? "queue-progress-bar is-running"
+    : job.status === "blocked"
+    ? "queue-progress-bar is-blocked"
     : "queue-progress-bar";
+  const isBlocked = job.status === "blocked" && job.blockedUntil;
+  const statusLine = isBlocked
+    ? `<p class="text-[11px] text-amber-600 font-semibold mt-2 queue-countdown" data-blocked-until="${escapeHtml(job.blockedUntil)}">${escapeHtml(studioCountdownText(job.blockedUntil))}</p>`
+    : `<p class="text-[11px] text-slate-400 mt-2">${escapeHtml(job.message || job.status)}</p>`;
   const logLines = job.status === "failed" ? 6 : 3;
   const logPreview = Array.isArray(job.logs) && job.logs.length > 0
     ? `<div class="queue-log-preview ${job.status === "failed" ? "is-error" : ""}">${job.logs.slice(-logLines).map((entry) => `<p>[${escapeHtml(entry.channel)}] ${escapeHtml(entry.line)}</p>`).join("")}</div>`
@@ -247,14 +293,14 @@ function renderQueueJobRow(job) {
           <p class="font-bold text-slate-900 capitalize">${escapeHtml(job.displayLabel || job.label)}</p>
           <p class="text-xs text-slate-400 truncate">${escapeHtml(job.sourceSummary)} · ${escapeHtml(job.localRunName)}</p>
           <div class="queue-progress"><div class="${tone}" style="width: ${Number(job.progress || 0)}%"></div></div>
-          <p class="text-[11px] text-slate-400 mt-2">${escapeHtml(job.message || job.status)}</p>
+          ${statusLine}
           ${logPreview}
         </div>
       </div>
       <div class="flex flex-col items-end gap-2">
-        <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
+        <span class="inline-flex items-center px-3 py-1 rounded-full ${job.status === "failed" ? "bg-red-50 text-red-500" : job.status === "submitted" ? "bg-green-50 text-green-700" : job.status === "running" ? "bg-blue-50 text-blue-700" : job.status === "blocked" ? "bg-orange-50 text-orange-600" : "bg-amber-50 text-amber-700"} text-xs font-bold uppercase">${job.status}</span>
         <div class="flex items-center gap-1">
-          ${job.status === "failed" ? `<button onclick="window.retryStudioJob(${attrArg(job.id)})" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>Retry</button>` : ""}
+          ${(job.status === "failed" || job.status === "blocked") ? `<button onclick="window.retryStudioJob(${attrArg(job.id)})" class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"><span class="material-symbols-outlined !text-xs">refresh</span>${job.status === "blocked" ? "Retry now" : "Retry"}</button>` : ""}
           ${job.status !== "running" ? `<button onclick="window.removeBackgroundStudioJob(${attrArg(job.id)})" class="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all" title="Remove"><span class="material-symbols-outlined !text-sm">delete</span></button>` : ""}
         </div>
       </div>
@@ -285,6 +331,7 @@ function renderStudioQueue(activeProject) {
 
   if (allJobs.length === 0) {
     queueList.innerHTML = '<div class="p-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-400 italic">No queued Studio batches yet.</div>';
+    syncStudioCountdowns();
     return;
   }
 
@@ -342,6 +389,7 @@ function renderStudioQueue(activeProject) {
 
   queueList.innerHTML = `${topBar}${stagedRows}${backgroundRows}${emptyMessage}`;
   applyOfflineIcons(queueList);
+  syncStudioCountdowns();
 }
 
 function prepareStudioView() {

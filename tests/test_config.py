@@ -70,6 +70,10 @@ class ConfigTests(TestCase):
         self.assertIn('output_dir = "./output/{source_stem}/reports"', content)
         self.assertIn('output_dir = "./output/{source_stem}/slides"', content)
         self.assertIn("[studios.quiz]", content)
+        # The template must use only live engine option values, not the
+        # deprecated "more" quiz quantity (mapped to "standard" upstream).
+        self.assertIn('quantity = "standard"', content)
+        self.assertNotIn('quantity = "more"', content)
 
     def test_load_config_resolves_relative_source_and_studio_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

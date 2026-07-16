@@ -21,7 +21,7 @@ function studioSettingSummary(studioName) {
     return `${String(settings.language || "en").toUpperCase()} · ${settings.format || "detailed"} · ${settings.length || "default"}`;
   }
   if (studioName === "quiz" || studioName === "flashcards") {
-    return `${settings.quantity || "more"} · ${settings.difficulty || "hard"} · ${settings.downloadFormat || (studioName === "quiz" ? "json" : "markdown")}`;
+    return `${settings.quantity || "standard"} · ${settings.difficulty || "hard"} · ${settings.downloadFormat || (studioName === "quiz" ? "json" : "markdown")}`;
   }
   if (studioName === "audio") {
     return `${String(settings.language || "en").toUpperCase()} · ${settings.format || "deep-dive"} · ${settings.length || "long"}`;
@@ -37,14 +37,26 @@ function updateStudioSettingsSummaries() {
   }
 }
 
-function studioSettingsField(field, label, options, value) {
+function studioSettingsField(field, label, options, value, onChange) {
   const opts = options.map((option) => `<option value="${option.value}" ${option.value === value ? "selected" : ""}>${option.label}</option>`).join("");
+  const onChangeAttr = onChange ? ` onchange="${onChange}"` : "";
   return `
     <label class="space-y-2 block">
       <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${label}</span>
-      <select data-studio-setting="${field}" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+      <select data-studio-setting="${field}"${onChangeAttr} class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
         ${opts}
       </select>
+    </label>
+  `;
+}
+
+function studioSettingsTextField(field, label, value, placeholder) {
+  const safeValue = String(value || "").replace(/"/g, "&quot;");
+  const safePlaceholder = String(placeholder || "").replace(/"/g, "&quot;");
+  return `
+    <label class="space-y-2 block">
+      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">${label}</span>
+      <input data-studio-setting="${field}" type="text" value="${safeValue}" placeholder="${safePlaceholder}" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all" />
     </label>
   `;
 }
@@ -238,6 +250,79 @@ function switchNblmSourceTab(studioName) {
   renderNblmSettingsBody();
 }
 
+// Studio types that expose a settings panel in the NotebookLM settings view.
+// Superset of prompt studios (state.js promptStudioTypes) — it adds video,
+// infographic, mind_map, and data_table, which the engine supports but which
+// have no prompt cards on the dashboard.
+const SETTINGS_STUDIO_TYPES = [
+  "report",
+  "slide_deck",
+  "quiz",
+  "flashcards",
+  "audio",
+  "video",
+  "infographic",
+  "mind_map",
+  "data_table",
+];
+
+// Kept in sync with notebooklm_chunker/config.py enum maps (source of truth).
+const VIDEO_FORMATS = [
+  { value: "explainer", label: "Explainer" },
+  { value: "brief", label: "Brief" },
+  { value: "cinematic", label: "Cinematic" },
+];
+const VIDEO_STYLES = [
+  { value: "auto", label: "Auto" },
+  { value: "custom", label: "Custom" },
+  { value: "classic", label: "Classic" },
+  { value: "whiteboard", label: "Whiteboard" },
+  { value: "kawaii", label: "Kawaii" },
+  { value: "anime", label: "Anime" },
+  { value: "watercolor", label: "Watercolor" },
+  { value: "retro-print", label: "Retro Print" },
+  { value: "heritage", label: "Heritage" },
+  { value: "paper-craft", label: "Paper Craft" },
+];
+const INFOGRAPHIC_ORIENTATIONS = [
+  { value: "landscape", label: "Landscape" },
+  { value: "portrait", label: "Portrait" },
+  { value: "square", label: "Square" },
+];
+const INFOGRAPHIC_DETAILS = [
+  { value: "concise", label: "Concise" },
+  { value: "standard", label: "Standard" },
+  { value: "detailed", label: "Detailed" },
+];
+const INFOGRAPHIC_STYLES = [
+  { value: "auto", label: "Auto" },
+  { value: "sketch-note", label: "Sketch Note" },
+  { value: "professional", label: "Professional" },
+  { value: "bento-grid", label: "Bento Grid" },
+  { value: "editorial", label: "Editorial" },
+  { value: "instructional", label: "Instructional" },
+  { value: "bricks", label: "Bricks" },
+  { value: "clay", label: "Clay" },
+  { value: "anime", label: "Anime" },
+  { value: "kawaii", label: "Kawaii" },
+  { value: "scientific", label: "Scientific" },
+];
+
+// UI defaults for studio types not covered by state.js defaultStudioSettings().
+// state.js only ships defaults for the five prompt studios, so the settings-only
+// studio types (video, infographic, data_table, mind_map) get theirs here.
+function studioSettingsDefaults(studioName) {
+  const base = defaultStudioSettings()[studioName];
+  if (base) return base;
+  const extra = {
+    video: { language: "en", format: "explainer", style: "auto", stylePrompt: "" },
+    infographic: { language: "en", orientation: "portrait", detail: "detailed", style: "auto" },
+    data_table: { language: "en" },
+    mind_map: {},
+  };
+  return extra[studioName] || {};
+}
+
 function nblmSourceSettingsFields(studioName, settings) {
   const sections = [];
   if (studioName === "report") {
@@ -259,7 +344,7 @@ function nblmSourceSettingsFields(studioName, settings) {
     ], settings.downloadFormat));
   } else if (studioName === "quiz" || studioName === "flashcards") {
     sections.push(studioSettingsField("quantity", "Quantity", [
-      { value: "fewer", label: "Fewer" }, { value: "default", label: "Default" }, { value: "more", label: "More" },
+      { value: "fewer", label: "Fewer" }, { value: "standard", label: "Standard" },
     ], settings.quantity));
     sections.push(studioSettingsField("difficulty", "Difficulty", [
       { value: "easier", label: "Easier" }, { value: "default", label: "Default" }, { value: "hard", label: "Hard" },
@@ -277,6 +362,28 @@ function nblmSourceSettingsFields(studioName, settings) {
     sections.push(studioSettingsField("length", "Length", [
       { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
     ], settings.length));
+  } else if (studioName === "video") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    sections.push(studioSettingsField("format", "Format", VIDEO_FORMATS, settings.format));
+    // Changing style must re-render the panel so the custom style_prompt input
+    // can appear/disappear; switchNblmSourceTab collects the DOM then repaints.
+    sections.push(studioSettingsField("style", "Style", VIDEO_STYLES, settings.style, "window.switchNblmSourceTab('video')"));
+    if (settings.style === "custom") {
+      sections.push(studioSettingsTextField("stylePrompt", "Style prompt", settings.stylePrompt, "Describe the visual style for the video"));
+    }
+  } else if (studioName === "infographic") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    sections.push(studioSettingsField("orientation", "Orientation", INFOGRAPHIC_ORIENTATIONS, settings.orientation));
+    sections.push(studioSettingsField("detail", "Detail", INFOGRAPHIC_DETAILS, settings.detail));
+    sections.push(studioSettingsField("style", "Style", INFOGRAPHIC_STYLES, settings.style));
+  } else if (studioName === "data_table") {
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+  } else if (studioName === "mind_map") {
+    sections.push(`
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Mind maps have no generation options — NotebookLM builds the map directly from the selected sources.
+      </p>
+    `);
   }
   return sections;
 }
@@ -287,10 +394,10 @@ function renderNblmSettingsBody() {
 
   if (nblmSettingsActiveTab === "sources") {
     const studioName = nblmSettingsActiveSourceTab;
-    const settings = nblmSettingsDraft.studioSettings[studioName] || defaultStudioSettings()[studioName] || {};
+    const settings = nblmSettingsDraft.studioSettings[studioName] || studioSettingsDefaults(studioName);
     const maxPar = nblmSettingsDraft.maxParallel[studioName] ?? DEFAULT_MAX_PARALLEL[studioName] ?? 2;
 
-    const sourceTabBar = renderTabBar(promptStudioTypes, studioName, "switchNblmSourceTab", {
+    const sourceTabBar = renderTabBar(SETTINGS_STUDIO_TYPES, studioName, "switchNblmSourceTab", {
       extraClass: " text-xs",
     });
 

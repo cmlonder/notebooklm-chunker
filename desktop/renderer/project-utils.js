@@ -124,6 +124,18 @@
       if (config.format) {
         lines.push(`format = ${JSON.stringify(config.format)}`);
       }
+      if (config.style) {
+        lines.push(`style = ${JSON.stringify(config.style)}`);
+      }
+      if (config.stylePrompt) {
+        lines.push(`style_prompt = ${JSON.stringify(config.stylePrompt)}`);
+      }
+      if (config.orientation) {
+        lines.push(`orientation = ${JSON.stringify(config.orientation)}`);
+      }
+      if (config.detail) {
+        lines.push(`detail = ${JSON.stringify(config.detail)}`);
+      }
       if (config.length) {
         lines.push(`length = ${JSON.stringify(config.length)}`);
       }

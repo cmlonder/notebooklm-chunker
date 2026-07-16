@@ -84,9 +84,13 @@ function defaultStudioSettings() {
   return {
     report: { language: "en", format: "study-guide" },
     slide_deck: { language: "en", format: "detailed", length: "default", downloadFormat: "pptx" },
-    quiz: { quantity: "more", difficulty: "hard", downloadFormat: "json" },
-    flashcards: { quantity: "more", difficulty: "hard", downloadFormat: "markdown" },
+    quiz: { quantity: "standard", difficulty: "hard", downloadFormat: "json" },
+    flashcards: { quantity: "standard", difficulty: "hard", downloadFormat: "markdown" },
     audio: { language: "en", format: "deep-dive", length: "long" },
+    video: { language: "en", format: "explainer", style: "auto", stylePrompt: "" },
+    infographic: { language: "en", orientation: "portrait", detail: "detailed", style: "auto" },
+    data_table: { language: "en" },
+    mind_map: {},
   };
 }
 
@@ -106,6 +110,12 @@ function loadStudioSettings() {
             : {}),
           ...(studioName === "slide_deck" && parsed?.[studioName]?.length === "long"
             ? { length: "default" }
+            : {}),
+          // "more"/"default" quiz & flashcard quantities were removed upstream;
+          // migrate any saved value to the surviving "standard" member.
+          ...((studioName === "quiz" || studioName === "flashcards") &&
+          ["more", "default"].includes(parsed?.[studioName]?.quantity)
+            ? { quantity: "standard" }
             : {}),
         },
       ]),

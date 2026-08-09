@@ -78,6 +78,50 @@ button {
   display: flex;
 }
 
+/* ------------------------------------------------------------------ *
+ * Window drag regions
+ *
+ * The BrowserWindow uses `titleBarStyle: 'hiddenInset'`, so macOS draws no
+ * title bar for the user to grab — the app has to nominate its own draggable
+ * surface or the window cannot be moved at all. The sidebar and the wizard
+ * header are the two chrome elements pinned to the top of the window, so they
+ * carry the drag region; the setup screen hides both, and gets a strip of its
+ * own along the top edge.
+ *
+ * Everything interactive inside a drag region must opt back out: a `drag`
+ * element swallows clicks, so an un-excluded button silently stops working.
+ * ------------------------------------------------------------------ */
+#main-sidebar,
+#wizard-header {
+  -webkit-app-region: drag;
+}
+
+#main-sidebar a,
+#main-sidebar button,
+#main-sidebar input,
+#main-sidebar select,
+#main-sidebar textarea,
+#wizard-header a,
+#wizard-header button,
+#wizard-header input,
+#wizard-header select {
+  -webkit-app-region: no-drag;
+}
+
+#setup-view {
+  position: relative;
+}
+
+#setup-view::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2rem;
+  -webkit-app-region: drag;
+}
+
 .sidebar-glass {
   background: rgba(255, 255, 255, 0.62);
   backdrop-filter: blur(20px);

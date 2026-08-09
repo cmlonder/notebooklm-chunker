@@ -578,7 +578,10 @@ function createWindow() {
     width: 1200, height: 800, minWidth: 800, minHeight: 600,
     webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
     icon: path.join(__dirname, '../build/icon.png'),
-    titleBarStyle: 'hiddenInset', backgroundColor: '#1e1e1e'
+    // `hiddenInset` removes the native title bar, so the renderer supplies the
+    // draggable surface itself (see the drag-region block in styles.css).
+    titleBarStyle: 'hiddenInset', backgroundColor: '#1e1e1e',
+    resizable: true, movable: true, maximizable: true, fullscreenable: true
   });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   if (process.argv.includes('--dev')) { mainWindow.webContents.openDevTools(); }

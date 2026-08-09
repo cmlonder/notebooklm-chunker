@@ -18,6 +18,8 @@ _EMPTY_SOURCE_STATE = {
     "last_error": None,
     "updated_at": None,
 }
+
+
 class RunStateError(ChunkerError):
     """Raised when a persisted run state file cannot be read or written."""
 

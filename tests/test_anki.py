@@ -97,9 +97,7 @@ class LoadFlashcardsTests(TestCase):
             (base / "a.json").write_text(
                 json.dumps({"cards": [{"front": "A", "back": "1"}]}), encoding="utf-8"
             )
-            (base / "b.md").write_text(
-                "## Card 1\n\n**Q:** B\n\n**A:** 2\n", encoding="utf-8"
-            )
+            (base / "b.md").write_text("## Card 1\n\n**Q:** B\n\n**A:** 2\n", encoding="utf-8")
             cards = collect_flashcards(base)
 
         fronts = sorted(c.front for c in cards)
@@ -137,9 +135,7 @@ class BuildApkgTests(TestCase):
                 card_rows = conn.execute(
                     "SELECT id, nid, did, ord, type, queue FROM cards ORDER BY id"
                 ).fetchall()
-                col_row = conn.execute(
-                    "SELECT ver, models, decks, conf FROM col"
-                ).fetchone()
+                col_row = conn.execute("SELECT ver, models, decks, conf FROM col").fetchone()
             finally:
                 conn.close()
 
@@ -172,9 +168,7 @@ class BuildApkgTests(TestCase):
         self.assertTrue(any(m["name"] == "Basic" for m in models.values()))
         self.assertTrue(any(d["name"] == "My Deck" for d in decks.values()))
         # Cards belong to the named deck, not the default deck.
-        named_deck_ids = {
-            int(k) for k, d in decks.items() if d["name"] == "My Deck"
-        }
+        named_deck_ids = {int(k) for k, d in decks.items() if d["name"] == "My Deck"}
         self.assertTrue(all(card[2] in named_deck_ids for card in card_rows))
 
     def test_deterministic_output_with_fixed_timestamp_and_seed(self) -> None:
@@ -203,9 +197,7 @@ class BuildApkgTests(TestCase):
             base = Path(directory)
             src = base / "flashcards.json"
             src.write_text(
-                json.dumps(
-                    {"cards": [{"front": "Hello", "back": "World"}]}
-                ),
+                json.dumps({"cards": [{"front": "Hello", "back": "World"}]}),
                 encoding="utf-8",
             )
             out = base / "deck.apkg"

@@ -1,0 +1,120 @@
+/* Workflow presets (roadmap D1)
+   Styles for the one-click Studio preset picker rendered by presets.js into
+   #studio-preset-picker. Theme-aware: it reuses the shared --primary / --slate
+   / --surface variables from styles.css, which already remap under
+   :root[data-theme="dark"], so most of the picker needs no dark override.
+   Only the subtle chip surface and hover are nudged for dark below. */
+
+.preset-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--slate-100);
+  border-radius: 1.5rem;
+  background: var(--surface);
+}
+
+.preset-picker-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.preset-picker-icon {
+  color: var(--primary);
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.preset-picker-heading {
+  min-width: 0;
+}
+
+.preset-picker-title {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--slate-900);
+}
+
+.preset-picker-sub {
+  font-size: 0.75rem;
+  color: var(--slate-400);
+  margin-top: 0.125rem;
+}
+
+.preset-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.preset-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--slate-200);
+  border-radius: 1rem;
+  background: var(--surface-strong);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  min-width: 0;
+  flex: 1 1 12rem;
+  max-width: 20rem;
+}
+
+.preset-chip:hover {
+  border-color: var(--primary-50);
+  background: var(--primary-10);
+}
+
+.preset-chip:active {
+  transform: scale(0.98);
+}
+
+.preset-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--primary-20);
+}
+
+.preset-chip-icon {
+  color: var(--primary);
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.preset-chip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.preset-chip-name {
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: var(--slate-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preset-chip-desc {
+  font-size: 0.6875rem;
+  color: var(--slate-400);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:root[data-theme="dark"] .preset-chip {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme="dark"] .preset-chip:hover {
+  background: var(--primary-10);
+}

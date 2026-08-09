@@ -183,6 +183,81 @@ function prepareStructureView() {
 // Renders the document's heading hierarchy and how it maps to chunks so the
 // user can judge the split before committing. Backed by `nblm inspect --tree`.
 
+// -- Manual chunk-boundary overrides --------------------------------------
+// The user can force a chunk to start at a heading ("force split") or fold a
+// heading into the previous chunk ("merge"). Overrides are keyed by the
+// heading's page number, kept in module state for the active project, and
+// persisted into the project's metadata.json alongside notebook/pdf info.
+const chunkOverrides = { outputDir: null, force: new Set(), noSplit: new Set() };
+
+async function ensureChunkOverridesLoaded() {
+  // Reload only when the active project changes so in-memory edits survive even
+  // if metadata.json is rewritten elsewhere (e.g. after a sync links a notebook).
+  if (chunkOverrides.outputDir === appState.outputDir) return;
+  chunkOverrides.outputDir = appState.outputDir;
+  chunkOverrides.force = new Set();
+  chunkOverrides.noSplit = new Set();
+  if (!appState.outputDir) return;
+  const meta = await readJson(`${appState.outputDir}/metadata.json`);
+  for (const page of Array.isArray(meta?.forceSplitPages) ? meta.forceSplitPages : []) {
+    const value = Number(page);
+    if (Number.isFinite(value)) chunkOverrides.force.add(value);
+  }
+  for (const page of Array.isArray(meta?.noSplitPages) ? meta.noSplitPages : []) {
+    const value = Number(page);
+    if (Number.isFinite(value) && !chunkOverrides.force.has(value)) chunkOverrides.noSplit.add(value);
+  }
+}
+
+async function persistChunkOverrides() {
+  if (!appState.outputDir) return;
+  // Merge into any existing metadata so notebook/pdf fields are preserved.
+  const existing = (await readJson(`${appState.outputDir}/metadata.json`)) || {};
+  existing.forceSplitPages = [...chunkOverrides.force].sort((a, b) => a - b);
+  existing.noSplitPages = [...chunkOverrides.noSplit].sort((a, b) => a - b);
+  appState.projectMetadata = existing;
+  await saveTextFile(`${appState.outputDir}/metadata.json`, `${JSON.stringify(existing, null, 2)}\n`);
+}
+
+function collectSplitOverrideArgs() {
+  const args = [];
+  for (const page of [...chunkOverrides.force].sort((a, b) => a - b)) {
+    args.push("--split-at", String(page));
+  }
+  for (const page of [...chunkOverrides.noSplit].sort((a, b) => a - b)) {
+    args.push("--no-split-at", String(page));
+  }
+  return args;
+}
+
+async function toggleForceSplit(page) {
+  const value = Number(page);
+  if (!Number.isFinite(value)) return;
+  await ensureChunkOverridesLoaded();
+  if (chunkOverrides.force.has(value)) {
+    chunkOverrides.force.delete(value);
+  } else {
+    chunkOverrides.force.add(value);
+    chunkOverrides.noSplit.delete(value);
+  }
+  await persistChunkOverrides();
+  scheduleSectionTree({ immediate: true });
+}
+
+async function toggleNoSplit(page) {
+  const value = Number(page);
+  if (!Number.isFinite(value)) return;
+  await ensureChunkOverridesLoaded();
+  if (chunkOverrides.noSplit.has(value)) {
+    chunkOverrides.noSplit.delete(value);
+  } else {
+    chunkOverrides.noSplit.add(value);
+    chunkOverrides.force.delete(value);
+  }
+  await persistChunkOverrides();
+  scheduleSectionTree({ immediate: true });
+}
+
 function collectStructureSettingArgs() {
   const args = [];
   const minPages = Number(document.getElementById("min-pages-input")?.value || 0);
@@ -208,6 +283,7 @@ function collectStructureSettingArgs() {
   for (const rangeArg of window.projectUtils.skipRangesToArgs(midRanges)) {
     args.push("--skip-range", rangeArg);
   }
+  args.push(...collectSplitOverrideArgs());
   return args;
 }
 
@@ -243,6 +319,7 @@ async function loadStructureTree() {
     return;
   }
   card.style.display = "flex";
+  await ensureChunkOverridesLoaded();
   // Guard against overlapping runs (settings can change while one is in flight).
   const token = (appState.sectionTreeToken = (appState.sectionTreeToken || 0) + 1);
   container.innerHTML = '<p class="section-tree-status">Analyzing section structure…</p>';
@@ -303,12 +380,23 @@ function renderTreeNode(node, depth, spanningChunks, nextId) {
   } else if (isMerged) {
     hint = '<span class="section-hint-dot is-merged" title="This chunk also covers other top-level sections"></span>';
   }
+  const startPage = Number.isFinite(Number(node.start_page)) ? Number(node.start_page) : null;
+  const isForced = startPage != null && chunkOverrides.force.has(startPage);
+  const isNoSplit = startPage != null && chunkOverrides.noSplit.has(startPage);
+  const marker = isForced
+    ? '<span class="section-node-override-marker" style="color:#7c3aed;font-size:9px;font-weight:800;letter-spacing:.05em" title="A chunk is forced to start here">SPLIT</span>'
+    : isNoSplit
+      ? '<span class="section-node-override-marker" style="color:#0891b2;font-size:9px;font-weight:800;letter-spacing:.05em" title="Merged into the previous chunk">MERGE</span>'
+      : "";
+  const overrideControls = startPage == null ? "" : renderOverrideControls(startPage, isForced, isNoSplit);
   const childHtml = hasChildren
     ? `<div class="section-node-children" id="children-${nodeId}">${children.map((child) => renderTreeNode(child, depth + 1, spanningChunks, nextId)).join("")}</div>`
     : "";
   const nodeClasses = ["section-node"];
   if (isSplit) nodeClasses.push("is-split");
   if (isMerged) nodeClasses.push("is-merged");
+  if (isForced) nodeClasses.push("is-forced-split");
+  if (isNoSplit) nodeClasses.push("is-no-split");
   return `
     <div class="${nodeClasses.join(" ")}" data-node="${nodeId}">
       <div class="section-node-row" style="padding-left:${indent}px">
@@ -316,11 +404,33 @@ function renderTreeNode(node, depth, spanningChunks, nextId) {
         <span class="section-node-level">H${escapeHtml(node.level)}</span>
         <span class="section-node-title" title="${title}">${title}</span>
         ${hint}
+        ${marker}
         <span class="section-node-pages">${pages}</span>
         ${renderChunkBadge(chunkIds)}
+        ${overrideControls}
       </div>
       ${childHtml}
     </div>`;
+}
+
+function renderOverrideControls(startPage, isForced, isNoSplit) {
+  // Inline styles keep these visible without touching styles.css; the active
+  // state is signalled by an accent background so toggles are obvious.
+  const base =
+    "display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:1px solid transparent;border-radius:6px;cursor:pointer;background:transparent;color:#64748b;";
+  const splitStyle = isForced
+    ? `${base}background:#ede9fe;color:#7c3aed;border-color:#c4b5fd`
+    : base;
+  const mergeStyle = isNoSplit
+    ? `${base}background:#cffafe;color:#0891b2;border-color:#a5f3fc`
+    : base;
+  const splitTitle = isForced ? "Remove forced split" : "Force a new chunk to start here";
+  const mergeTitle = isNoSplit ? "Allow a split here" : "Merge this section into the previous chunk";
+  return `
+    <span class="section-node-overrides" style="display:inline-flex;gap:4px;margin-left:auto">
+      <button type="button" class="section-override-btn" style="${splitStyle}" onclick="window.toggleForceSplit(${startPage})" title="${escapeHtml(splitTitle)}"><span class="material-symbols-outlined !text-sm">content_cut</span></button>
+      <button type="button" class="section-override-btn" style="${mergeStyle}" onclick="window.toggleNoSplit(${startPage})" title="${escapeHtml(mergeTitle)}"><span class="material-symbols-outlined !text-sm">call_merge</span></button>
+    </span>`;
 }
 
 function renderSectionTree(data) {
@@ -484,6 +594,8 @@ async function forceRefine() {
     for (const rangeArg of window.projectUtils.skipRangesToArgs(midRanges)) {
       args.push("--skip-range", rangeArg);
     }
+    await ensureChunkOverridesLoaded();
+    args.push(...collectSplitOverrideArgs());
     const result = await window.electronAPI.runNBLM({
       command: "prepare",
       args,
@@ -750,6 +862,8 @@ export {
   scheduleSectionTree,
   refreshSectionTree,
   toggleTreeNode,
+  toggleForceSplit,
+  toggleNoSplit,
 };
 
 // app.js (which wires renderer handlers onto `window`) is not modified for these
@@ -761,4 +875,8 @@ if (typeof window !== "undefined") {
   // structure view; register them here since app.js is not modified.
   window.refreshSectionTree = refreshSectionTree;
   window.toggleTreeNode = toggleTreeNode;
+  // Manual chunk-boundary override toggles, invoked from inline onclick on the
+  // section-tree nodes.
+  window.toggleForceSplit = toggleForceSplit;
+  window.toggleNoSplit = toggleNoSplit;
 }

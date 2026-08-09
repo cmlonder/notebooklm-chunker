@@ -152,6 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Skip an inclusive PDF page range like `1-8` or a single page like `12`. Repeat as needed.",
     )
+    _add_split_override_arguments(inspect_parser)
     inspect_parser.set_defaults(handler=_handle_inspect)
 
     init_parser = subparsers.add_parser(
@@ -338,6 +339,26 @@ def _add_prepare_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Skip an inclusive PDF page range like `1-8` or a single page like `12`. Repeat as needed.",
     )
+    _add_split_override_arguments(parser)
+
+
+def _add_split_override_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--split-at",
+        action="append",
+        type=int,
+        default=None,
+        metavar="PAGE",
+        help="Force a chunk boundary to start at this page. Repeat as needed.",
+    )
+    parser.add_argument(
+        "--no-split-at",
+        action="append",
+        type=int,
+        default=None,
+        metavar="PAGE",
+        help="Forbid a chunk boundary at this heading page (merge it with the previous chunk). Repeat as needed.",
+    )
 
 
 def _add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -434,7 +455,7 @@ def _handle_inspect(args: argparse.Namespace) -> int:
     include_tree = getattr(args, "tree", False)
     needs_config = include_chunks or include_tree
     config = load_config(_path_or_none(args.config)) if needs_config else None
-    skip_ranges = _resolve_skip_ranges(args, config) if needs_config else ()
+    skip_ranges = _resolve_skip_ranges(args, config) if config is not None else ()
     blocks = parse_document(input_path, pdf_skip_ranges=skip_ranges)
     pages = sorted({block.page for block in blocks if block.page is not None})
     payload: dict[str, object] = {
@@ -447,7 +468,14 @@ def _handle_inspect(args: argparse.Namespace) -> int:
     if include_chunks or include_tree:
         assert config is not None
         settings = _resolve_chunking_settings(args, config)
-        chunks = chunk_document(blocks, input_path, settings=settings)
+        force_split_pages, no_split_pages = _resolve_split_overrides(args)
+        chunks = chunk_document(
+            blocks,
+            input_path,
+            settings=settings,
+            force_split_pages=force_split_pages,
+            no_split_pages=no_split_pages,
+        )
         if include_chunks:
             payload["chunks"] = _build_chunk_quality_report(chunks, settings)
         if include_tree:
@@ -484,7 +512,7 @@ def _build_section_tree(blocks, chunks, last_page) -> list[dict[str, object]]:
     """
     headings = [block for block in blocks if block.kind == "heading"]
 
-    flat: list[dict[str, object]] = []
+    flat: list[tuple[int, dict[str, object]]] = []
     for index, heading in enumerate(headings):
         start_page = heading.page
         end_page = last_page
@@ -493,33 +521,34 @@ def _build_section_tree(blocks, chunks, last_page) -> list[dict[str, object]]:
                 if following.page is not None:
                     end_page = following.page - 1
                 break
-        if (
-            start_page is not None
-            and end_page is not None
-            and end_page < start_page
-        ):
+        if start_page is not None and end_page is not None and end_page < start_page:
             end_page = start_page
         flat.append(
-            {
-                "title": heading.text,
-                "level": heading.level,
-                "start_page": start_page,
-                "end_page": end_page,
-                "chunk_ids": _chunks_for_range(chunks, start_page, end_page),
-                "children": [],
-            }
+            (
+                heading.level,
+                {
+                    "title": heading.text,
+                    "level": heading.level,
+                    "start_page": start_page,
+                    "end_page": end_page,
+                    "chunk_ids": _chunks_for_range(chunks, start_page, end_page),
+                    "children": [],
+                },
+            )
         )
 
     roots: list[dict[str, object]] = []
-    stack: list[dict[str, object]] = []
-    for node in flat:
-        while stack and stack[-1]["level"] >= node["level"]:
+    stack: list[tuple[int, dict[str, object]]] = []
+    for level, node in flat:
+        while stack and stack[-1][0] >= level:
             stack.pop()
         if stack:
-            stack[-1]["children"].append(node)  # type: ignore[attr-defined]
+            children = stack[-1][1]["children"]
+            assert isinstance(children, list)
+            children.append(node)
         else:
             roots.append(node)
-        stack.append(node)
+        stack.append((level, node))
     return roots
 
 
@@ -598,11 +627,14 @@ def _handle_prepare(args: argparse.Namespace) -> int:
     output_dir = _resolve_chunk_output_dir(args.output_dir, input_path, config)
     _confirm_chunk_output_overwrite(output_dir, assume_yes=args.yes, action_label="prepare")
     settings = _resolve_chunking_settings(args, config)
+    force_split_pages, no_split_pages = _resolve_split_overrides(args)
     blocks, export_result = _prepare_document(
         input_path,
         output_dir,
         settings,
         pdf_skip_ranges=_resolve_skip_ranges(args, config),
+        force_split_pages=force_split_pages,
+        no_split_pages=no_split_pages,
         reporter=_progress,
     )
     headings = sum(1 for block in blocks if block.kind == "heading")
@@ -727,11 +759,14 @@ def _run_pipeline(args: argparse.Namespace, *, resume: bool) -> int:
             studio_names=tuple(studio_name for studio_name, _ in config.studios.enabled_items()),
         )
     settings = _resolve_chunking_settings(args, config)
+    force_split_pages, no_split_pages = _resolve_split_overrides(args)
     _, export_result = _prepare_document(
         input_path,
         output_dir,
         settings,
         pdf_skip_ranges=_resolve_skip_ranges(args, config),
+        force_split_pages=force_split_pages,
+        no_split_pages=no_split_pages,
         reporter=_progress,
     )
 
@@ -770,6 +805,8 @@ def _prepare_document(
     settings: ChunkingSettings,
     *,
     pdf_skip_ranges: tuple[str, ...] = (),
+    force_split_pages: tuple[int, ...] = (),
+    no_split_pages: tuple[int, ...] = (),
     reporter=None,
 ) -> tuple[list, ExportResult]:
     _emit_prepare_log(reporter, f"parse: {input_path}")
@@ -806,7 +843,23 @@ def _prepare_document(
         f"max={settings.max_pages:.2f}, "
         f"words/page={settings.words_per_page}",
     )
-    chunks = chunk_document(blocks, input_path, settings=settings)
+    if force_split_pages:
+        _emit_prepare_log(
+            reporter,
+            "chunk: force split at page(s) " + ", ".join(str(page) for page in force_split_pages),
+        )
+    if no_split_pages:
+        _emit_prepare_log(
+            reporter,
+            "chunk: no split at page(s) " + ", ".join(str(page) for page in no_split_pages),
+        )
+    chunks = chunk_document(
+        blocks,
+        input_path,
+        settings=settings,
+        force_split_pages=force_split_pages,
+        no_split_pages=no_split_pages,
+    )
     _emit_prepare_log(reporter, f"chunk: planned {len(chunks)} chunk(s)")
     export_result = export_markdown_chunks(chunks, output_dir, reporter=reporter)
     _emit_prepare_log(reporter, f"export: manifest.json -> {export_result.manifest_path}")
@@ -848,6 +901,14 @@ def _resolve_chunking_settings(args: argparse.Namespace, config: AppConfig) -> C
             else config.chunking.words_per_page or 500
         ),
     )
+
+
+def _resolve_split_overrides(
+    args: argparse.Namespace,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    force_split = tuple(getattr(args, "split_at", None) or ())
+    no_split = tuple(getattr(args, "no_split_at", None) or ())
+    return force_split, no_split
 
 
 def _resolve_skip_ranges(args: argparse.Namespace, config: AppConfig) -> tuple[str, ...]:

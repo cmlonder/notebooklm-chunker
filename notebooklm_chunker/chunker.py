@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -62,6 +62,9 @@ def chunk_document(
     blocks: list[Block],
     source_path: Path,
     settings: ChunkingSettings | None = None,
+    *,
+    force_split_pages: Iterable[int] | None = None,
+    no_split_pages: Iterable[int] | None = None,
 ) -> list[Chunk]:
     resolved_settings = settings or ChunkingSettings()
     _validate_settings(resolved_settings)
@@ -73,8 +76,18 @@ def chunk_document(
     if not sections:
         return []
 
+    # Manual boundary overrides. A forced split takes precedence over a no-split
+    # request for the same page so the two never contradict each other.
+    forced_pages = {int(page) for page in (force_split_pages or ())}
+    no_split = {int(page) for page in (no_split_pages or ()) if int(page) not in forced_pages}
+
     normalized_sections = _split_oversized_sections(sections, resolved_settings)
-    grouped_sections = _group_sections(normalized_sections, resolved_settings)
+    grouped_sections = _group_sections(
+        normalized_sections,
+        resolved_settings,
+        force_split_pages=forced_pages,
+        no_split_pages=no_split,
+    )
 
     chunks: list[Chunk] = []
     for chunk_id, chunk_sections in enumerate(grouped_sections, start=1):
@@ -376,6 +389,9 @@ _BOUNDARY_DEPTH_PENALTY = 0.75
 def _group_sections(
     sections: list[Section],
     settings: ChunkingSettings,
+    *,
+    force_split_pages: set[int] | None = None,
+    no_split_pages: set[int] | None = None,
 ) -> list[list[Section]]:
     if not sections:
         return []
@@ -388,11 +404,29 @@ def _group_sections(
             return 0.0
         return (depths[start] - min_depth) * _BOUNDARY_DEPTH_PENALTY
 
+    # Map user page overrides onto section-boundary indices. A boundary lives at
+    # section index i (0 < i < count): a chunk starts there. Index 0 is always a
+    # boundary (document start) so overrides there are meaningless and skipped.
+    forced = force_split_pages or set()
+    no_split = no_split_pages or set()
+    forced_boundaries: set[int] = set()
+    forbidden_boundaries: set[int] = set()
+    for index in range(1, len(sections)):
+        start_page = sections[index].start_page
+        if start_page is None:
+            continue
+        if start_page in forced:
+            forced_boundaries.add(index)
+        elif start_page in no_split:
+            forbidden_boundaries.add(index)
+
     ranges = _choose_ranges(
         len(sections),
         settings,
         range_pages_fn=lambda start, end: _chunk_pages(sections[start:end], settings),
         boundary_cost_fn=boundary_cost,
+        forced_boundaries=forced_boundaries,
+        forbidden_boundaries=forbidden_boundaries,
     )
     return [sections[start:end] for start, end in ranges]
 
@@ -403,9 +437,17 @@ def _choose_ranges(
     *,
     range_pages_fn: Callable[[int, int], float],
     boundary_cost_fn: Callable[[int], float] | None = None,
+    forced_boundaries: set[int] | None = None,
+    forbidden_boundaries: set[int] | None = None,
 ) -> list[tuple[int, int]]:
     if count == 0:
         return []
+
+    # Manual boundary constraints, expressed on interior section indices:
+    #   forced     -> a chunk boundary MUST fall here (no chunk may straddle it).
+    #   forbidden  -> a chunk boundary must NOT fall here (merge across it).
+    forced = forced_boundaries or set()
+    forbidden = forbidden_boundaries or set()
 
     best_costs = [math.inf] * (count + 1)
     next_breaks = [-1] * (count + 1)
@@ -413,21 +455,37 @@ def _choose_ranges(
 
     for start in range(count - 1, -1, -1):
         start_cost = boundary_cost_fn(start) if boundary_cost_fn is not None else 0.0
-        for end in range(start + 1, count + 1):
-            pages = range_pages_fn(start, end)
-            if pages > settings.max_pages and end > start + 1:
-                break
+        # A chunk starting at `start` may not span past the next forced boundary:
+        # capping the range there guarantees a cut lands on every forced page.
+        max_end = count
+        for boundary in forced:
+            if start < boundary < max_end:
+                max_end = boundary
+        # Tracks whether the current range [start, end) could legally be cut at
+        # some interior index. When every interior index is forbidden the range
+        # is "unbreakable" and may exceed max_pages (the user's merge wins).
+        breakable = False
+        for end in range(start + 1, max_end + 1):
+            is_forbidden_cut = end < count and end in forbidden
+            if not is_forbidden_cut:
+                pages = range_pages_fn(start, end)
+                is_singleton = (end == start + 1) or not breakable
+                if pages > settings.max_pages and end > start + 1 and breakable:
+                    break
 
-            local_cost = start_cost + _range_cost(
-                pages,
-                settings,
-                is_last=(end == count),
-                is_singleton=(end == start + 1),
-            )
-            total_cost = local_cost + best_costs[end]
-            if total_cost < best_costs[start]:
-                best_costs[start] = total_cost
-                next_breaks[start] = end
+                local_cost = start_cost + _range_cost(
+                    pages,
+                    settings,
+                    is_last=(end == count),
+                    is_singleton=is_singleton,
+                )
+                total_cost = local_cost + best_costs[end]
+                if total_cost < best_costs[start]:
+                    best_costs[start] = total_cost
+                    next_breaks[start] = end
+            # `end` now becomes an interior index for any longer range from `start`.
+            if end not in forbidden:
+                breakable = True
 
     if next_breaks[0] == -1:
         raise ChunkerError(

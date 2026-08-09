@@ -482,9 +482,7 @@ def _page_blocks_with_toc_headings(
     # Headings whose text cannot be located on the page still belong to it;
     # emit them at the top so the following body lands under them.
     pending = list(page_headings)
-    unmatched = [
-        heading for heading in pending if not _find_toc_heading_line(lines, heading[1])
-    ]
+    unmatched = [heading for heading in pending if not _find_toc_heading_line(lines, heading[1])]
     for level, title in unmatched:
         blocks.append(Block(kind="heading", text=title, level=level, page=page))
     matched = [heading for heading in pending if heading not in unmatched]
@@ -723,13 +721,17 @@ def _blocks_from_text(
         font_level = (
             font_heading_levels.get(_normalize_space(current)) if font_heading_levels else None
         )
-        if font_level is not None and _passes_heading_gates(current) and _title_case_like_or_upper(
-            current
+        if (
+            font_level is not None
+            and _passes_heading_gates(current)
+            and _title_case_like_or_upper(current)
         ):
             flush_paragraph()
             normalized = current.title() if current.isupper() else current
             blocks.append(
-                Block(kind="heading", text=_normalize_space(normalized), level=font_level, page=page)
+                Block(
+                    kind="heading", text=_normalize_space(normalized), level=font_level, page=page
+                )
             )
             index += 1
             continue

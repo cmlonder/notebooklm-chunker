@@ -218,9 +218,7 @@ class CliTests(TestCase):
                 self.assertEqual(os.environ.get("NOTEBOOKLM_PROFILE"), "work")
 
         self.assertEqual(exit_code, 0)
-        mocked_login.assert_called_once_with(
-            profile="work", account="a@b.com", all_accounts=False
-        )
+        mocked_login.assert_called_once_with(profile="work", account="a@b.com", all_accounts=False)
 
     def test_profile_command_passes_through(self) -> None:
         with patch("notebooklm_chunker.cli.run_notebooklm_profile") as mocked_profile:

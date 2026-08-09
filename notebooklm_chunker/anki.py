@@ -46,10 +46,7 @@ _FIELD_SEP = "\x1f"
 
 # Base-91 alphabet used by Anki for note GUIDs.
 _BASE91 = (
-    "abcdefghijklmnopqrstuvwxyz"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "0123456789"
-    "!#$%&()*+,-./:;<=>?@[]^_`{|}~"
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&()*+,-./:;<=>?@[]^_`{|}~"
 )
 
 # Accepted (front-key, back-key) aliases for dict-shaped cards, in priority order.
@@ -116,11 +113,12 @@ def _coerce_tags(value: object) -> tuple[str, ...]:
 def _cards_from_json(data: object) -> list[Flashcard]:
     """Extract cards from parsed JSON of a few possible shapes."""
 
-    entries: object
+    entries: list[object]
     if isinstance(data, dict):
         for key in ("cards", "flashcards", "items"):
-            if isinstance(data.get(key), list):
-                entries = data[key]
+            value = data.get(key)
+            if isinstance(value, list):
+                entries = value
                 break
         else:
             # A single card object, e.g. {"front": ..., "back": ...}.
@@ -132,7 +130,7 @@ def _cards_from_json(data: object) -> list[Flashcard]:
         return []
 
     cards: list[Flashcard] = []
-    for entry in entries:  # type: ignore[union-attr]
+    for entry in entries:
         if isinstance(entry, dict):
             card = _card_from_dict(entry)
             if card:
@@ -597,21 +595,21 @@ def build_apkg(
                         card_id,
                         note_id,
                         deck_id,
-                        0,          # ord
-                        now_s,      # mod
-                        -1,         # usn
-                        0,          # type (new)
-                        0,          # queue (new)
+                        0,  # ord
+                        now_s,  # mod
+                        -1,  # usn
+                        0,  # type (new)
+                        0,  # queue (new)
                         index + 1,  # due (position)
-                        0,          # ivl
-                        0,          # factor
-                        0,          # reps
-                        0,          # lapses
-                        0,          # left
-                        0,          # odue
-                        0,          # odid
-                        0,          # flags
-                        "",         # data
+                        0,  # ivl
+                        0,  # factor
+                        0,  # reps
+                        0,  # lapses
+                        0,  # left
+                        0,  # odue
+                        0,  # odid
+                        0,  # flags
+                        "",  # data
                     ),
                 )
             conn.commit()

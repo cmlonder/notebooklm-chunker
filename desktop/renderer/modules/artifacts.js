@@ -1,6 +1,7 @@
 import { appState, summarizeStudioOutputs, studioIconNames } from "./state.js";
 import { matchesQuery, showToast, escapeHtml, applyOfflineIcons } from "./dom.js";
 import { prepareStudioView } from "./studio.js";
+import { launchQuizPlayer } from "./quizplayer.js";
 
 function artifactKindToStudio(kind) {
   const normalized = String(kind || "").toLowerCase();
@@ -346,14 +347,10 @@ function quizAnswerText(answer, options) {
   return text;
 }
 
-function renderQuizArtifact(content) {
-  let data;
-  try {
-    data = JSON.parse(content);
-  } catch (error) {
-    return renderRawArtifact(content);
-  }
-  const questions = Array.isArray(data)
+// Pull the array of question objects out of the many shapes quiz JSON can take
+// (bare array, or wrapped under .questions / .quiz / .items).
+function quizQuestionList(data) {
+  return Array.isArray(data)
     ? data
     : Array.isArray(data && data.questions)
     ? data.questions
@@ -362,6 +359,85 @@ function renderQuizArtifact(content) {
     : Array.isArray(data && data.items)
     ? data.items
     : [];
+}
+
+// True/false detection for questions that carry no options list but a boolean
+// (or "true"/"false") answer — so the player can still present two choices.
+function quizBooleanAnswer(answer) {
+  if (answer === true) return "true";
+  if (answer === false) return "false";
+  const values = Array.isArray(answer) ? answer : [answer];
+  for (const candidate of values) {
+    if (candidate === true) return "true";
+    if (candidate === false) return "false";
+    const text = String(candidate == null ? "" : candidate).trim().toLowerCase();
+    if (text === "true" || text === "t" || text === "yes") return "true";
+    if (text === "false" || text === "f" || text === "no") return "false";
+  }
+  return null;
+}
+
+// Normalize one raw question object into the structure the player consumes.
+// All key-variant handling (question/prompt/text, options/choices/answers,
+// answer/correct/correctIndex/…) is reused from the previewer helpers so the two
+// stay in lock-step. Returns { text, options:[{text,correct}], correctIndex,
+// answerText, explanation }. options is [] for open-ended questions.
+function normalizeQuizQuestion(question) {
+  const text = (question && (question.question ?? question.prompt ?? question.text ?? question.title)) ?? "";
+  const rawOptions = (question && (question.options ?? question.choices ?? question.answers ?? question.alternatives)) ?? [];
+  const options = Array.isArray(rawOptions) ? rawOptions : [];
+  const answer = (question
+    && (question.answer ?? question.correct ?? question.correctAnswer ?? question.correct_answer
+      ?? question.correctOption ?? question.correct_option ?? question.solution
+      ?? question.correctIndex ?? question.correct_index)) ?? null;
+  let normalizedOptions = options.map((option, index) => {
+    const optionText = quizOptionText(option);
+    const correct = quizOptionMarkedCorrect(option) || optionMatchesAnswer(optionText, index, answer);
+    return { text: optionText, correct };
+  });
+  // Synthesize True/False choices for boolean questions with no options list.
+  if (normalizedOptions.length === 0) {
+    const boolean = quizBooleanAnswer(answer);
+    const type = String((question && (question.type ?? question.questionType ?? question.kind)) ?? "").toLowerCase();
+    if (boolean !== null || type.includes("true") || type.includes("bool")) {
+      normalizedOptions = [
+        { text: "True", correct: boolean === "true" },
+        { text: "False", correct: boolean === "false" },
+      ];
+    }
+  }
+  const correctIndex = normalizedOptions.findIndex((option) => option.correct);
+  const answerText = quizAnswerText(answer, options);
+  const explanation = question && (question.explanation ?? question.rationale ?? question.reason);
+  return {
+    text: String(text),
+    options: normalizedOptions,
+    correctIndex,
+    answerText: answerText ? String(answerText) : "",
+    explanation: explanation ? String(explanation) : "",
+  };
+}
+
+// Parse a quiz artifact's file content into normalized questions for the player.
+// Returns [] when the content is not parseable quiz JSON.
+function parseQuizQuestions(content) {
+  let data;
+  try {
+    data = JSON.parse(content);
+  } catch (error) {
+    return [];
+  }
+  return quizQuestionList(data).map(normalizeQuizQuestion);
+}
+
+function renderQuizArtifact(content) {
+  let data;
+  try {
+    data = JSON.parse(content);
+  } catch (error) {
+    return renderRawArtifact(content);
+  }
+  const questions = quizQuestionList(data);
   if (questions.length === 0) return renderRawArtifact(content);
   const items = questions.map((question) => {
     const text = (question && (question.question ?? question.prompt ?? question.text ?? question.title)) ?? "";
@@ -633,6 +709,34 @@ async function openArtifactPreview(artifact) {
   }
 }
 
+// Resolve the local quiz file for a quiz artifact, parse it, and hand the
+// normalized questions to the interactive player (quizplayer.js). Reuses the
+// same local-path resolution and JSON parsing as the previewer.
+async function openQuizPlayer(artifact) {
+  if (!artifact) return;
+  const studioName = artifactKindToStudio(artifact.kind);
+  const local = resolveLocalArtifactPath(artifact, "quiz");
+  if (!local || !local.path) {
+    showToast("This quiz has not been downloaded locally yet.");
+    return;
+  }
+  try {
+    const result = await window.electronAPI.readFile(local.path);
+    if (!result || !result.success) {
+      showToast("The local quiz file could not be read.");
+      return;
+    }
+    const questions = parseQuizQuestions(result.content);
+    if (!questions.length) {
+      showToast("No quiz questions could be read from this file.");
+      return;
+    }
+    launchQuizPlayer(questions, artifact.title || "Quiz");
+  } catch (error) {
+    showToast("Something went wrong while loading this quiz.");
+  }
+}
+
 // --- Entry point: inject a preview button into each Studio artifact row ------
 // The rows themselves are rendered by studio.js (off-limits), so we observe the
 // list container and augment freshly rendered rows. Ordering mirrors
@@ -648,6 +752,23 @@ function buildArtifactPreviewButton(artifact) {
     event.preventDefault();
     event.stopPropagation();
     void openArtifactPreview(artifact);
+  });
+  return button;
+}
+
+// A "Play" button shown only on quiz artifact rows — launches the interactive
+// player instead of the static preview.
+function buildQuizPlayButton(artifact) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "artifact-play-btn";
+  button.title = "Play quiz";
+  button.setAttribute("aria-label", "Play quiz");
+  button.innerHTML = '<span class="material-symbols-outlined" data-icon-name="play_circle">play_circle</span>';
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void openQuizPlayer(artifact);
   });
   return button;
 }
@@ -673,6 +794,11 @@ function augmentStudioArtifactRows(list) {
     } else {
       row.appendChild(actions);
     }
+    if (artifactKindToStudio(artifact.kind) === "quiz") {
+      const playButton = buildQuizPlayButton(artifact);
+      actions.appendChild(playButton);
+      applyOfflineIcons(playButton);
+    }
     const button = buildArtifactPreviewButton(artifact);
     actions.appendChild(button);
     applyOfflineIcons(button);
@@ -697,12 +823,15 @@ export {
   toggleStudioArtifactSelection,
   deleteSelectedStudioArtifacts,
   openArtifactPreview,
+  openQuizPlayer,
+  parseQuizQuestions,
   initArtifactPreview,
 };
 
 // Self-register (app.js is off-limits; other modules use this pattern too).
 if (typeof window !== "undefined") {
   window.openArtifactPreview = openArtifactPreview;
+  window.openQuizPlayer = openQuizPlayer;
   if (typeof document !== "undefined") {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", initArtifactPreview, { once: true });

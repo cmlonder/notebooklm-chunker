@@ -187,7 +187,9 @@ class ParserTests(TestCase):
 
             blocks = parse_document(source)
 
-        headings = [(block.level, block.text, block.page) for block in blocks if block.kind == "heading"]
+        headings = [
+            (block.level, block.text, block.page) for block in blocks if block.kind == "heading"
+        ]
         self.assertEqual(
             headings,
             [
@@ -231,7 +233,9 @@ class ParserTests(TestCase):
         self.assertTrue(_line_matches_toc_title("1.2 Airline Deregulation", "Airline Deregulation"))
         self.assertTrue(_line_matches_toc_title("AIRLINE DEREGULATION", "Airline Deregulation"))
         self.assertTrue(_line_matches_toc_title("Airline Deregulation", "1.2 Airline Deregulation"))
-        self.assertFalse(_line_matches_toc_title("Airline Deregulation Act", "Airline Deregulation"))
+        self.assertFalse(
+            _line_matches_toc_title("Airline Deregulation Act", "Airline Deregulation")
+        )
 
     def test_clean_pdf_page_entries_removes_running_titles_with_embedded_page_numbers(self) -> None:
         cleaned = _clean_pdf_page_entries(
@@ -397,9 +401,7 @@ class ParserTests(TestCase):
 
             blocks = parse_document(source)
 
-        headings = [
-            (block.level, block.text) for block in blocks if block.kind == "heading"
-        ]
+        headings = [(block.level, block.text) for block in blocks if block.kind == "heading"]
         # The text heuristic alone would emit this at level 2; the font signal
         # upgrades it to level 1.
         self.assertIn((1, "Introduction"), headings)

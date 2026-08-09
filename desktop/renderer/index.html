@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="logs.css">
   <link rel="stylesheet" href="artifact-preview.css">
+  <link rel="stylesheet" href="presets.css">
   <script>
     // Apply the persisted (or OS-preferred) theme before first paint to avoid a flash.
     (function () {
@@ -255,6 +256,8 @@
                     <p id="dashboard-selected-source-meta" class="text-sm text-slate-500">Select a source on the left, then add report, slide, quiz, flashcard, or audio jobs for it.</p>
                   </div>
                 </div>
+                <!-- Workflow presets (roadmap D1): populated by presets.js renderPresetPicker(). -->
+                <div id="studio-preset-picker" class="preset-picker"></div>
                 <div id="studio-controls" class="grid grid-cols-1 gap-4">
                   <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
                     <div class="flex items-start justify-between gap-4">

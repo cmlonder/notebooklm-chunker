@@ -26,6 +26,12 @@ import {
   renderDashboardLineages,
 } from "./dashboard.js";
 import { filteredStudioArtifacts, normalizedArtifactStatus } from "./artifacts.js";
+// Workflow presets (roadmap D1). Side-effect import so presets.js evaluates as
+// part of the module graph (app.js is off-limits): it self-registers
+// window.applyPreset and renders the picker. The import is circular
+// (presets.js imports enqueueStudioPreset below) but safe — the binding is a
+// hoisted function declaration and is only called at click time.
+import "./presets.js";
 
 function buildQueueItemForSources(studioName, activeProject, selectedSources, sourceIds, { batchNumber, isPerSource = false } = {}) {
   const studios = buildStudioSelections();
@@ -657,6 +663,51 @@ async function addStudioQueueItemsForSelection(studioName) {
   showToast(`${queuedItems.length} ${label} job${queuedItems.length === 1 ? "" : "s"} added to queue.`);
 }
 
+// Workflow presets (roadmap D1) enqueue several studios at once. This reuses the
+// normal queue-item build path (buildQueueItemForSources -> buildStudioSelections)
+// and layers each preset's per-studio config overrides on top, so a preset drives
+// the same inputs as the manual "Add to queue" buttons without changing how
+// buildStudioSelections works. Called from presets.js applyPreset().
+async function enqueueStudioPreset(studioNames, overrides = {}, presetLabel = "Preset") {
+  const activeProject = currentDashboardProject();
+  if (!activeProject) {
+    alert("Choose a local run first.");
+    return { added: 0 };
+  }
+  const selectedSources = currentSelectedDashboardSources();
+  if (selectedSources.length === 0) {
+    alert("Choose a source first.");
+    return { added: 0 };
+  }
+  const sourceIds = await resolveDashboardSourceIds(activeProject, selectedSources);
+  if (sourceIds.length === 0) {
+    alert("The selected sources are missing NotebookLM source IDs.");
+    return { added: 0 };
+  }
+  const queuedItems = [];
+  studioNames.forEach((studioName) => {
+    appState.studioQueueCounter += 1;
+    const queueItem = buildQueueItemForSources(
+      studioName,
+      activeProject,
+      selectedSources,
+      sourceIds,
+      { batchNumber: appState.studioQueueCounter },
+    );
+    if (!queueItem) return;
+    const override = overrides[studioName];
+    if (override && Object.keys(override).length > 0) {
+      queueItem.config = { ...queueItem.config, ...override };
+    }
+    queuedItems.push(queueItem);
+  });
+  if (queuedItems.length === 0) return { added: 0 };
+  appState.studioQueue.push(...queuedItems);
+  prepareStudioView();
+  showToast(`${presetLabel}: added ${queuedItems.length} job${queuedItems.length === 1 ? "" : "s"} to queue.`);
+  return { added: queuedItems.length };
+}
+
 function removeStudioQueueItem(index) {
   appState.studioQueue.splice(index, 1);
   prepareStudioView();
@@ -736,6 +787,7 @@ export {
   prepareStudioView,
   addStudioQueueItem,
   addStudioQueueItemsForSelection,
+  enqueueStudioPreset,
   removeStudioQueueItem,
   runStudios,
   applyStudioQueueUpdate,

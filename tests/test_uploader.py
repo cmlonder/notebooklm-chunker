@@ -910,8 +910,10 @@ class UploaderTests(TestCase):
                 )
 
         self.assertEqual(len(results), 4)
-        self.assertEqual({result.studio for result in results},
-                         {"video", "flashcards", "infographic", "data_table"})
+        self.assertEqual(
+            {result.studio for result in results},
+            {"video", "flashcards", "infographic", "data_table"},
+        )
         artifacts = _FakeNotebookLMClient.last_client.artifacts
         self.assertEqual(len(artifacts.video_generate_calls), 1)
         self.assertEqual(artifacts.video_generate_calls[0]["video_format"], "EXPLAINER")
@@ -1708,9 +1710,7 @@ class UploaderTests(TestCase):
         with patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked:
             run_notebooklm_login(all_accounts=True)
 
-        mocked.assert_called_once_with(
-            ["notebooklm", "login", "--all-accounts"], check=True
-        )
+        mocked.assert_called_once_with(["notebooklm", "login", "--all-accounts"], check=True)
 
     def test_run_profile_passes_through(self) -> None:
         from notebooklm_chunker.uploaders.notebooklm_py import run_notebooklm_profile
@@ -1718,9 +1718,7 @@ class UploaderTests(TestCase):
         with patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked:
             run_notebooklm_profile(["create", "work"])
 
-        mocked.assert_called_once_with(
-            ["notebooklm", "profile", "create", "work"], check=True
-        )
+        mocked.assert_called_once_with(["notebooklm", "profile", "create", "work"], check=True)
 
     def test_run_logout_removes_local_notebooklm_storage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

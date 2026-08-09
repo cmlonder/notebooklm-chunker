@@ -195,10 +195,111 @@ class ChunkerTests(TestCase):
         self.assertEqual(filenames[2], "c002-origins-p34-36.md")
 
 
+class ManualBoundaryOverrideTests(TestCase):
+    def _page_blocks(self, page_count: int) -> list[Block]:
+        blocks: list[Block] = []
+        for page in range(1, page_count + 1):
+            blocks.extend(
+                [
+                    Block(kind="heading", text=f"Section {page}", level=1, page=page),
+                    Block(kind="paragraph", text="Body text", page=page),
+                ]
+            )
+        return blocks
+
+    _SETTINGS = ChunkingSettings(target_pages=3.0, min_pages=2.5, max_pages=4.0, words_per_page=250)
+
+    def _boundaries(self, chunks) -> list[tuple[int | None, int | None]]:
+        return [(chunk.start_page, chunk.end_page) for chunk in chunks]
+
+    def test_no_overrides_match_default_boundaries(self) -> None:
+        blocks = self._page_blocks(6)
+
+        baseline = chunk_document(blocks, Path("book.pdf"), settings=self._SETTINGS)
+        with_empty = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=self._SETTINGS,
+            force_split_pages=(),
+            no_split_pages=(),
+        )
+
+        self.assertEqual(self._boundaries(baseline), [(1, 3), (4, 6)])
+        self.assertEqual(self._boundaries(with_empty), self._boundaries(baseline))
+
+    def test_force_split_creates_boundary_at_page(self) -> None:
+        blocks = self._page_blocks(6)
+
+        # Default splits 1-3 / 4-6; forcing a split at page 3 must start a new
+        # chunk there even though it is off the natural boundary.
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=self._SETTINGS,
+            force_split_pages=(3,),
+        )
+
+        starts = {chunk.start_page for chunk in chunks}
+        self.assertIn(3, starts)
+        # No chunk may straddle the forced page.
+        for chunk in chunks:
+            self.assertFalse(
+                chunk.start_page is not None
+                and chunk.end_page is not None
+                and chunk.start_page < 3 <= chunk.end_page
+            )
+
+    def test_no_split_prevents_boundary_at_page(self) -> None:
+        blocks = self._page_blocks(6)
+
+        # The default boundary starts a chunk at page 4; forbidding it must fold
+        # page 4 into the previous chunk instead.
+        baseline = chunk_document(blocks, Path("book.pdf"), settings=self._SETTINGS)
+        self.assertIn(4, {chunk.start_page for chunk in baseline})
+
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=self._SETTINGS,
+            no_split_pages=(4,),
+        )
+
+        self.assertNotIn(4, {chunk.start_page for chunk in chunks})
+
+    def test_forced_split_wins_over_min_max(self) -> None:
+        blocks = self._page_blocks(6)
+
+        # A forced split at page 2 produces a 1-page chunk, well below min_pages,
+        # but the explicit user choice must still be honored without crashing.
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=self._SETTINGS,
+            force_split_pages=(2,),
+        )
+
+        self.assertEqual(chunks[0].start_page, 1)
+        self.assertEqual(chunks[0].end_page, 1)
+        self.assertEqual(chunks[1].start_page, 2)
+
+    def test_forced_split_overrides_conflicting_no_split(self) -> None:
+        blocks = self._page_blocks(6)
+
+        # Same page requested as both a forced split and a no-split: the forced
+        # split wins and a boundary is placed there.
+        chunks = chunk_document(
+            blocks,
+            Path("book.pdf"),
+            settings=self._SETTINGS,
+            force_split_pages=(3,),
+            no_split_pages=(3,),
+        )
+
+        self.assertIn(3, {chunk.start_page for chunk in chunks})
+
+
 class ChunkQualityTests(TestCase):
-    _SETTINGS = ChunkingSettings(
-        target_pages=3.0, min_pages=2.5, max_pages=4.0, words_per_page=500
-    )
+    _SETTINGS = ChunkingSettings(target_pages=3.0, min_pages=2.5, max_pages=4.0, words_per_page=500)
 
     def _codes(self, findings, chunk_id: int) -> set[str]:
         return {finding.code for finding in findings if finding.chunk_id == chunk_id}
@@ -262,9 +363,7 @@ class ChunkQualityTests(TestCase):
         self.assertIn("no_heading", self._codes(findings, 1))
         self.assertIn("no_heading", self._codes(findings, 2))
         # Filename fallback is a softer signal.
-        stem_finding = next(
-            f for f in findings if f.chunk_id == 3 and f.code == "no_heading"
-        )
+        stem_finding = next(f for f in findings if f.chunk_id == 3 and f.code == "no_heading")
         self.assertEqual(stem_finding.severity, "info")
 
     def test_flags_mid_section_cut_from_part_suffix(self) -> None:

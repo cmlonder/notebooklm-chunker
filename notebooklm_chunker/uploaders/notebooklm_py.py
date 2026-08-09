@@ -1228,7 +1228,11 @@ def _suspend_studio_after_quota_block(
 
 
 async def _create_audio_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_audio(
         notebook_id,
@@ -1245,7 +1249,11 @@ async def _create_audio_artifact(
 
 
 async def _create_video_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_video(
         notebook_id,
@@ -1263,7 +1271,11 @@ async def _create_video_artifact(
 
 
 async def _create_report_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     format_key = config.format or "study-guide"
     return await client.artifacts.generate_report(
@@ -1277,7 +1289,11 @@ async def _create_report_artifact(
 
 
 async def _create_slide_deck_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_slide_deck(
         notebook_id,
@@ -1294,7 +1310,11 @@ async def _create_slide_deck_artifact(
 
 
 async def _create_quiz_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_quiz(
         notebook_id,
@@ -1310,7 +1330,11 @@ async def _create_quiz_artifact(
 
 
 async def _create_flashcards_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_flashcards(
         notebook_id,
@@ -1326,7 +1350,11 @@ async def _create_flashcards_artifact(
 
 
 async def _create_infographic_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_infographic(
         notebook_id,
@@ -1352,7 +1380,11 @@ async def _create_infographic_artifact(
 
 
 async def _create_data_table_artifact(
-    client: Any, rpc_module: Any, notebook_id: str, source_ids: list[str] | None, config: StudioConfig
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
 ) -> Any:
     return await client.artifacts.generate_data_table(
         notebook_id,
@@ -1451,10 +1483,16 @@ class _StudioSpec:
 
 _STUDIO_SPECS: dict[str, _StudioSpec] = {
     "audio": _StudioSpec(
-        "audio", lambda config: "audio-overview.mp4", _create_audio_artifact, _download_audio_artifact
+        "audio",
+        lambda config: "audio-overview.mp4",
+        _create_audio_artifact,
+        _download_audio_artifact,
     ),
     "video": _StudioSpec(
-        "video", lambda config: "video-overview.mp4", _create_video_artifact, _download_video_artifact
+        "video",
+        lambda config: "video-overview.mp4",
+        _create_video_artifact,
+        _download_video_artifact,
     ),
     "report": _StudioSpec(
         "report", lambda config: "report.md", _create_report_artifact, _download_report_artifact
@@ -1528,7 +1566,7 @@ async def _run_single_studio(
         and _supports_remote_artifact_rename(studio_name)
     ):
         lock = (studio_locks or {}).get(studio_name)
-    async with (semaphore or nullcontext()), (lock or nullcontext()):
+    async with semaphore or nullcontext(), lock or nullcontext():
         return await _run_single_studio_locked(
             client,
             rpc_module,

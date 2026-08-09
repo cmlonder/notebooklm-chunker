@@ -240,8 +240,7 @@ def _playwright_check() -> DoctorCheck:
             name="playwright",
             status="warn",
             summary=(
-                f"Playwright{_version_suffix(version)} is installed but could not start "
-                f"({detail})."
+                f"Playwright{_version_suffix(version)} is installed but could not start ({detail})."
             ),
             hint="Run `python -m playwright install chromium`.",
         )

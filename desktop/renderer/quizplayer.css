@@ -1,0 +1,468 @@
+/* ------------------------------------------------------------------ *
+ * Interactive quiz player (roadmap B6)
+ *
+ * All styles for quizplayer.js live here. The player reuses the app's existing
+ * CSS custom properties (--surface, --slate-*, --primary, --green-500,
+ * --red-500), which are already redefined under :root[data-theme="dark"] in
+ * styles.css, so the player follows the app theme automatically. A handful of
+ * dark-only overrides below refine surfaces the shared variables don't cover.
+ *
+ * The integrator must link this file in index.html, e.g.:
+ *   <link rel="stylesheet" href="quizplayer.css">
+ * ------------------------------------------------------------------ */
+
+.quizplayer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.quizplayer-overlay.hidden {
+  display: none;
+}
+
+.quizplayer-card {
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-strong, #fff);
+  color: var(--slate-900);
+  border: 1px solid var(--slate-200);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+
+/* --- Header --------------------------------------------------------------- */
+.quizplayer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 22px 14px;
+}
+
+.quizplayer-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--slate-900);
+  word-break: break-word;
+}
+
+.quizplayer-progress {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--slate-500);
+}
+
+.quizplayer-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--slate-500);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.quizplayer-close:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
+}
+
+.quizplayer-close .icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Progress bar --------------------------------------------------------- */
+.quizplayer-progressbar {
+  height: 4px;
+  background: var(--slate-200);
+  overflow: hidden;
+}
+
+.quizplayer-progressbar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
+
+/* --- Body ----------------------------------------------------------------- */
+.quizplayer-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.quizplayer-question {
+  margin: 0 0 16px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--slate-900);
+}
+
+.quizplayer-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quizplayer-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--slate-200);
+  border-radius: 12px;
+  color: var(--slate-900);
+  font-size: 0.94rem;
+  line-height: 1.4;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+}
+
+.quizplayer-option:not(:disabled):hover {
+  border-color: var(--primary);
+  background: var(--primary-10);
+}
+
+.quizplayer-option:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.quizplayer-option:disabled {
+  cursor: default;
+}
+
+.quizplayer-option-key {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--slate-100);
+  color: var(--slate-500);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.quizplayer-option-text {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.quizplayer-option-mark {
+  flex: 0 0 auto;
+  width: 18px;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* Reveal states */
+.quizplayer-option.is-correct {
+  border-color: var(--green-500);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.quizplayer-option.is-correct .quizplayer-option-key {
+  background: var(--green-500);
+  color: #fff;
+}
+
+.quizplayer-option.is-correct .quizplayer-option-mark::after {
+  content: "\2713"; /* check */
+  color: var(--green-500);
+}
+
+.quizplayer-option.is-incorrect {
+  border-color: var(--red-500);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.quizplayer-option.is-incorrect .quizplayer-option-key {
+  background: var(--red-500);
+  color: #fff;
+}
+
+.quizplayer-option.is-incorrect .quizplayer-option-mark::after {
+  content: "\2717"; /* cross */
+  color: var(--red-500);
+}
+
+/* --- Open-ended ----------------------------------------------------------- */
+.quizplayer-openended {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1.5px dashed var(--slate-300);
+  border-radius: 12px;
+}
+
+.quizplayer-openended-hint {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--slate-500);
+}
+
+.quizplayer-reveal {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: var(--slate-100);
+  color: var(--slate-700);
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+.quizplayer-reveal:not(:disabled):hover {
+  background: var(--slate-200);
+}
+
+.quizplayer-reveal:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Feedback ------------------------------------------------------------- */
+.quizplayer-feedback {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--slate-50, #f8fafc);
+  border: 1px solid var(--slate-200);
+}
+
+.quizplayer-feedback.hidden {
+  display: none;
+}
+
+.quizplayer-feedback-status {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.quizplayer-feedback-status.is-correct {
+  color: var(--green-500);
+}
+
+.quizplayer-feedback-status.is-incorrect {
+  color: var(--red-500);
+}
+
+.quizplayer-feedback-status.is-neutral {
+  color: var(--primary);
+}
+
+.quizplayer-feedback-answer {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--slate-900);
+}
+
+.quizplayer-feedback-answer span {
+  font-weight: 600;
+  color: var(--slate-500);
+}
+
+.quizplayer-feedback-explanation {
+  margin: 6px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--slate-500);
+}
+
+/* --- Footer --------------------------------------------------------------- */
+.quizplayer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 22px 18px;
+  border-top: 1px solid var(--slate-200);
+}
+
+.quizplayer-score {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--slate-500);
+}
+
+.quizplayer-next {
+  padding: 9px 22px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.quizplayer-next:not(:disabled):hover {
+  filter: brightness(1.05);
+}
+
+.quizplayer-next:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.quizplayer-next.hidden {
+  display: none;
+}
+
+/* --- Summary -------------------------------------------------------------- */
+.quizplayer-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 16px 8px;
+}
+
+.quizplayer-summary-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 132px;
+  height: 132px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  border: 6px solid var(--primary);
+  background: var(--primary-10);
+}
+
+.quizplayer-summary-fraction {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--slate-900);
+}
+
+.quizplayer-summary-pct {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.quizplayer-summary-headline {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+
+.quizplayer-summary-subline {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--slate-500);
+}
+
+.quizplayer-summary-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.quizplayer-retry,
+.quizplayer-done {
+  padding: 9px 22px;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.quizplayer-retry {
+  background: var(--primary);
+  color: #fff;
+}
+
+.quizplayer-retry:hover {
+  filter: brightness(1.05);
+}
+
+.quizplayer-done {
+  background: var(--slate-100);
+  color: var(--slate-700);
+}
+
+.quizplayer-done:hover {
+  background: var(--slate-200);
+}
+
+/* --- Row action button (rendered by artifacts.js) ------------------------- */
+.artifact-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.artifact-play-btn:hover {
+  background: var(--primary-10);
+}
+
+.artifact-play-btn .icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Dark-theme refinements ---------------------------------------------- *
+ * The shared variables already flip under [data-theme="dark"]; these cover the
+ * few surfaces that use literal fallbacks or need extra contrast. */
+:root[data-theme="dark"] .quizplayer-overlay {
+  background: rgba(2, 6, 12, 0.6);
+}
+
+:root[data-theme="dark"] .quizplayer-card {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="dark"] .quizplayer-close:hover,
+:root[data-theme="dark"] .quizplayer-reveal:not(:disabled):hover,
+:root[data-theme="dark"] .quizplayer-done:hover {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+:root[data-theme="dark"] .quizplayer-feedback {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+:root[data-theme="dark"] .quizplayer-option.is-correct {
+  background: rgba(34, 197, 94, 0.18);
+}
+
+:root[data-theme="dark"] .quizplayer-option.is-incorrect {
+  background: rgba(248, 113, 113, 0.18);
+}

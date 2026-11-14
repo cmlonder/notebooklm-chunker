@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "notebooklm-chunker"
-version = "0.5.0"
+version = "0.6.0"
 description = "Turn long PDFs into chunked NotebookLM workflows with Studio outputs"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing",
 ]
-dependencies = ["notebooklm-py[browser]>=0.7.3,<0.8", "pymupdf>=1.24.0"]
+dependencies = ["notebooklm-py[browser]>=0.8.6,<0.9", "pymupdf>=1.24.0"]
 
 [project.urls]
 Homepage = "https://github.com/cmlonder/notebooklm-chunker"

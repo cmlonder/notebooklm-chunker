@@ -1,6 +1,6 @@
 {
   "name": "notebooklm-chunker-desktop",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Desktop app for NotebookLM Chunker",
   "homepage": "https://github.com/cmlonder/notebooklm-chunker",
   "main": "src/main.js",

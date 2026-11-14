@@ -86,6 +86,94 @@
     };
   }
 
+  // Allowed option values per Studio type. Mirrors the tuples in
+  // notebooklm_chunker/config.py (source of truth); the engine rejects any
+  // value outside these lists, so both the settings UI and the workflow
+  // writer read from here.
+  const STUDIO_OPTIONS = {
+    report: {
+      format: ["study-guide", "briefing-doc", "blog-post", "concept-explanation", "custom"],
+    },
+    slide_deck: {
+      format: ["detailed", "presenter"],
+      length: ["default", "short"],
+      downloadFormat: ["pdf", "pptx"],
+    },
+    quiz: {
+      quantity: ["fewer", "standard", "more"],
+      difficulty: ["easy", "medium", "hard"],
+      downloadFormat: ["json", "markdown", "html"],
+    },
+    flashcards: {
+      quantity: ["fewer", "standard", "more"],
+      difficulty: ["easy", "medium", "hard"],
+      downloadFormat: ["markdown", "json", "html"],
+    },
+    audio: {
+      format: ["deep-dive", "brief", "critique", "debate"],
+      length: ["short", "default", "long"],
+    },
+    video: {
+      format: ["explainer", "brief", "cinematic", "short"],
+      style: [
+        "auto", "custom", "classic", "whiteboard", "kawaii", "anime",
+        "watercolor", "retro-print", "heritage", "paper-craft",
+      ],
+    },
+    infographic: {
+      orientation: ["landscape", "portrait", "square"],
+      detail: ["concise", "standard", "detailed"],
+      style: [
+        "auto", "sketch-note", "professional", "bento-grid", "editorial",
+        "instructional", "bricks", "clay", "anime", "kawaii", "scientific",
+      ],
+    },
+    mind_map: {
+      format: ["note-backed", "interactive"],
+    },
+    data_table: {},
+  };
+
+  // Values older builds of this app saved or shipped in presets that the
+  // engine never accepted. Map each to its closest valid value.
+  const LEGACY_STUDIO_VALUES = {
+    report: { format: { timeline: "study-guide", faq: "study-guide" } },
+    quiz: { difficulty: { easier: "easy", default: "medium" }, quantity: { default: "standard" } },
+    flashcards: { difficulty: { easier: "easy", default: "medium" }, quantity: { default: "standard" } },
+    audio: { format: { conversational: "deep-dive" } },
+    slide_deck: { format: { summary: "presenter" }, length: { long: "default" } },
+  };
+
+  // Return a copy of a Studio config with every option the engine would
+  // reject either migrated to its valid replacement or removed (so the engine
+  // default applies) instead of failing the whole job.
+  function normalizeStudioConfig(studioName, config) {
+    const normalized = { ...(config || {}) };
+    const allowed = STUDIO_OPTIONS[studioName] || {};
+    const legacy = LEGACY_STUDIO_VALUES[studioName] || {};
+    for (const [field, values] of Object.entries(allowed)) {
+      const current = normalized[field];
+      if (current === undefined || current === null || current === "") continue;
+      const migrated = legacy[field] && legacy[field][current] ? legacy[field][current] : current;
+      if (values.includes(migrated)) {
+        normalized[field] = migrated;
+      } else {
+        delete normalized[field];
+      }
+    }
+    if (studioName === "video") {
+      // NotebookLM ignores a custom style on short videos and the engine
+      // rejects the combination.
+      if (normalized.format === "short" && normalized.style === "custom") {
+        normalized.style = "auto";
+      }
+      if (normalized.style !== "custom") {
+        delete normalized.stylePrompt;
+      }
+    }
+    return normalized;
+  }
+
   function buildStudiosToml({
     outputDir,
     notebookId,
@@ -104,10 +192,11 @@
       `max_parallel_chunks = ${Number(maxParallelChunks || 3)}`,
       `download_outputs = ${downloadOutputs === false ? "false" : "true"}`,
     ];
-    for (const [studioName, config] of Object.entries(studios || {})) {
-      if (!config || !config.enabled) {
+    for (const [studioName, rawConfig] of Object.entries(studios || {})) {
+      if (!rawConfig || !rawConfig.enabled) {
         continue;
       }
+      const config = normalizeStudioConfig(studioName, rawConfig);
       lines.push("", `[studios.${studioName}]`, "enabled = true");
       if (config.perChunk !== false) {
         lines.push("per_chunk = true");
@@ -297,6 +386,8 @@
     nextVersionRawName,
     deriveProjectStatus,
     buildStudiosToml,
+    STUDIO_OPTIONS,
+    normalizeStudioConfig,
     parseNotebookId,
     parseSkipRanges,
     skipRangesToArgs,

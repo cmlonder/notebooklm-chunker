@@ -70,8 +70,8 @@ class ConfigTests(TestCase):
         self.assertIn('output_dir = "./output/{source_stem}/reports"', content)
         self.assertIn('output_dir = "./output/{source_stem}/slides"', content)
         self.assertIn("[studios.quiz]", content)
-        # The template must use only live engine option values, not the
-        # deprecated "more" quiz quantity (mapped to "standard" upstream).
+        # The template keeps the default quiz quantity rather than opting
+        # every new workflow into "more".
         self.assertIn('quantity = "standard"', content)
         self.assertNotIn('quantity = "more"', content)
 
@@ -209,6 +209,56 @@ class ConfigTests(TestCase):
         self.assertEqual(config.studios.video.style, "custom")
         self.assertEqual(config.studios.video.style_prompt, "Retro sci-fi paperback illustration")
         self.assertEqual(config.studios.infographic.style, "bento-grid")
+
+    def _load_studios_toml(self, *lines: str):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "nblm.toml"
+            config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return load_config(config_path)
+
+    def test_load_config_accepts_newer_studio_options(self) -> None:
+        config = self._load_studios_toml(
+            "[studios.video]",
+            "enabled = true",
+            'format = "short"',
+            'style = "whiteboard"',
+            "",
+            "[studios.report]",
+            "enabled = true",
+            'format = "concept-explanation"',
+            "",
+            "[studios.mind_map]",
+            "enabled = true",
+            'format = "interactive"',
+            'language = "tr"',
+            'prompt = "Focus on tradeoffs."',
+        )
+
+        self.assertEqual(config.studios.video.format, "short")
+        self.assertEqual(config.studios.report.format, "concept-explanation")
+        self.assertEqual(config.studios.mind_map.format, "interactive")
+        self.assertEqual(config.studios.mind_map.language, "tr")
+        self.assertEqual(config.studios.mind_map.prompt, "Focus on tradeoffs.")
+
+    def test_load_config_rejects_custom_style_on_short_video(self) -> None:
+        with self.assertRaises(ConfigError) as context:
+            self._load_studios_toml(
+                "[studios.video]",
+                "enabled = true",
+                'format = "short"',
+                'style = "custom"',
+                'style_prompt = "Noir"',
+            )
+
+        self.assertIn("short", str(context.exception))
+
+    def test_load_config_rejects_unknown_mind_map_format(self) -> None:
+        with self.assertRaises(ConfigError):
+            self._load_studios_toml(
+                "[studios.mind_map]",
+                "enabled = true",
+                'format = "3d"',
+            )
 
     def test_load_config_rejects_unknown_infographic_style(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

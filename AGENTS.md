@@ -103,7 +103,7 @@ making future changes.
 ## Dependency Rules
 
 - `notebooklm-py` ships breaking changes per minor release. Keep the
-  dependency pinned with an upper bound (`<0.8` today) and bump it
+  dependency pinned with an upper bound (`<0.9` today) and bump it
   deliberately after checking upstream release notes and enum changes.
 - Mirror upstream enum removals in the fake RPC module in
   `tests/test_uploader.py` — the fakes are the only thing that catches

@@ -90,7 +90,7 @@ function defaultStudioSettings() {
     video: { language: "en", format: "explainer", style: "auto", stylePrompt: "" },
     infographic: { language: "en", orientation: "portrait", detail: "detailed", style: "auto" },
     data_table: { language: "en" },
-    mind_map: {},
+    mind_map: { language: "en", format: "note-backed" },
   };
 }
 
@@ -99,24 +99,14 @@ function loadStudioSettings() {
   try {
     const raw = localStorage.getItem(studioSettingsStorageKey());
     const parsed = raw ? JSON.parse(raw) : {};
+    // Saved values the engine no longer (or never) accepted are migrated or
+    // dropped by normalizeStudioConfig, so the default fills the gap.
     appState.studioSettings = Object.fromEntries(
       Object.entries(defaults).map(([studioName, config]) => [
         studioName,
         {
           ...config,
-          ...(parsed?.[studioName] || {}),
-          ...(studioName === "slide_deck" && parsed?.[studioName]?.format === "summary"
-            ? { format: "presenter" }
-            : {}),
-          ...(studioName === "slide_deck" && parsed?.[studioName]?.length === "long"
-            ? { length: "default" }
-            : {}),
-          // "more"/"default" quiz & flashcard quantities were removed upstream;
-          // migrate any saved value to the surviving "standard" member.
-          ...((studioName === "quiz" || studioName === "flashcards") &&
-          ["more", "default"].includes(parsed?.[studioName]?.quantity)
-            ? { quantity: "standard" }
-            : {}),
+          ...window.projectUtils.normalizeStudioConfig(studioName, parsed?.[studioName] || {}),
         },
       ]),
     );

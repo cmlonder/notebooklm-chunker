@@ -9,6 +9,8 @@ const {
   nextVersionRawName,
   deriveProjectStatus,
   buildStudiosToml,
+  STUDIO_OPTIONS,
+  normalizeStudioConfig,
   parseNotebookId,
   parseSkipRanges,
   skipRangesToArgs,
@@ -101,6 +103,69 @@ test("buildStudiosToml omits per_chunk when disabled explicitly", () => {
 
   assert.match(toml, /\[studios\.report\]/);
   assert.doesNotMatch(toml, /per_chunk = true/);
+});
+
+test("normalizeStudioConfig migrates values older builds saved", () => {
+  assert.deepEqual(
+    normalizeStudioConfig("quiz", { quantity: "more", difficulty: "easier", downloadFormat: "html" }),
+    { quantity: "more", difficulty: "easy", downloadFormat: "html" },
+  );
+  assert.equal(normalizeStudioConfig("flashcards", { difficulty: "default" }).difficulty, "medium");
+  assert.equal(normalizeStudioConfig("audio", { format: "conversational" }).format, "deep-dive");
+  assert.equal(normalizeStudioConfig("report", { format: "faq" }).format, "study-guide");
+});
+
+test("normalizeStudioConfig drops unknown values and keeps other fields", () => {
+  const normalized = normalizeStudioConfig("report", {
+    enabled: true,
+    format: "made-up",
+    language: "tr",
+    prompt: "Keep it short.",
+  });
+  assert.deepEqual(normalized, { enabled: true, language: "tr", prompt: "Keep it short." });
+});
+
+test("normalizeStudioConfig never pairs a short video with a custom style", () => {
+  assert.deepEqual(
+    normalizeStudioConfig("video", { format: "short", style: "custom", stylePrompt: "Noir" }),
+    { format: "short", style: "auto" },
+  );
+  assert.deepEqual(
+    normalizeStudioConfig("video", { format: "cinematic", style: "custom", stylePrompt: "Noir" }),
+    { format: "cinematic", style: "custom", stylePrompt: "Noir" },
+  );
+});
+
+test("STUDIO_OPTIONS covers every engine Studio type", () => {
+  assert.deepEqual(Object.keys(STUDIO_OPTIONS).sort(), [
+    "audio",
+    "data_table",
+    "flashcards",
+    "infographic",
+    "mind_map",
+    "quiz",
+    "report",
+    "slide_deck",
+    "video",
+  ]);
+  assert.ok(STUDIO_OPTIONS.video.format.includes("short"));
+  assert.ok(STUDIO_OPTIONS.report.format.includes("concept-explanation"));
+  assert.ok(STUDIO_OPTIONS.mind_map.format.includes("interactive"));
+});
+
+test("buildStudiosToml writes only values the engine accepts", () => {
+  const toml = buildStudiosToml({
+    outputDir: "./output/demo/chunks",
+    notebookId: "nb1",
+    studios: {
+      quiz: { enabled: true, difficulty: "default", quantity: "standard" },
+      audio: { enabled: true, format: "conversational" },
+    },
+  });
+
+  assert.match(toml, /difficulty = "medium"/);
+  assert.match(toml, /format = "deep-dive"/);
+  assert.doesNotMatch(toml, /conversational|"default"/);
 });
 
 test("parseNotebookId extracts notebook id from CLI output", () => {

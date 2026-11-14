@@ -14,9 +14,9 @@
 // user's saved settings.
 //
 // Override values below MUST match the options offered in the settings modal:
-//   report.format   : study-guide | briefing-doc | timeline | faq | custom
-//   quiz/flashcards : quantity fewer|standard, difficulty easier|default|hard
-//   audio.format    : deep-dive | conversational,  length short|default|long
+//   report.format   : study-guide | briefing-doc | blog-post | concept-explanation | custom
+//   quiz/flashcards : quantity fewer|standard|more, difficulty easy|medium|hard
+//   audio.format    : deep-dive | brief | critique | debate,  length short|default|long
 //   slide_deck      : format detailed|presenter, length default|short
 // ----------------------------------------------------------------------------
 
@@ -31,8 +31,8 @@ const STUDIO_PRESETS = [
     description: "Study-guide report, quiz, and flashcards",
     studios: {
       report: { format: "study-guide" },
-      quiz: { quantity: "standard", difficulty: "default" },
-      flashcards: { quantity: "standard", difficulty: "default" },
+      quiz: { quantity: "standard", difficulty: "medium" },
+      flashcards: { quantity: "standard", difficulty: "medium" },
     },
   },
   {

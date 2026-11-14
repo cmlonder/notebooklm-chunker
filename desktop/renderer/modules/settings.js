@@ -266,47 +266,29 @@ const SETTINGS_STUDIO_TYPES = [
   "data_table",
 ];
 
-// Kept in sync with notebooklm_chunker/config.py enum maps (source of truth).
-const VIDEO_FORMATS = [
-  { value: "explainer", label: "Explainer" },
-  { value: "brief", label: "Brief" },
-  { value: "cinematic", label: "Cinematic" },
-];
-const VIDEO_STYLES = [
-  { value: "auto", label: "Auto" },
-  { value: "custom", label: "Custom" },
-  { value: "classic", label: "Classic" },
-  { value: "whiteboard", label: "Whiteboard" },
-  { value: "kawaii", label: "Kawaii" },
-  { value: "anime", label: "Anime" },
-  { value: "watercolor", label: "Watercolor" },
-  { value: "retro-print", label: "Retro Print" },
-  { value: "heritage", label: "Heritage" },
-  { value: "paper-craft", label: "Paper Craft" },
-];
-const INFOGRAPHIC_ORIENTATIONS = [
-  { value: "landscape", label: "Landscape" },
-  { value: "portrait", label: "Portrait" },
-  { value: "square", label: "Square" },
-];
-const INFOGRAPHIC_DETAILS = [
-  { value: "concise", label: "Concise" },
-  { value: "standard", label: "Standard" },
-  { value: "detailed", label: "Detailed" },
-];
-const INFOGRAPHIC_STYLES = [
-  { value: "auto", label: "Auto" },
-  { value: "sketch-note", label: "Sketch Note" },
-  { value: "professional", label: "Professional" },
-  { value: "bento-grid", label: "Bento Grid" },
-  { value: "editorial", label: "Editorial" },
-  { value: "instructional", label: "Instructional" },
-  { value: "bricks", label: "Bricks" },
-  { value: "clay", label: "Clay" },
-  { value: "anime", label: "Anime" },
-  { value: "kawaii", label: "Kawaii" },
-  { value: "scientific", label: "Scientific" },
-];
+// Option lists come from project-utils.js STUDIO_OPTIONS, which mirrors
+// notebooklm_chunker/config.py (source of truth), so the settings UI can never
+// offer a value the engine rejects.
+const OPTION_LABELS = {
+  pdf: "PDF",
+  pptx: "PPTX",
+  json: "JSON",
+  html: "HTML",
+  "briefing-doc": "Briefing Doc",
+};
+
+function studioOptions(studioName, field) {
+  const values = window.projectUtils.STUDIO_OPTIONS?.[studioName]?.[field] || [];
+  return values.map((value) => ({
+    value,
+    label:
+      OPTION_LABELS[value] ||
+      value
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" "),
+  }));
+}
 
 // UI defaults for studio types not covered by state.js defaultStudioSettings().
 // state.js only ships defaults for the five prompt studios, so the settings-only
@@ -318,70 +300,65 @@ function studioSettingsDefaults(studioName) {
     video: { language: "en", format: "explainer", style: "auto", stylePrompt: "" },
     infographic: { language: "en", orientation: "portrait", detail: "detailed", style: "auto" },
     data_table: { language: "en" },
-    mind_map: {},
+    mind_map: { language: "en", format: "note-backed" },
   };
   return extra[studioName] || {};
 }
 
 function nblmSourceSettingsFields(studioName, settings) {
   const sections = [];
+  const select = (field, label, onChange) =>
+    sections.push(
+      studioSettingsField(field, label, studioOptions(studioName, field), settings[field], onChange),
+    );
+  const language = () =>
+    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+
   if (studioName === "report") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "study-guide", label: "Study Guide" }, { value: "briefing-doc", label: "Briefing Doc" },
-      { value: "timeline", label: "Timeline" }, { value: "faq", label: "FAQ" }, { value: "custom", label: "Custom" },
-    ], settings.format));
+    language();
+    select("format", "Format");
   } else if (studioName === "slide_deck") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "detailed", label: "Detailed" }, { value: "presenter", label: "Presenter" },
-    ], settings.format));
-    sections.push(studioSettingsField("length", "Length", [
-      { value: "default", label: "Default" }, { value: "short", label: "Short" },
-    ], settings.length));
-    sections.push(studioSettingsField("downloadFormat", "Download format", [
-      { value: "pdf", label: "PDF" }, { value: "pptx", label: "PPTX" },
-    ], settings.downloadFormat));
+    language();
+    select("format", "Format");
+    select("length", "Length");
+    select("downloadFormat", "Download format");
   } else if (studioName === "quiz" || studioName === "flashcards") {
-    sections.push(studioSettingsField("quantity", "Quantity", [
-      { value: "fewer", label: "Fewer" }, { value: "standard", label: "Standard" },
-    ], settings.quantity));
-    sections.push(studioSettingsField("difficulty", "Difficulty", [
-      { value: "easier", label: "Easier" }, { value: "default", label: "Default" }, { value: "hard", label: "Hard" },
-    ], settings.difficulty));
-    sections.push(studioSettingsField("downloadFormat", "Download format", studioName === "quiz" ? [
-      { value: "json", label: "JSON" }, { value: "markdown", label: "Markdown" },
-    ] : [
-      { value: "markdown", label: "Markdown" }, { value: "json", label: "JSON" },
-    ], settings.downloadFormat));
+    select("quantity", "Quantity");
+    select("difficulty", "Difficulty");
+    select("downloadFormat", "Download format");
   } else if (studioName === "audio") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
-    sections.push(studioSettingsField("format", "Format", [
-      { value: "deep-dive", label: "Deep Dive" }, { value: "conversational", label: "Conversational" },
-    ], settings.format));
-    sections.push(studioSettingsField("length", "Length", [
-      { value: "short", label: "Short" }, { value: "default", label: "Default" }, { value: "long", label: "Long" },
-    ], settings.length));
+    language();
+    select("format", "Format");
+    select("length", "Length");
   } else if (studioName === "video") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
-    sections.push(studioSettingsField("format", "Format", VIDEO_FORMATS, settings.format));
-    // Changing style must re-render the panel so the custom style_prompt input
-    // can appear/disappear; switchNblmSourceTab collects the DOM then repaints.
-    sections.push(studioSettingsField("style", "Style", VIDEO_STYLES, settings.style, "window.switchNblmSourceTab('video')"));
-    if (settings.style === "custom") {
+    language();
+    // Changing format or style must re-render the panel so the custom
+    // style_prompt input can appear/disappear; switchNblmSourceTab collects
+    // the DOM then repaints.
+    select("format", "Format", "window.switchNblmSourceTab('video')");
+    const isShort = settings.format === "short";
+    const styles = studioOptions("video", "style").filter(
+      (option) => !(isShort && option.value === "custom"),
+    );
+    sections.push(
+      studioSettingsField("style", "Style", styles, settings.style, "window.switchNblmSourceTab('video')"),
+    );
+    if (settings.style === "custom" && !isShort) {
       sections.push(studioSettingsTextField("stylePrompt", "Style prompt", settings.stylePrompt, "Describe the visual style for the video"));
     }
   } else if (studioName === "infographic") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
-    sections.push(studioSettingsField("orientation", "Orientation", INFOGRAPHIC_ORIENTATIONS, settings.orientation));
-    sections.push(studioSettingsField("detail", "Detail", INFOGRAPHIC_DETAILS, settings.detail));
-    sections.push(studioSettingsField("style", "Style", INFOGRAPHIC_STYLES, settings.style));
+    language();
+    select("orientation", "Orientation");
+    select("detail", "Detail");
+    select("style", "Style");
   } else if (studioName === "data_table") {
-    sections.push(studioSettingsField("language", "Language", NBLM_LANGUAGES, settings.language));
+    language();
   } else if (studioName === "mind_map") {
+    language();
+    select("format", "Type");
     sections.push(`
       <p class="text-xs text-slate-400 leading-relaxed">
-        Mind maps have no generation options — NotebookLM builds the map directly from the selected sources.
+        Interactive is the mind map shown in NotebookLM's Studio panel. Note Backed saves the map as a note.
       </p>
     `);
   }

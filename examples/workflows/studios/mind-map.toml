@@ -12,5 +12,8 @@ words_per_page = 250
 
 [studios.mind_map]
 enabled = true
-# notebooklm-py does not expose a custom prompt for mind maps today.
+# "interactive" is the mind map shown in NotebookLM's Studio panel;
+# "note-backed" (default) saves the map as a note.
+format = "note-backed"
+# prompt = "Focus on the main themes."
 output_path = "../output/mind-map/studio/mind-map.json"

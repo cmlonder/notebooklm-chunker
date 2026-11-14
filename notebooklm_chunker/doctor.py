@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import importlib
 import importlib.util
 import os
 import shutil
@@ -8,6 +10,8 @@ from importlib import metadata
 from pathlib import Path
 
 from notebooklm_chunker.config import AppConfig, ConfigError, load_config, resolve_config_path
+
+_SESSION_PROBE_TIMEOUT_SECONDS = 20.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +180,15 @@ def _auth_check() -> DoctorCheck:
     auth_paths = notebooklm_auth_paths(notebooklm_home)
     if auth_paths:
         account = _active_account_summary(auth_paths)
+        has_session_file = any(path.name == "storage_state.json" for path in auth_paths)
+        if has_session_file and _saved_session_rejected():
+            who = f" for {account}" if account else ""
+            return DoctorCheck(
+                name="auth",
+                status="warn",
+                summary=f"Saved NotebookLM session{who} has expired.",
+                hint="Run `nblm login` to sign in again.",
+            )
         summary = f"Signed in as {account}" if account else "Local auth state found"
         return DoctorCheck(
             name="auth",
@@ -203,19 +216,59 @@ def _active_account_summary(auth_paths: list[Path]) -> str | None:
                 break
 
     email: str | None = None
-    try:
-        from notebooklm._auth.account import get_account_email_for_storage
-
-        for path in auth_paths:
-            if path.name == "storage_state.json":
-                email = get_account_email_for_storage(path)
-                if email:
-                    break
-    except Exception:
-        email = None
+    for path in auth_paths:
+        if path.name == "storage_state.json":
+            email = account_email_for_storage(path)
+            if email:
+                break
 
     parts = [part for part in (profile, email) if part]
     return " · ".join(dict.fromkeys(parts)) if parts else None
+
+
+def account_email_for_storage(storage_path: Path) -> str | None:
+    """Best-effort account email recorded next to a saved session file."""
+
+    # notebooklm-py 0.8 moved this private helper from `_auth.account` to
+    # `_auth.storage`; try both so a minor upstream move does not blank the
+    # account label.
+    for module_name in ("notebooklm._auth.storage", "notebooklm._auth.account"):
+        try:
+            module = importlib.import_module(module_name)
+            helper = getattr(module, "get_account_email_for_storage", None)
+            if helper is None:
+                continue
+            email = helper(storage_path)
+        except Exception:
+            continue
+        return str(email) if email else None
+    return None
+
+
+def _saved_session_rejected() -> bool:
+    """Ask NotebookLM whether the saved session still signs in.
+
+    Returns True only when NotebookLM answers and rejects the session. Being
+    offline, or any other failure to reach it, is not evidence of a sign-out.
+    """
+
+    try:
+        from notebooklm import NotebookLMClient
+        from notebooklm.exceptions import AuthError
+    except Exception:
+        return False
+
+    async def probe() -> None:
+        async with NotebookLMClient.from_storage():
+            pass
+
+    try:
+        asyncio.run(asyncio.wait_for(probe(), timeout=_SESSION_PROBE_TIMEOUT_SECONDS))
+    except AuthError:
+        return True
+    except Exception:
+        return False
+    return False
 
 
 def _playwright_check() -> DoctorCheck:

@@ -82,6 +82,9 @@ Check auth, config, Playwright, and parser readiness:
 nblm doctor --config ./nblm.toml
 ```
 
+`doctor` contacts NotebookLM to confirm the saved session still signs in. An
+expired session shows as `WARN auth`; run `nblm login` again.
+
 Show the installed CLI version:
 
 ```bash
@@ -202,13 +205,16 @@ Selected per-type options:
 
 ```toml
 [studios.video]
-format = "explainer"       # explainer | brief | cinematic
+format = "explainer"       # explainer | brief | cinematic | short
 style = "whiteboard"       # auto | custom | classic | whiteboard | kawaii | anime | ...
-# style_prompt only applies when style = "custom"
+# style_prompt only applies when style = "custom" (not available with format = "short")
 # style_prompt = "Retro sci-fi paperback illustration"
 
+[studios.report]
+format = "study-guide"     # briefing-doc | study-guide | blog-post | concept-explanation | custom
+
 [studios.quiz]
-quantity = "standard"      # fewer | standard  ("more" is deprecated upstream; maps to standard)
+quantity = "standard"      # fewer | standard | more
 difficulty = "hard"        # easy | medium | hard
 download_format = "json"   # json | markdown | html
 
@@ -216,6 +222,11 @@ download_format = "json"   # json | markdown | html
 orientation = "portrait"   # landscape | portrait | square
 detail = "detailed"        # concise | standard | detailed
 style = "bento-grid"       # auto | sketch-note | professional | bento-grid | editorial | ...
+
+[studios.mind_map]
+format = "note-backed"     # note-backed | interactive (the Studio-panel mind map)
+language = "en"
+# prompt = "Focus on the tradeoffs between the approaches."
 ```
 
 ## Workflow Notes

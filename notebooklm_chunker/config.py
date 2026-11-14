@@ -12,7 +12,7 @@ DEFAULT_CONFIG_BASENAMES = ("nblm.toml", ".nblm.toml", "pyproject.toml")
 
 _AUDIO_FORMATS = ("deep-dive", "brief", "critique", "debate")
 _AUDIO_LENGTHS = ("short", "default", "long")
-_VIDEO_FORMATS = ("explainer", "brief", "cinematic")
+_VIDEO_FORMATS = ("explainer", "brief", "cinematic", "short")
 _VIDEO_STYLES = (
     "auto",
     "custom",
@@ -25,7 +25,8 @@ _VIDEO_STYLES = (
     "heritage",
     "paper-craft",
 )
-_REPORT_FORMATS = ("briefing-doc", "study-guide", "blog-post", "custom")
+_REPORT_FORMATS = ("briefing-doc", "study-guide", "blog-post", "concept-explanation", "custom")
+_MIND_MAP_FORMATS = ("note-backed", "interactive")
 _SLIDE_FORMATS = ("detailed", "presenter")
 _SLIDE_LENGTHS = ("default", "short")
 _SLIDE_DOWNLOAD_FORMATS = ("pdf", "pptx")
@@ -241,13 +242,15 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 allowed_formats=_AUDIO_FORMATS,
                 allowed_lengths=_AUDIO_LENGTHS,
             ),
-            video=_load_studio_config(
-                studios,
-                "video",
-                base_dir=base_dir,
-                source_path=source_path,
-                allowed_formats=_VIDEO_FORMATS,
-                allowed_styles=_VIDEO_STYLES,
+            video=_validated_video_config(
+                _load_studio_config(
+                    studios,
+                    "video",
+                    base_dir=base_dir,
+                    source_path=source_path,
+                    allowed_formats=_VIDEO_FORMATS,
+                    allowed_styles=_VIDEO_STYLES,
+                )
             ),
             report=_load_studio_config(
                 studios,
@@ -303,6 +306,7 @@ def load_config(explicit_path: Path | None = None, *, start_dir: Path | None = N
                 "mind_map",
                 base_dir=base_dir,
                 source_path=source_path,
+                allowed_formats=_MIND_MAP_FORMATS,
             ),
         ),
         config_path=str(config_path),
@@ -485,6 +489,17 @@ def _load_studio_config(
             allowed_download_formats,
         ),
     )
+
+
+def _validated_video_config(config: StudioConfig) -> StudioConfig:
+    # NotebookLM ignores a custom visual style on short videos, so reject the
+    # combination instead of generating something the user did not ask for.
+    if config.format == "short" and (config.style == "custom" or config.style_prompt):
+        raise ConfigError(
+            'studios.video: `format = "short"` does not support `style = "custom"` '
+            "or `style_prompt`. Pick a built-in style or another format."
+        )
+    return config
 
 
 def _as_dict(value: Any) -> dict[str, Any]:

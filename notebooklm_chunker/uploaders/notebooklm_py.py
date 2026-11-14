@@ -7,8 +7,8 @@ import os
 import re
 import shutil
 import subprocess
-from collections.abc import Awaitable, Callable, Coroutine
-from contextlib import nullcontext
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
+from contextlib import asynccontextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -44,6 +44,7 @@ _VIDEO_FORMAT_TO_MEMBER = {
     "explainer": "EXPLAINER",
     "brief": "BRIEF",
     "cinematic": "CINEMATIC",
+    "short": "SHORT",
 }
 _VIDEO_STYLE_TO_MEMBER = {
     "auto": "AUTO_SELECT",
@@ -61,6 +62,7 @@ _REPORT_FORMAT_TO_MEMBER = {
     "briefing-doc": "BRIEFING_DOC",
     "study-guide": "STUDY_GUIDE",
     "blog-post": "BLOG_POST",
+    "concept-explanation": "CONCEPT_EXPLANATION",
     "custom": "CUSTOM",
 }
 _SLIDE_FORMAT_TO_MEMBER = {
@@ -74,9 +76,8 @@ _SLIDE_LENGTH_TO_MEMBER = {
 _QUIZ_QUANTITY_TO_MEMBER = {
     "fewer": "FEWER",
     "standard": "STANDARD",
-    # NotebookLM removed the MORE option (notebooklm-py 0.7.x); accept legacy
-    # configs but send the closest remaining member.
-    "more": "STANDARD",
+    # MORE has its own wire value again since notebooklm-py 0.8.1.
+    "more": "MORE",
 }
 _QUIZ_DIFFICULTY_TO_MEMBER = {
     "easy": "EASY",
@@ -291,7 +292,7 @@ class NotebookLMPyUploader:
 
     async def _list_artifacts_async(self, notebook_id: str) -> list[dict[str, Any]]:
         client_class = _load_notebooklm_client_class()
-        async with await client_class.from_storage() as client:
+        async with _open_client(client_class) as client:
             list_method = getattr(client.artifacts, "list", None)
             if list_method is None:
                 raise UploadError(
@@ -314,7 +315,7 @@ class NotebookLMPyUploader:
 
     async def _delete_artifacts_async(self, notebook_id: str, artifact_ids: list[str]) -> None:
         client_class = _load_notebooklm_client_class()
-        async with await client_class.from_storage() as client:
+        async with _open_client(client_class) as client:
             delete_method = getattr(client.artifacts, "delete", None)
             if delete_method is None:
                 raise UploadError(
@@ -348,7 +349,7 @@ class NotebookLMPyUploader:
             else None
         )
         try:
-            async with await client_class.from_storage() as client:
+            async with _open_client(client_class) as client:
                 resolved_notebook_id = await _ensure_notebook(
                     client,
                     notebook_id=notebook_id,
@@ -381,7 +382,7 @@ class NotebookLMPyUploader:
     async def _list_notebooks_async(self) -> list[dict[str, str | None]]:
         client_class = _load_notebooklm_client_class()
         try:
-            async with await client_class.from_storage() as client:
+            async with _open_client(client_class) as client:
                 notebooks = await client.notebooks.list()
                 return [
                     {
@@ -430,7 +431,7 @@ class NotebookLMPyUploader:
         run_state = _open_run_state(directory / RUN_STATE_BASENAME, resume=resume)
         create_quota_cooldown = CreateQuotaCooldown(studio_rate_limit_cooldown_seconds)
         try:
-            async with await client_class.from_storage() as client:
+            async with _open_client(client_class) as client:
                 if resume:
                     notebook_id = _resolve_resume_notebook_id(
                         run_state,
@@ -589,7 +590,7 @@ class NotebookLMPyUploader:
                 "or pass `--notebook-id` to `nblm studios`."
             )
         try:
-            async with await client_class.from_storage() as client:
+            async with _open_client(client_class) as client:
                 existing_notebook = await _verify_existing_notebook(
                     client,
                     notebook_id=notebook_id,
@@ -687,9 +688,10 @@ def run_notebooklm_profile(args: list[str]) -> None:
 def list_notebooklm_profiles() -> list[dict[str, Any]]:
     """Return notebooklm-py auth profiles with account email and active flag."""
 
+    from ..doctor import account_email_for_storage
+
     try:
         from notebooklm import paths
-        from notebooklm._auth.account import get_account_email_for_storage
     except Exception:
         return []
 
@@ -706,7 +708,7 @@ def list_notebooklm_profiles() -> list[dict[str, Any]]:
     for name in names:
         email = None
         try:
-            email = get_account_email_for_storage(paths.get_storage_path(name))
+            email = account_email_for_storage(paths.get_storage_path(name))
         except Exception:
             email = None
         profiles.append({"name": name, "email": email, "active": name == active})
@@ -1683,16 +1685,9 @@ async def _run_single_studio_locked(
         )
 
     if studio_name == "mind_map":
-        result = await client.artifacts.generate_mind_map(
-            notebook_id,
-            source_ids=source_ids,
+        note_id = await _generate_mind_map(
+            client, rpc_module, notebook_id, source_ids, studio_config
         )
-        # notebooklm-py >= 0.7 returns a typed MindMapResult; older versions a dict.
-        if isinstance(result, dict):
-            note_id = result.get("note_id")
-        else:
-            note_id = getattr(result, "note_id", None)
-        note_id = str(note_id) if note_id is not None else None
         downloaded: str | None = None
         if download_outputs:
             downloaded = await client.artifacts.download_mind_map(
@@ -1974,6 +1969,53 @@ def _limit_create_operation(
     return run_with_limit
 
 
+async def _generate_mind_map(
+    client: Any,
+    rpc_module: Any,
+    notebook_id: str,
+    source_ids: list[str] | None,
+    config: StudioConfig,
+) -> str | None:
+    """Create a mind map and return its ID.
+
+    `note-backed` (default) is the classic map stored as a note. `interactive`
+    is the Studio-panel mind map NotebookLM shows today; it is generated as a
+    Studio artifact and waited on by notebooklm-py.
+    """
+
+    language = config.language or "en"
+    if (config.format or "note-backed") == "interactive":
+        mind_maps_api = getattr(client, "mind_maps", None)
+        kind_enum = getattr(rpc_module, "MindMapKind", None)
+        if kind_enum is None:
+            kind_enum = getattr(importlib.import_module("notebooklm"), "MindMapKind", None)
+        if mind_maps_api is None or kind_enum is None:
+            raise UploadError("This notebooklm-py version does not support interactive mind maps.")
+        mind_map = await mind_maps_api.generate(
+            notebook_id,
+            source_ids,
+            kind=kind_enum.INTERACTIVE,
+            language=language,
+            instructions=config.prompt,
+            failure_policy="raise",
+        )
+        mind_map_id = _read_attr(mind_map, "id")
+        return str(mind_map_id) if mind_map_id else None
+
+    result = await client.artifacts.generate_mind_map(
+        notebook_id,
+        source_ids=source_ids,
+        language=language,
+        instructions=config.prompt,
+    )
+    # notebooklm-py >= 0.7 returns a typed MindMapResult; older versions a dict.
+    if isinstance(result, dict):
+        note_id = result.get("note_id")
+    else:
+        note_id = getattr(result, "note_id", None)
+    return str(note_id) if note_id is not None else None
+
+
 async def _wait_for_completion(
     client: Any,
     notebook_id: str,
@@ -2003,7 +2045,7 @@ async def _wait_for_completion(
     )
     if getattr(final_status, "is_failed", False):
         error = _read_attr(final_status, "error") or f"{studio_label} generation failed."
-        if _looks_like_quota_exhausted_message(error):
+        if _is_quota_exhausted_status(final_status):
             blocked_until = _quota_blocked_until()
             raise QuotaExceededError(
                 f"{error} Daily NotebookLM quota appears exhausted. Try `nblm resume` again after {blocked_until}.",
@@ -2048,7 +2090,7 @@ async def _create_artifact_with_retry(
         except Exception as exc:
             last_error = f"{studio_label} create failed before a task ID was returned: {_describe_exception(exc)}"
             rate_limited = _is_rate_limited_error(exc)
-            quota_exhausted = _looks_like_quota_exhausted_message(_describe_exception(exc))
+            quota_exhausted = _is_quota_exhausted_error(exc)
         else:
             task_id = _read_attr(status, "task_id")
             if task_id:
@@ -2060,7 +2102,7 @@ async def _create_artifact_with_retry(
                 return status
             last_error = _describe_create_failure(studio_label, status)
             rate_limited = _looks_like_rate_limit_message(_read_attr(status, "error"))
-            quota_exhausted = _looks_like_quota_exhausted_message(_read_attr(status, "error"))
+            quota_exhausted = _is_quota_exhausted_status(status)
 
         if quota_exhausted:
             blocked_until = _quota_blocked_until()
@@ -2123,6 +2165,26 @@ def _is_rate_limited_error(exc: Exception) -> bool:
     if retry_after is not None:
         return True
     return _looks_like_rate_limit_message(_describe_exception(exc))
+
+
+# NotebookLM refuses a Studio create with a `USER_DISPLAYABLE_ERROR` when the
+# account quota is spent. notebooklm-py >= 0.8 raises that refusal as a
+# `RateLimitError` carrying this rpc_code (older versions returned a failed
+# status with the same error_code), and the message may be Google's own text,
+# so match the code first and the wording second.
+_QUOTA_REFUSAL_CODE = "USER_DISPLAYABLE_ERROR"
+
+
+def _is_quota_exhausted_error(exc: Exception) -> bool:
+    if str(getattr(exc, "rpc_code", "") or "") == _QUOTA_REFUSAL_CODE:
+        return True
+    return _looks_like_quota_exhausted_message(_describe_exception(exc))
+
+
+def _is_quota_exhausted_status(status: Any) -> bool:
+    if str(_read_attr(status, "error_code") or "") == _QUOTA_REFUSAL_CODE:
+        return True
+    return _looks_like_quota_exhausted_message(_read_attr(status, "error"))
 
 
 def _looks_like_rate_limit_message(message: str | None) -> bool:
@@ -2617,6 +2679,21 @@ def _enum_value(
             "may no longer support this option."
         )
     return member
+
+
+@asynccontextmanager
+async def _open_client(client_class: Any) -> AsyncIterator[Any]:
+    """Open a NotebookLM client from the saved session.
+
+    notebooklm-py 0.8 returns an async context manager from `from_storage()`
+    and deprecates awaiting it; older builds return a coroutine.
+    """
+
+    handle = client_class.from_storage()
+    if not hasattr(handle, "__aenter__"):
+        handle = await handle
+    async with handle as client:
+        yield client
 
 
 def _load_notebooklm_client_class() -> Any:

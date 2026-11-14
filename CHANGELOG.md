@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-15
+
 ### Added
+- Video Studio: `format = "short"` for short-form videos
+- Report Studio: `format = "concept-explanation"`
+- Mind map Studio: `format = "interactive"` generates the Studio-panel mind
+  map (default stays `note-backed`), and `prompt` / `language` are now sent
+- Quiz and flashcards in the desktop app: `more` quantity and HTML download
 - Multi-account support: `nblm --profile <name>` on every auth-touching command,
   `nblm login --account <email>` / `--all-accounts`, and `nblm profile ...`
   passthrough (list, create, switch, rename, delete)
@@ -39,8 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Issue and PR templates
 
 ### Changed
-- notebooklm-py dependency pinned to `>=0.7.3,<0.8` (the library ships
-  breaking changes per minor release)
+- Requires `notebooklm-py` 0.8.6 or newer (`>=0.8.6,<0.9`). Google moved
+  NotebookLM to `notebook.google.com`; older `notebooklm-py` never detects a
+  finished browser sign-in on the new address, so `nblm login` hung until it
+  timed out
+- `nblm doctor` now asks NotebookLM whether the saved session still signs in
+  and reports an expired session as `WARN auth` instead of `OK`. When
+  NotebookLM cannot be reached, the saved session is still reported as present
+- Quiz and flashcards `quantity = "more"` is sent as its own value again
+  instead of being downgraded to `standard`
+- Studio quota blocks are detected from NotebookLM's refusal code as well as
+  the message text, so a refusal with different wording still records the
+  quota block and exits
 - Chunk source titles are now sent with the upload itself instead of a
   separate rename call (one fewer RPC per chunk)
 - Repeated PDF running headers that embed page numbers
@@ -51,14 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow split into distinct jobs
 
 ### Fixed
+- Desktop Studio settings offered values the engine rejects (report
+  `timeline` / `faq`, quiz difficulty `easier` / `default`, audio
+  `conversational`), so those jobs failed with a config error. The lists now
+  come from one table that mirrors the engine, audio gains `brief`,
+  `critique` and `debate`, report gains `blog-post`, and previously saved
+  invalid values are migrated to the closest valid one
 - Auth detection failed against notebooklm-py 0.7, which moved auth state into
   per-profile directories (`profiles/<name>/`); `nblm doctor` reported "not
   signed in" and the desktop app showed "login is not ready" even after a
   successful login. Logout also silently failed to clear the new-layout session.
   `nblm doctor` now also reports which profile/account is active
 - Quiz and flashcards generation crashed against notebooklm-py 0.7.x because
-  the upstream `QuizQuantity.MORE` option was removed; `quantity = "more"` in
-  existing configs now maps to `standard`
+  the upstream `QuizQuantity.MORE` option was removed
 - Mind map generation recorded no artifact ID with notebooklm-py >= 0.7
   (typed `MindMapResult` was not read)
 - `nblm --version` reported 0.2.1 while the package version was 0.5.0
@@ -78,5 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quota handling and retry logic
 - Per-chunk and whole-notebook Studio modes
 
-[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.5.0...v0.6.0
 [0.2.1]: https://github.com/cmlonder/notebooklm-chunker/releases/tag/v0.2.1

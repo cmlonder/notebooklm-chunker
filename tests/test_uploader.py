@@ -56,6 +56,42 @@ class _FakeMindMapResult:
         self.mind_map = {"root": "fake"}
 
 
+class _FakeMindMap:
+    """Mirrors the notebooklm-py 0.8 `MindMap` returned by `client.mind_maps`."""
+
+    def __init__(self, mind_map_id: str) -> None:
+        self.id = mind_map_id
+
+
+class _FakeMindMapsAPI:
+    def __init__(self) -> None:
+        self.generate_calls: list[dict[str, object]] = []
+
+    async def generate(
+        self,
+        notebook_id: str,
+        source_ids: list[str] | None = None,
+        *,
+        kind: object,
+        language: str | None = "en",
+        instructions: str | None = None,
+        wait: bool = True,
+        failure_policy: str = "legacy",
+    ) -> _FakeMindMap:
+        self.generate_calls.append(
+            {
+                "notebook_id": notebook_id,
+                "source_ids": source_ids,
+                "kind": kind,
+                "language": language,
+                "instructions": instructions,
+                "wait": wait,
+                "failure_policy": failure_policy,
+            }
+        )
+        return _FakeMindMap(f"interactive-mind-map-{len(self.generate_calls)}")
+
+
 class _FakeNotebooksAPI:
     def __init__(self, events: list[str]) -> None:
         self.created_titles: list[str] = []
@@ -332,12 +368,16 @@ class _FakeArtifactsAPI:
         self,
         notebook_id: str,
         source_ids: list[str] | None = None,
+        language: str | None = "en",
+        instructions: str | None = None,
     ) -> _FakeMindMapResult:
         note_id = f"note-mind-map-{len(self.mind_map_generate_calls) + 1}"
         self.mind_map_generate_calls.append(
             {
                 "notebook_id": notebook_id,
                 "source_ids": source_ids,
+                "language": language,
+                "instructions": instructions,
             }
         )
         self.events.append("mind_map:" + ",".join(source_ids or []))
@@ -485,6 +525,7 @@ class _FakeClient:
         self.notebooks = _FakeNotebooksAPI(self.events)
         self.sources = _FakeSourcesAPI(self.events)
         self.artifacts = _FakeArtifactsAPI(self.events)
+        self.mind_maps = _FakeMindMapsAPI()
 
     async def __aenter__(self) -> _FakeClient:
         return self
@@ -529,7 +570,16 @@ class _FakeRpcModule:
             "BRIEFING_DOC": "BRIEFING_DOC",
             "STUDY_GUIDE": "STUDY_GUIDE",
             "BLOG_POST": "BLOG_POST",
+            "CONCEPT_EXPLANATION": "CONCEPT_EXPLANATION",
             "CUSTOM": "CUSTOM",
+        },
+    )
+    MindMapKind = type(
+        "MindMapKind",
+        (),
+        {
+            "NOTE_BACKED": "NOTE_BACKED",
+            "INTERACTIVE": "INTERACTIVE",
         },
     )
     SlideDeckFormat = type(
@@ -548,13 +598,14 @@ class _FakeRpcModule:
             "SHORT": "SHORT",
         },
     )
-    # Mirrors notebooklm-py 0.7.x: the MORE member was removed upstream.
+    # Mirrors notebooklm-py 0.8.x: MORE is back with its own wire value.
     QuizQuantity = type(
         "QuizQuantity",
         (),
         {
             "FEWER": "FEWER",
             "STANDARD": "STANDARD",
+            "MORE": "MORE",
         },
     )
     QuizDifficulty = type(
@@ -572,6 +623,8 @@ class _FakeRpcModule:
         {
             "EXPLAINER": "EXPLAINER",
             "BRIEF": "BRIEF",
+            "CINEMATIC": "CINEMATIC",
+            "SHORT": "SHORT",
         },
     )
     VideoStyle = type(
@@ -807,14 +860,14 @@ class UploaderTests(TestCase):
                     "notebook_id": "nb1",
                     "source_ids": ["src-c001-intro"],
                     "instructions": None,
-                    "quantity": "STANDARD",
+                    "quantity": "MORE",
                     "difficulty": "HARD",
                 },
                 {
                     "notebook_id": "nb1",
                     "source_ids": ["src-c002-summary"],
                     "instructions": None,
-                    "quantity": "STANDARD",
+                    "quantity": "MORE",
                     "difficulty": "HARD",
                 },
             ],
@@ -934,7 +987,7 @@ class UploaderTests(TestCase):
         self.assertEqual(len(artifacts.data_table_download_calls), 1)
         self.assertTrue(artifacts.data_table_download_calls[0][1].endswith(".csv"))
 
-    def test_run_studios_mind_map_reads_note_id_from_typed_result(self) -> None:
+    def _run_single_chunk_mind_map(self, **mind_map_options: object) -> tuple[list, dict]:
         uploader = NotebookLMPyUploader()
 
         with tempfile.TemporaryDirectory() as directory:
@@ -982,10 +1035,48 @@ class UploaderTests(TestCase):
                             enabled=True,
                             per_chunk=True,
                             output_dir=str((root / "studio" / "mind-maps").resolve()),
+                            **mind_map_options,
                         )
                     ),
                 )
             saved_state = json.loads(state_path.read_text(encoding="utf-8"))
+        return results, saved_state
+
+    def test_run_studios_interactive_mind_map_uses_mind_maps_api(self) -> None:
+        results, saved_state = self._run_single_chunk_mind_map(
+            format="interactive", prompt="Focus on tradeoffs.", language="tr"
+        )
+
+        client = _FakeNotebookLMClient.last_client
+        self.assertEqual(client.artifacts.mind_map_generate_calls, [])
+        self.assertEqual(
+            client.mind_maps.generate_calls,
+            [
+                {
+                    "notebook_id": "nb1",
+                    "source_ids": ["src-c001-intro"],
+                    "kind": "INTERACTIVE",
+                    "language": "tr",
+                    "instructions": "Focus on tradeoffs.",
+                    "wait": True,
+                    "failure_policy": "raise",
+                }
+            ],
+        )
+        self.assertEqual(results[0].artifact_id, "interactive-mind-map-1")
+        self.assertEqual(client.artifacts.mind_map_download_calls[0][2], "interactive-mind-map-1")
+        chunk_studios = saved_state["chunks"]["c001-intro.md"]["studios"]
+        self.assertEqual(chunk_studios["mind_map"]["artifact_id"], "interactive-mind-map-1")
+
+    def test_run_studios_mind_map_passes_prompt_and_language(self) -> None:
+        self._run_single_chunk_mind_map(prompt="Only chapter themes.", language="de")
+
+        calls = _FakeNotebookLMClient.last_client.artifacts.mind_map_generate_calls
+        self.assertEqual(calls[0]["instructions"], "Only chapter themes.")
+        self.assertEqual(calls[0]["language"], "de")
+
+    def test_run_studios_mind_map_reads_note_id_from_typed_result(self) -> None:
+        results, saved_state = self._run_single_chunk_mind_map()
 
         self.assertEqual(len(results), 1)
         # The typed result's note_id must flow through to the download call
@@ -1221,6 +1312,102 @@ class UploaderTests(TestCase):
             "slide-deck [001-intro.md] create failed before a task ID was returned",
             state["chunks"]["001-intro.md"]["studios"]["slide_deck"]["last_error"],
         )
+
+    def test_raised_quota_refusal_blocks_studio_type_without_retrying(self) -> None:
+        # notebooklm-py >= 0.8 raises the refusal instead of returning a failed
+        # status, and the message can be Google's own wording.
+        uploader = NotebookLMPyUploader()
+
+        class _RaisedRefusal(Exception):
+            rpc_code = "USER_DISPLAYABLE_ERROR"
+            retry_after = None
+
+        class _QuotaArtifacts(_FakeArtifactsAPI):
+            report_attempts = 0
+
+            async def generate_report(self, *args, **kwargs):  # type: ignore[override]
+                type(self).report_attempts += 1
+                raise _RaisedRefusal("You have reached your limit for today.")
+
+        class _QuotaClient(_FakeClient):
+            def __init__(self) -> None:
+                super().__init__()
+                self.artifacts = _QuotaArtifacts(self.events)
+
+        class _QuotaNotebookLMClient:
+            @classmethod
+            async def from_storage(cls):
+                return _QuotaClient()
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chunks_dir = root / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-intro.md").write_text("# Intro\n\nBody\n", encoding="utf-8")
+
+            with (
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_client_class",
+                    return_value=_QuotaNotebookLMClient,
+                ),
+                patch(
+                    "notebooklm_chunker.uploaders.notebooklm_py._load_notebooklm_rpc_module",
+                    return_value=_FakeRpcModule,
+                ),
+            ):
+                with self.assertRaises(UploadError) as context:
+                    uploader.ingest_directory(
+                        chunks_dir,
+                        notebook_title="Notebook",
+                        studios=StudiosConfig(
+                            report=StudioConfig(
+                                enabled=True,
+                                per_chunk=True,
+                                output_dir=str((root / "studio" / "reports").resolve()),
+                                format="study-guide",
+                            ),
+                        ),
+                        studio_create_retries=5,
+                        studio_create_backoff_seconds=0.01,
+                    )
+
+            state = json.loads((chunks_dir / ".nblm-run-state.json").read_text(encoding="utf-8"))
+
+        self.assertIn(
+            "Daily NotebookLM quota appears exhausted for: report until", str(context.exception)
+        )
+        self.assertEqual(_QuotaArtifacts.report_attempts, 1)
+        self.assertIsNotNone(state["quota_blocks"]["report"]["blocked_until"])
+        self.assertEqual(
+            state["chunks"]["001-intro.md"]["studios"]["report"]["status"], "quota_blocked"
+        )
+
+    def test_open_client_supports_context_manager_from_storage(self) -> None:
+        # notebooklm-py 0.8 returns an async context manager from
+        # `from_storage()` instead of a coroutine.
+        from notebooklm_chunker.uploaders.notebooklm_py import _open_client
+
+        events: list[str] = []
+
+        class _Handle:
+            async def __aenter__(self) -> str:
+                events.append("enter")
+                return "client"
+
+            async def __aexit__(self, *exc_info: object) -> None:
+                events.append("exit")
+
+        class _ContextManagerClient:
+            @classmethod
+            def from_storage(cls) -> _Handle:
+                return _Handle()
+
+        async def scenario() -> str:
+            async with _open_client(_ContextManagerClient) as client:
+                return str(client)
+
+        self.assertEqual(asyncio.run(scenario()), "client")
+        self.assertEqual(events, ["enter", "exit"])
 
     def test_ingest_directory_blocks_only_exhausted_studio_type_and_preserves_other_results(
         self,

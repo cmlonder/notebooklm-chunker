@@ -344,6 +344,50 @@
   width: 100%;
 }
 
+.artifact-video,
+.artifact-image {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 0.75rem;
+  background: #000;
+}
+
+.artifact-image {
+  background: transparent;
+}
+
+.artifact-mindmap,
+.artifact-mindmap-children {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.artifact-mindmap {
+  padding-left: 0;
+}
+
+.artifact-mindmap-children {
+  border-left: 1px solid var(--slate-200, #e2e8f0);
+  margin-left: 0.35rem;
+}
+
+.artifact-mindmap-node {
+  padding: 0.2rem 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.artifact-mindmap-node[data-depth="0"] > span {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.artifact-mindmap-node[data-depth="1"] > span {
+  font-weight: 600;
+}
+
 .artifact-audio-note {
   color: var(--slate-500);
   font-size: 0.8rem;

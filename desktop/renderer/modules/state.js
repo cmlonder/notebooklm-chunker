@@ -68,9 +68,24 @@ const studioIconNames = {
   quiz: "quiz",
   flashcards: "style",
   audio: "podcasts",
+  video: "movie",
+  infographic: "insert_chart",
+  mind_map: "account_tree",
+  data_table: "table_chart",
 };
 
-const promptStudioTypes = ["report", "slide_deck", "quiz", "flashcards", "audio"];
+// Every Studio type the builder can queue. Mirrors the engine's nine types.
+const promptStudioTypes = [
+  "report",
+  "slide_deck",
+  "quiz",
+  "flashcards",
+  "audio",
+  "video",
+  "infographic",
+  "mind_map",
+  "data_table",
+];
 
 const DEFAULT_CHUNK_MIN_PAGES = 2.5;
 const DEFAULT_CHUNK_MAX_PAGES = 4.0;
@@ -145,7 +160,17 @@ function persistPromptLibrary() {
   localStorage.setItem(promptStorageKey(), JSON.stringify(appState.promptLibrary));
 }
 
-const DEFAULT_MAX_PARALLEL = { report: 2, slide_deck: 2, quiz: 2, flashcards: 2, audio: 1 };
+const DEFAULT_MAX_PARALLEL = {
+  report: 2,
+  slide_deck: 2,
+  quiz: 2,
+  flashcards: 2,
+  audio: 1,
+  video: 1,
+  infographic: 2,
+  mind_map: 2,
+  data_table: 2,
+};
 const DEFAULT_MAX_PARALLEL_CHUNKS = 3;
 
 function nblmSettingsStorageKey() {

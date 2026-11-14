@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-15
+
+### Added
+- Desktop Studio Builder can now queue all nine Studio types: video,
+  infographic, mind map and data table join report, slide deck, quiz,
+  flashcards and audio, each with its own settings, prompt library and tab
+- Desktop artifact preview plays downloaded videos, shows infographic images
+  inline and renders mind maps as an outline
+
+### Fixed
+- Desktop: the video settings dialog on the dashboard did not refresh when
+  the style changed, so the custom style prompt field never appeared there
+- Desktop: workflow preset icons rendered as plain text
+
 ## [0.6.0] - 2026-11-15
 
 ### Added
@@ -100,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quota handling and retry logic
 - Per-chunk and whole-notebook Studio modes
 
-[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.5.0...v0.6.0
 [0.2.1]: https://github.com/cmlonder/notebooklm-chunker/releases/tag/v0.2.1

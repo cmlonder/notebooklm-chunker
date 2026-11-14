@@ -254,7 +254,7 @@
                 <div class="flex items-center justify-between gap-4">
                   <div>
                     <h3 class="font-bold text-slate-900">Studio Builder</h3>
-                    <p id="dashboard-selected-source-meta" class="text-sm text-slate-500">Select a source on the left, then add report, slide, quiz, flashcard, or audio jobs for it.</p>
+                    <p id="dashboard-selected-source-meta" class="text-sm text-slate-500">Select a source on the left, then add Studio jobs for it.</p>
                   </div>
                 </div>
                 <!-- Workflow presets (roadmap D1): populated by presets.js renderPresetPicker(). -->
@@ -407,6 +407,122 @@
                     </select>
                     <div id="studio-audio-prompt-wrap" class="hidden">
                       <textarea id="studio-audio-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom audio prompt"></textarea>
+                    </div>
+                  </label>
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">movie</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Video</h3>
+                          <p class="text-sm text-slate-500">Video overview for the selected source.</p>
+                          <p id="studio-video-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('video')" class="queue-action-btn queue-settings-btn" title="Video settings" aria-label="Video settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('video')" class="queue-action-btn" title="Add video to queue" aria-label="Add video to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('video')" class="queue-action-btn" title="Add one video per selected source" aria-label="Add one video per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-video-preset" onchange="window.applyPromptPreset('video', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-video-prompt-wrap" class="hidden">
+                      <textarea id="studio-video-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom video prompt"></textarea>
+                    </div>
+                  </label>
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">insert_chart</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Infographic</h3>
+                          <p class="text-sm text-slate-500">One-page visual summary of the selected source.</p>
+                          <p id="studio-infographic-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('infographic')" class="queue-action-btn queue-settings-btn" title="Infographic settings" aria-label="Infographic settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('infographic')" class="queue-action-btn" title="Add infographic to queue" aria-label="Add infographic to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('infographic')" class="queue-action-btn" title="Add one infographic per selected source" aria-label="Add one infographic per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-infographic-preset" onchange="window.applyPromptPreset('infographic', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-infographic-prompt-wrap" class="hidden">
+                      <textarea id="studio-infographic-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom infographic prompt"></textarea>
+                    </div>
+                  </label>
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">account_tree</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Mind Map</h3>
+                          <p class="text-sm text-slate-500">Mind map of the ideas in the selected source.</p>
+                          <p id="studio-mind_map-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('mind_map')" class="queue-action-btn queue-settings-btn" title="Mind Map settings" aria-label="Mind Map settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('mind_map')" class="queue-action-btn" title="Add mind map to queue" aria-label="Add mind map to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('mind_map')" class="queue-action-btn" title="Add one mind map per selected source" aria-label="Add one mind map per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-mind_map-preset" onchange="window.applyPromptPreset('mind_map', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-mind_map-prompt-wrap" class="hidden">
+                      <textarea id="studio-mind_map-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom mind map prompt"></textarea>
+                    </div>
+                  </label>
+                  <label class="glass-panel rounded-3xl p-5 border border-slate-100 flex flex-col gap-3">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined text-primary !text-xl">table_chart</span>
+                        <div>
+                          <h3 class="font-bold text-slate-900">Data Table</h3>
+                          <p class="text-sm text-slate-500">Structured comparison table for the selected source.</p>
+                          <p id="studio-data_table-settings-summary" class="text-xs text-slate-400 mt-1"></p>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button onclick="window.openStudioSettings('data_table')" class="queue-action-btn queue-settings-btn" title="Data Table settings" aria-label="Data Table settings">
+                          <span class="material-symbols-outlined !text-sm">settings</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItem('data_table')" class="queue-action-btn" title="Add data table to queue" aria-label="Add data table to queue">
+                          <span class="material-symbols-outlined !text-sm">add_circle</span>
+                        </button>
+                        <button onclick="window.addStudioQueueItemsForSelection('data_table')" class="queue-action-btn" title="Add one data table per selected source" aria-label="Add one data table per selected source">
+                          <span class="material-symbols-outlined !text-sm">rocket_launch</span>
+                        </button>
+                      </div>
+                    </div>
+                    <select id="studio-data_table-preset" onchange="window.applyPromptPreset('data_table', this.value)" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all">
+                      <option value="">(Optional) Select</option>
+                    </select>
+                    <div id="studio-data_table-prompt-wrap" class="hidden">
+                      <textarea id="studio-data_table-prompt" class="w-full rounded-2xl border-slate-200 text-sm" rows="4" placeholder="Custom data table prompt"></textarea>
                     </div>
                   </label>
                 </div>

@@ -139,6 +139,41 @@ function buildStudioSelections() {
       length: settings.audio.length,
       maxParallel: getMaxParallel("audio"),
     },
+    video: {
+      enabled: true,
+      outputDir: `${base}/videos`,
+      prompt: document.getElementById("studio-video-prompt")?.value.trim(),
+      language: settings.video.language,
+      format: settings.video.format,
+      style: settings.video.style,
+      stylePrompt: settings.video.stylePrompt,
+      maxParallel: getMaxParallel("video"),
+    },
+    infographic: {
+      enabled: true,
+      outputDir: `${base}/infographics`,
+      prompt: document.getElementById("studio-infographic-prompt")?.value.trim(),
+      language: settings.infographic.language,
+      orientation: settings.infographic.orientation,
+      detail: settings.infographic.detail,
+      style: settings.infographic.style,
+      maxParallel: getMaxParallel("infographic"),
+    },
+    mind_map: {
+      enabled: true,
+      outputDir: `${base}/mind-maps`,
+      prompt: document.getElementById("studio-mind_map-prompt")?.value.trim(),
+      language: settings.mind_map.language,
+      format: settings.mind_map.format,
+      maxParallel: getMaxParallel("mind_map"),
+    },
+    data_table: {
+      enabled: true,
+      outputDir: `${base}/data-tables`,
+      prompt: document.getElementById("studio-data_table-prompt")?.value.trim(),
+      language: settings.data_table.language,
+      maxParallel: getMaxParallel("data_table"),
+    },
   };
 }
 
@@ -151,7 +186,7 @@ function studioQueueSummary(activeProject) {
     return "Choose a source to start building the queue.";
   }
   if (appState.studioQueue.length === 0) {
-    return "Queue is empty. Add report, slide, quiz, flashcard, or audio batches for the selected source set.";
+    return "Queue is empty. Add Studio batches for the selected source set.";
   }
   return `${appState.studioQueue.length} queued job${appState.studioQueue.length === 1 ? "" : "s"} across the selected sources in this local run.`;
 }

@@ -26,6 +26,18 @@ function studioSettingSummary(studioName) {
   if (studioName === "audio") {
     return `${String(settings.language || "en").toUpperCase()} · ${settings.format || "deep-dive"} · ${settings.length || "long"}`;
   }
+  if (studioName === "video") {
+    return `${String(settings.language || "en").toUpperCase()} · ${settings.format || "explainer"} · ${settings.style || "auto"}`;
+  }
+  if (studioName === "infographic") {
+    return `${String(settings.language || "en").toUpperCase()} · ${settings.orientation || "portrait"} · ${settings.detail || "detailed"} · ${settings.style || "auto"}`;
+  }
+  if (studioName === "mind_map") {
+    return `${String(settings.language || "en").toUpperCase()} · ${settings.format || "note-backed"}`;
+  }
+  if (studioName === "data_table") {
+    return String(settings.language || "en").toUpperCase();
+  }
   return "";
 }
 
@@ -75,6 +87,25 @@ function openStudioSettings(studioName) {
   body.innerHTML = `<div class="space-y-4">${sections.join("")}</div>`;
   modal.classList.remove("hidden");
 }
+
+// Re-render the option fields after a choice that changes which fields exist
+// (video format/style). Works in both places the fields are shown: the
+// per-Studio modal on the dashboard and the NotebookLM settings view.
+function refreshStudioSettingsFields(studioName) {
+  const modal = document.getElementById("studio-settings-modal");
+  const body = document.getElementById("studio-settings-body");
+  const modalOpen = modal && body && !modal.classList.contains("hidden");
+  if (!modalOpen || appState.studioSettingsEditor !== studioName) {
+    switchNblmSourceTab(studioName);
+    return;
+  }
+  const draft = { ...(appState.studioSettings?.[studioName] || defaultStudioSettings()[studioName] || {}) };
+  modal.querySelectorAll("[data-studio-setting]").forEach((node) => {
+    draft[node.getAttribute("data-studio-setting")] = node.value;
+  });
+  body.innerHTML = `<div class="space-y-4">${nblmSourceSettingsFields(studioName, draft).join("")}</div>`;
+}
+window.refreshStudioSettingsFields = refreshStudioSettingsFields;
 
 function closeStudioSettings() {
   const modal = document.getElementById("studio-settings-modal");
@@ -250,21 +281,9 @@ function switchNblmSourceTab(studioName) {
   renderNblmSettingsBody();
 }
 
-// Studio types that expose a settings panel in the NotebookLM settings view.
-// Superset of prompt studios (state.js promptStudioTypes) — it adds video,
-// infographic, mind_map, and data_table, which the engine supports but which
-// have no prompt cards on the dashboard.
-const SETTINGS_STUDIO_TYPES = [
-  "report",
-  "slide_deck",
-  "quiz",
-  "flashcards",
-  "audio",
-  "video",
-  "infographic",
-  "mind_map",
-  "data_table",
-];
+// Studio types that expose a settings panel in the NotebookLM settings view:
+// the same nine the builder can queue.
+const SETTINGS_STUDIO_TYPES = promptStudioTypes;
 
 // Option lists come from project-utils.js STUDIO_OPTIONS, which mirrors
 // notebooklm_chunker/config.py (source of truth), so the settings UI can never
@@ -333,15 +352,14 @@ function nblmSourceSettingsFields(studioName, settings) {
   } else if (studioName === "video") {
     language();
     // Changing format or style must re-render the panel so the custom
-    // style_prompt input can appear/disappear; switchNblmSourceTab collects
-    // the DOM then repaints.
-    select("format", "Format", "window.switchNblmSourceTab('video')");
+    // style_prompt input can appear/disappear.
+    select("format", "Format", "window.refreshStudioSettingsFields('video')");
     const isShort = settings.format === "short";
     const styles = studioOptions("video", "style").filter(
       (option) => !(isShort && option.value === "custom"),
     );
     sections.push(
-      studioSettingsField("style", "Style", styles, settings.style, "window.switchNblmSourceTab('video')"),
+      studioSettingsField("style", "Style", styles, settings.style, "window.refreshStudioSettingsFields('video')"),
     );
     if (settings.style === "custom" && !isShort) {
       sections.push(studioSettingsTextField("stylePrompt", "Style prompt", settings.stylePrompt, "Describe the visual style for the video"));

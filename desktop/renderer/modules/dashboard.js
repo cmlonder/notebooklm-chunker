@@ -234,10 +234,10 @@ function renderDashboardSources() {
   if (selectedMeta) {
     const selectedSources = currentSelectedDashboardSources();
     selectedMeta.textContent = selectedSources.length > 1
-      ? `${selectedSources.length} sources selected. Add report, slide, quiz, flashcard, or audio jobs for them.`
+      ? `${selectedSources.length} sources selected. Add Studio jobs for them.`
       : source
-      ? `${source.title} selected. Add report, slide, quiz, flashcard, or audio jobs for this source.`
-      : "Select a source on the left, then add report, slide, quiz, flashcard, or audio jobs for it.";
+      ? `${source.title} selected. Add Studio jobs for this source.`
+      : "Select a source on the left, then add Studio jobs for it.";
   }
   updateDashboardSelectedCount();
 }

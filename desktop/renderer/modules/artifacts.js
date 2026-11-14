@@ -10,6 +10,10 @@ function artifactKindToStudio(kind) {
   if (normalized.includes("audio") || normalized.includes("podcast")) return "audio";
   if (normalized.includes("quiz")) return "quiz";
   if (normalized.includes("report")) return "report";
+  if (normalized.includes("video")) return "video";
+  if (normalized.includes("infographic")) return "infographic";
+  if (normalized.includes("mind")) return "mind_map";
+  if (normalized.includes("table")) return "data_table";
   return normalized;
 }
 
@@ -121,7 +125,9 @@ async function deleteSelectedStudioArtifacts() {
  * ------------------------------------------------------------------ */
 
 const AUDIO_EXTENSIONS = new Set(["mp3", "mp4", "m4a", "wav", "ogg", "aac", "flac"]);
-const BINARY_EXTENSIONS = new Set(["pptx", "ppt", "pdf", "png", "jpg", "jpeg", "gif", "webp", "docx", "xlsx", "key", "zip"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "webm", "mov", "m4v"]);
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+const BINARY_EXTENSIONS = new Set(["pptx", "ppt", "pdf", "docx", "xlsx", "key", "zip"]);
 
 function artifactFileExtension(filePath) {
   const base = String(filePath || "").split("/").pop() || "";
@@ -622,6 +628,64 @@ function renderAudioArtifact(filePath) {
     </div>`;
 }
 
+function renderVideoArtifact(filePath) {
+  const src = `file://${encodeURI(filePath)}`;
+  return `
+    <div class="artifact-audio">
+      <video class="artifact-video" controls preload="metadata" src="${escapeHtml(src)}"></video>
+      <p class="artifact-audio-note">Downloaded video: ${escapeHtml(filePath)}</p>
+    </div>`;
+}
+
+function renderImageArtifact(filePath) {
+  const src = `file://${encodeURI(filePath)}`;
+  return `
+    <div class="artifact-audio">
+      <img class="artifact-image" src="${escapeHtml(src)}" alt="Downloaded infographic" />
+      <p class="artifact-audio-note">Downloaded image: ${escapeHtml(filePath)}</p>
+    </div>`;
+}
+
+// Mind maps download as a nested JSON tree. Field names vary between the
+// note-backed and interactive kinds, so read the usual candidates.
+function mindMapNodeLabel(node) {
+  if (typeof node === "string") return node;
+  if (!node || typeof node !== "object") return "";
+  return String(node.name ?? node.title ?? node.label ?? node.text ?? node.topic ?? "");
+}
+
+function mindMapNodeChildren(node) {
+  if (!node || typeof node !== "object") return [];
+  const children = node.children ?? node.nodes ?? node.subtopics ?? node.items;
+  return Array.isArray(children) ? children : [];
+}
+
+function renderMindMapNode(node, depth) {
+  const label = mindMapNodeLabel(node);
+  const children = mindMapNodeChildren(node);
+  const childHtml = children.length
+    ? `<ul class="artifact-mindmap-children">${children.map((child) => renderMindMapNode(child, depth + 1)).join("")}</ul>`
+    : "";
+  if (!label && !childHtml) return "";
+  return `<li class="artifact-mindmap-node" data-depth="${Math.min(depth, 3)}"><span>${escapeHtml(label || "Untitled")}</span>${childHtml}</li>`;
+}
+
+function renderMindMapArtifact(content) {
+  let data;
+  try {
+    data = JSON.parse(content);
+  } catch (error) {
+    return renderRawArtifact(content);
+  }
+  const root = data && typeof data === "object" && !Array.isArray(data)
+    ? data.mind_map ?? data.tree ?? data.root ?? data
+    : data;
+  const nodes = Array.isArray(root) ? root : [root];
+  const html = nodes.map((node) => renderMindMapNode(node, 0)).join("");
+  if (!html) return renderRawArtifact(content);
+  return `<ul class="artifact-mindmap">${html}</ul>`;
+}
+
 function renderBinaryArtifact(filePath, studioName) {
   const name = String(filePath).split("/").pop() || filePath;
   return `
@@ -650,6 +714,7 @@ function renderArtifactContent(studioName, extension, content) {
   if (studioName === "flashcards") return renderFlashcardsArtifact(content, extension);
   if (studioName === "report") return `<div class="artifact-markdown">${markdownToSafeHtml(content)}</div>`;
   if (studioName === "data_table" || extension === "csv") return renderCsvArtifact(content);
+  if (studioName === "mind_map") return renderMindMapArtifact(content);
   if (extension === "json") return renderQuizArtifact(content);
   if (extension === "md" || extension === "markdown" || extension === "txt" || extension === "") {
     return `<div class="artifact-markdown">${markdownToSafeHtml(content)}</div>`;
@@ -685,9 +750,19 @@ async function openArtifactPreview(artifact) {
   }
   const extension = artifactFileExtension(local.path);
   try {
+    if (studioName === "video" && VIDEO_EXTENSIONS.has(extension)) {
+      const exists = await localFileExists(local.path);
+      setBody(exists ? renderVideoArtifact(local.path) : renderNotDownloadedArtifact());
+      return;
+    }
     if (AUDIO_EXTENSIONS.has(extension)) {
       const exists = await localFileExists(local.path);
       setBody(exists ? renderAudioArtifact(local.path) : renderNotDownloadedArtifact());
+      return;
+    }
+    if (IMAGE_EXTENSIONS.has(extension)) {
+      const exists = await localFileExists(local.path);
+      setBody(exists ? renderImageArtifact(local.path) : renderNotDownloadedArtifact());
       return;
     }
     if (BINARY_EXTENSIONS.has(extension)) {

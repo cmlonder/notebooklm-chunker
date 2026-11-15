@@ -21,8 +21,12 @@ case "$(uname -s)" in
     ;;
 esac
 
+echo "==> Bundled engine"
+bash "$ROOT_DIR/scripts/build_sidecar.sh"
+
 cd "$DESKTOP_DIR"
 
+echo
 echo "==> Desktop tests"
 npm test
 

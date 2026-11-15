@@ -8,7 +8,7 @@ an open-source project.
 - Python 3.12+
 - `git`
 - `pip`
-- `python -m playwright install chromium` only if you want to test `nblm login`
+- a browser for `nblm login`: an installed Chrome or Edge, or `python -m playwright install chromium`
   or live NotebookLM flows
 
 ## Local Setup
@@ -246,27 +246,39 @@ Then publish the GitHub release for that tag. Two workflows will run:
 - `.github/workflows/publish.yml` for the Python package / PyPI
 - `.github/workflows/desktop-release.yml` for Electron desktop binaries
 
-### Sidecar Binary (Experimental)
+### Bundled Engine (Sidecar)
 
-The desktop app can bundle a standalone `nblm` binary (PyInstaller) so end
-users do not need Python, pip, or PATH setup:
+Released desktop apps carry a standalone `nblm` binary (PyInstaller) so users
+need no Python, pip, or PATH setup:
 
 ```bash
 bash scripts/build_sidecar.sh
 ```
 
-That writes `desktop/sidecar/dist/nblm`. `electron-builder` picks it up via
-`extraResources`, and the app prefers the bundled binary at runtime, falling
-back to `nblm` on PATH (dev setups, power users).
+That writes `desktop/sidecar/dist/nblm/`. `electron-builder` copies it into
+the app via `extraResources`, and the app prefers it at runtime, falling back
+to `nblm` on PATH (source checkouts without a sidecar build).
 
-Current limitations:
+- `desktop-release.yml` builds the sidecar on each OS before packaging; a
+  local `npm run build:*` needs `bash scripts/build_sidecar.sh` first, which
+  `scripts/release_desktop_local.sh` runs for you
+- the sidecar is per-platform
+- the binary also answers `nblm -m <module>` and `nblm -c <code>`
+  (`scripts/sidecar_entry.py`). notebooklm-py re-invokes `sys.executable`
+  that way to run its CLI and to download Chromium, so sign-in works with no
+  Python on the machine. The build script fails if that shim breaks.
+- sign-in uses an installed Chrome or Edge when Playwright's Chromium is not
+  there (`notebooklm_chunker/login_browser.py`), so most users download nothing
 
-- run the sidecar build before `npm run build:*` or the packaged app falls
-  back to requiring `nblm` on PATH
-- the sidecar is per-platform; each OS build needs its own sidecar build
-- `nblm login` still needs Playwright Chromium on the machine
-  (`python -m playwright install chromium`), because Playwright browsers are
-  not bundled into the binary. All other commands are self-contained.
+### App Icon
+
+`desktop/build/icon.svg` is the master. After editing it, rebuild the rasters
+on macOS and keep `desktop/renderer/chunker-mark.svg` (the same art cropped to
+the tile) in step:
+
+```bash
+bash scripts/build_icons.sh
+```
 
 ## Local Package Verification
 
@@ -320,9 +332,8 @@ npm install
 npm run dev
 ```
 
-The desktop app is currently a repo-based workflow, not a separately published
-binary release process. GitHub releases today are used for the Python package
-release flow above.
+Binaries are built and attached to each GitHub release by
+`.github/workflows/desktop-release.yml`.
 
 ## Project Layout
 

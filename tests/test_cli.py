@@ -207,7 +207,9 @@ class CliTests(TestCase):
                     exit_code = main(["login"])
 
         self.assertEqual(exit_code, 0)
-        mocked_login.assert_called_once_with(profile=None, account=None, all_accounts=False)
+        mocked_login.assert_called_once_with(
+            profile=None, account=None, all_accounts=False, browser="auto"
+        )
 
     def test_login_command_forwards_profile_and_account(self) -> None:
         stdout = io.StringIO()
@@ -218,7 +220,19 @@ class CliTests(TestCase):
                 self.assertEqual(os.environ.get("NOTEBOOKLM_PROFILE"), "work")
 
         self.assertEqual(exit_code, 0)
-        mocked_login.assert_called_once_with(profile="work", account="a@b.com", all_accounts=False)
+        mocked_login.assert_called_once_with(
+            profile="work", account="a@b.com", all_accounts=False, browser="auto"
+        )
+
+    def test_login_command_forwards_browser_choice(self) -> None:
+        with patch("notebooklm_chunker.cli.run_notebooklm_login") as mocked_login:
+            with redirect_stdout(io.StringIO()):
+                exit_code = main(["login", "--browser", "chrome"])
+
+        self.assertEqual(exit_code, 0)
+        mocked_login.assert_called_once_with(
+            profile=None, account=None, all_accounts=False, browser="chrome"
+        )
 
     def test_profile_command_passes_through(self) -> None:
         with patch("notebooklm_chunker.cli.run_notebooklm_profile") as mocked_profile:

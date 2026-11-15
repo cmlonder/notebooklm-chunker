@@ -1,0 +1,30 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- App icon master. A page cut into three chunks. The 824px tile inside a
+       1024px canvas follows the macOS icon grid; renderer/chunker-mark.svg is
+       the same art cropped to the tile. Rebuild rasters: scripts/build_icons.sh -->
+  <defs>
+    <linearGradient id="bg" x1="140" y1="110" x2="880" y2="930" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.5" stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="292" y1="244" x2="732" y2="780" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+    <filter id="shadow" x="60" y="70" width="904" height="914" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0F172A" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)" filter="url(#shadow)"/>
+  <g fill="url(#card)">
+    <rect x="292" y="244" width="440" height="160" rx="36"/>
+    <rect x="292" y="432" width="440" height="160" rx="36"/>
+    <rect x="292" y="620" width="440" height="160" rx="36"/>
+  </g>
+  <g stroke-width="28" stroke-linecap="round">
+    <path d="M352 300H636M352 350H548" stroke="#1D4ED8"/>
+    <path d="M352 488H672M352 538H584" stroke="#2563EB"/>
+    <path d="M352 676H612M352 726H520" stroke="#38BDF8"/>
+  </g>
+</svg>

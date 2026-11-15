@@ -3,7 +3,7 @@ const appState = {
   setupStatus: null,
   profiles: [],
   activeProfile: null,
-  currentView: "auth",
+  currentView: "setup",
   userMenuOpen: false,
   isResumeMode: false,
   isRunning: false,

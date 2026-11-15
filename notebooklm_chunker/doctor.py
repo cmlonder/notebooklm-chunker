@@ -10,6 +10,11 @@ from importlib import metadata
 from pathlib import Path
 
 from notebooklm_chunker.config import AppConfig, ConfigError, load_config, resolve_config_path
+from notebooklm_chunker.login_browser import (
+    is_frozen,
+    system_browser_channel,
+    system_browser_label,
+)
 
 _SESSION_PROBE_TIMEOUT_SECONDS = 20.0
 
@@ -109,7 +114,16 @@ def run_doctor(
         )
 
     notebooklm_cli = shutil.which("notebooklm")
-    if notebooklm_cli:
+    if is_frozen():
+        # The desktop app's engine carries notebooklm-py inside itself.
+        checks.append(
+            DoctorCheck(
+                name="notebooklm-cli",
+                status="ok",
+                summary="Bundled with this app.",
+            )
+        )
+    elif notebooklm_cli:
         checks.append(
             DoctorCheck(
                 name="notebooklm-cli",
@@ -123,7 +137,7 @@ def run_doctor(
                 name="notebooklm-cli",
                 status="warn",
                 summary="`notebooklm` CLI was not found in PATH.",
-                hint="Install `notebooklm-chunker` and run `python -m playwright install chromium`.",
+                hint="Install `notebooklm-chunker`.",
             )
         )
 
@@ -271,6 +285,13 @@ def _saved_session_rejected() -> bool:
     return False
 
 
+def _playwright_chromium_executable() -> Path:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        return Path(playwright.chromium.executable_path)
+
+
 def _playwright_check() -> DoctorCheck:
     spec = importlib.util.find_spec("playwright")
     if spec is None:
@@ -283,10 +304,7 @@ def _playwright_check() -> DoctorCheck:
 
     version = _package_version("playwright")
     try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as playwright:
-            executable_path = Path(playwright.chromium.executable_path)
+        executable_path = _playwright_chromium_executable()
     except Exception as exc:
         detail = str(exc).strip().splitlines()[0] if str(exc).strip() else exc.__class__.__name__
         return DoctorCheck(
@@ -305,14 +323,22 @@ def _playwright_check() -> DoctorCheck:
             summary=f"Chromium ready at {executable_path}{_version_suffix(version)}",
         )
 
+    # No Playwright Chromium is not a blocker: `nblm login` signs in with an
+    # installed Chrome or Edge, and otherwise downloads Chromium by itself.
+    channel = system_browser_channel()
+    if channel:
+        return DoctorCheck(
+            name="playwright",
+            status="ok",
+            summary=f"Sign-in will use {system_browser_label(channel)}{_version_suffix(version)}",
+        )
     return DoctorCheck(
         name="playwright",
-        status="warn",
+        status="ok",
         summary=(
-            f"Playwright{_version_suffix(version)} is installed but Chromium is missing "
-            f"(expected at {executable_path})."
+            "No sign-in browser yet; `nblm login` downloads Chromium (about 150 MB) "
+            f"the first time{_version_suffix(version)}"
         ),
-        hint="Run `python -m playwright install chromium`.",
     )
 
 

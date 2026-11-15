@@ -590,7 +590,9 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await resolveShellPath();
-  if (process.platform === 'darwin') {
+  // A packaged app already carries its icon; only the bare Electron binary used
+  // in development needs it set by hand.
+  if (process.platform === 'darwin' && !app.isPackaged) {
     const iconPath = path.join(__dirname, '../build/icon.png');
     if (fs.existsSync(iconPath)) {
       const { nativeImage } = require('electron');

@@ -45,6 +45,18 @@ jobs:
         working-directory: desktop
         run: npm test
 
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The app ships its own `nblm` engine so users need no Python install.
+      - name: Build bundled engine
+        shell: bash
+        env:
+          PYTHON: python
+        run: bash scripts/build_sidecar.sh
+
       - name: Build desktop app
         working-directory: desktop
         run: npm run ${{ matrix.build_script }}

@@ -36,103 +36,73 @@ function summarizeSetupStatus(cliCheck, doctorResult) {
     cliVersion: cliReady ? String(cliCheck.output || "").trim() : "",
     cliDetail: cliReady
       ? (notebooklmCli.detail || String(cliCheck.output || "").trim())
-      : String(cliCheck?.error || "nblm was not found on PATH."),
+      : String(cliCheck?.error || "The engine did not start."),
     playwrightReady: playwright.ok,
     playwrightDetail: playwright.detail,
     authReady: auth.ok,
     authDetail: auth.detail,
     pdfParserReady: pdfParser.ok,
     pdfParserDetail: pdfParser.detail,
-    readyForApp: cliReady && playwright.ok,
-    readyForLiveRun: cliReady && playwright.ok && auth.ok,
+    // Sign-in picks its own browser (installed Chrome/Edge, else it downloads
+    // Chromium), so only the engine itself gates the app.
+    readyForApp: cliReady,
+    readyForLiveRun: cliReady && auth.ok,
     doctorOutput,
   };
 }
 
+function activeAccountLabel() {
+  const profiles = appState.profiles || [];
+  const active = profiles.find((p) => p.name === appState.activeProfile) || profiles.find((p) => p.active);
+  if (!active) return "";
+  return active.email || active.name;
+}
+
+function setCheck(key, ok, detail) {
+  const badge = document.getElementById(`setup-${key}-badge`);
+  const text = document.getElementById(`setup-${key}-detail`);
+  if (badge) {
+    badge.className = `setup-status-pill ${ok ? "setup-status-ok" : "setup-status-warn"}`;
+    badge.textContent = ok ? "Ready" : "Needs attention";
+  }
+  if (text) text.textContent = detail;
+}
+
 function renderSetupView() {
   const status = appState.setupStatus || {};
-  const cliBadge = document.getElementById("setup-cli-badge");
-  const cliDetail = document.getElementById("setup-cli-detail");
-  const playwrightBadge = document.getElementById("setup-playwright-badge");
-  const playwrightDetail = document.getElementById("setup-playwright-detail");
-  const authBadge = document.getElementById("setup-auth-badge");
-  const authDetail = document.getElementById("setup-auth-detail");
-  const pdfBadge = document.getElementById("setup-pdf-badge");
-  const pdfDetail = document.getElementById("setup-pdf-detail");
-  const doctorSummary = document.getElementById("setup-doctor-summary");
+  const summary = document.getElementById("setup-doctor-summary");
   const signInButton = document.getElementById("setup-login-btn");
-  const actionRow = document.getElementById("setup-action-row");
-  const loginActions = document.getElementById("setup-login-actions");
-  const loggedInNotice = document.getElementById("setup-logged-in-note");
-  const showLoginActions = !appState.isAuthenticated;
-  const statusClass = (ok) => ok ? "setup-status-ok" : "setup-status-warn";
-  const statusText = (ok) => ok ? "Ready" : "Action needed";
+  const account = activeAccountLabel();
 
-  if (cliBadge) {
-    cliBadge.className = `setup-status-pill ${statusClass(Boolean(status.cliReady))}`;
-    cliBadge.textContent = statusText(Boolean(status.cliReady));
-  }
-  if (cliDetail) {
-    cliDetail.textContent = status.cliReady
-      ? (status.cliVersion || status.cliDetail || "nblm is available.")
-      : (status.cliDetail || "Install notebooklm-chunker first so the desktop app can call nblm.");
-  }
-  if (playwrightBadge) {
-    playwrightBadge.className = `setup-status-pill ${statusClass(Boolean(status.playwrightReady))}`;
-    playwrightBadge.textContent = statusText(Boolean(status.playwrightReady));
-  }
-  if (playwrightDetail) {
-    playwrightDetail.textContent = status.playwrightReady
-      ? (status.playwrightDetail || "Chromium is ready.")
-      : (status.playwrightDetail || "Run `python -m playwright install chromium`.");
-  }
-  if (authBadge) {
-    authBadge.className = `setup-status-pill ${statusClass(Boolean(status.authReady))}`;
-    authBadge.textContent = statusText(Boolean(status.authReady));
-  }
-  if (authDetail) {
-    authDetail.textContent = status.authReady
-      ? (status.authDetail || "NotebookLM login is ready.")
-      : (status.authDetail || "Sign in once to unlock sync and Studio generation.");
-  }
-  if (pdfBadge) {
-    pdfBadge.className = `setup-status-pill ${statusClass(Boolean(status.pdfParserReady))}`;
-    pdfBadge.textContent = statusText(Boolean(status.pdfParserReady));
-  }
-  if (pdfDetail) {
-    pdfDetail.textContent = status.pdfParserReady
-      ? (status.pdfParserDetail || "PyMuPDF is available.")
-      : (status.pdfParserDetail || "Install the PDF parser dependency.");
-  }
-  if (doctorSummary) {
-    doctorSummary.textContent = status.readyForLiveRun
-      ? "This machine is ready for chunking, sync, and Studio generation."
-      : status.readyForApp
-      ? "Desktop is ready. Sign in once to unlock live NotebookLM sync and Studio generation."
-      : "Finish the setup items below before using the desktop app.";
-  }
-  if (actionRow) {
-    actionRow.classList.toggle("setup-action-row-compact", appState.isAuthenticated);
-  }
-  if (loginActions) {
-    loginActions.classList.toggle("hidden", !showLoginActions);
-    loginActions.style.display = showLoginActions ? "flex" : "none";
-  }
-  if (loggedInNotice) {
-    loggedInNotice.classList.toggle("hidden", !appState.isAuthenticated);
-    if (appState.isAuthenticated) {
-      loggedInNotice.textContent = "You are already signed in. Use this screen only to recheck the local CLI and browser prerequisites.";
-    }
+  setCheck("cli", Boolean(status.cliReady), status.cliReady
+    ? (status.cliVersion || "Ready")
+    : (status.cliDetail || "The engine did not start. Reinstall the app."));
+  setCheck("playwright", Boolean(status.playwrightReady), status.playwrightDetail || "Not checked");
+  setCheck("auth", Boolean(status.authReady), status.authDetail || "Not signed in");
+  setCheck("pdf", Boolean(status.pdfParserReady), status.pdfParserDetail || "Not checked");
+
+  if (summary) {
+    summary.textContent = !status.cliReady
+      ? "The app's engine did not start. Reinstall the app, then open Details."
+      : appState.isAuthenticated
+      ? `Signed in${account ? ` as ${account}` : ""}.`
+      : "Sign in once with your Google account. A browser window opens for it.";
   }
   if (signInButton) {
-    signInButton.disabled = !status.readyForApp;
+    signInButton.classList.toggle("hidden", appState.isAuthenticated);
+    signInButton.disabled = !status.cliReady || appState.loginProcessActive;
+  }
+  const sidebarAccount = document.getElementById("sidebar-account");
+  if (sidebarAccount) {
+    sidebarAccount.textContent = account;
+    sidebarAccount.title = account;
   }
   renderProfileSelector();
 }
 
 async function refreshSetupStatus({ showSpinner = false } = {}) {
   if (showSpinner) {
-    showLoading("Checking desktop setup...");
+    showLoading("Starting…");
   }
   try {
     const cliCheck = await window.electronAPI.checkNBLM();
@@ -196,8 +166,8 @@ function renderProfileSelector() {
   const select = document.getElementById("setup-profile-select");
   if (!row || !select) return;
   const profiles = appState.profiles || [];
-  // Only worth showing once there is a real choice to make.
-  if (profiles.length < 1) {
+  // Nothing to choose from before the first sign-in.
+  if (profiles.length < 1 || !appState.isAuthenticated) {
     row.classList.add("hidden");
     return;
   }
@@ -227,7 +197,7 @@ async function switchProfile(name) {
 
 async function addAccount() {
   const name = (window.prompt(
-    "New profile name (e.g. work, personal). You'll sign into Google for this account:",
+    "Name for the new account (e.g. work):",
   ) || "").trim();
   if (!name) return;
   if ((appState.profiles || []).some((p) => p.name === name)) {
@@ -237,7 +207,7 @@ async function addAccount() {
   appState.loginProcessActive = true;
   appState.loginAwaitingEnter = false;
   updateLoginPromptUI();
-  showLoading(`Complete the Google login for "${name}" in your browser.`);
+  showLoading(`Finish signing in to "${name}" in the browser window.`);
   try {
     const result = await window.electronAPI.runNBLM({
       command: "login",
@@ -268,7 +238,7 @@ async function login() {
   appState.loginProcessActive = true;
   appState.loginAwaitingEnter = false;
   updateLoginPromptUI();
-  showLoading("Complete the NotebookLM login in your browser.");
+  showLoading("Finish signing in in the browser window.");
   try {
     const result = await window.electronAPI.runNBLM({ command: "login", args: [] });
     if (!result.success) {
@@ -292,7 +262,7 @@ async function confirmLogin() {
   try {
     const result = await window.electronAPI.runNBLM({ command: "doctor", args: [] });
     if (!doctorShowsReadyAuth(result.output)) {
-      throw new Error("NotebookLM login is not ready yet. Finish login in the browser and try again.");
+      throw new Error("Sign-in did not complete. Finish it in the browser window and try again.");
     }
     appState.isAuthenticated = true;
     appState.setupStatus = summarizeSetupStatus({ success: true, output: appState.setupStatus?.cliVersion || "nblm" }, result);

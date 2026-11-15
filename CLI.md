@@ -22,7 +22,6 @@ From PyPI:
 
 ```bash
 pip install notebooklm-chunker
-python -m playwright install chromium
 nblm login
 ```
 
@@ -30,7 +29,6 @@ With `pipx`:
 
 ```bash
 pipx install notebooklm-chunker
-python -m playwright install chromium
 nblm login
 ```
 
@@ -38,11 +36,15 @@ From a local checkout:
 
 ```bash
 python -m pip install /ABS/PATH/notebooklm-chunker
-python -m playwright install chromium
 nblm login
 ```
 
 If you already have valid NotebookLM auth state, you can skip `nblm login`.
+
+`nblm login` opens a browser window. By default it uses Playwright's Chromium
+when that is installed, otherwise an installed Google Chrome or Microsoft Edge,
+and it downloads Chromium only when neither exists. Pick one explicitly with
+`nblm login --browser chromium|chrome|msedge`.
 
 To clear local `notebooklm-py` auth state later:
 

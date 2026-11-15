@@ -134,3 +134,41 @@ class AccountEmailTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SignInBrowserCheckTests(unittest.TestCase):
+    def test_installed_chrome_counts_as_ready(self) -> None:
+        from notebooklm_chunker import doctor
+
+        with (
+            patch.object(doctor, "_playwright_chromium_executable", return_value=Path("/missing")),
+            patch.object(doctor, "system_browser_channel", return_value="chrome"),
+        ):
+            check = doctor._playwright_check()
+
+        self.assertEqual(check.status, "ok")
+        self.assertIn("Google Chrome", check.summary)
+
+    def test_missing_browser_is_not_a_blocker(self) -> None:
+        from notebooklm_chunker import doctor
+
+        with (
+            patch.object(doctor, "_playwright_chromium_executable", return_value=Path("/missing")),
+            patch.object(doctor, "system_browser_channel", return_value=None),
+        ):
+            check = doctor._playwright_check()
+
+        self.assertEqual(check.status, "ok")
+        self.assertIn("downloads Chromium", check.summary)
+
+    def test_bundled_engine_does_not_need_the_notebooklm_script(self) -> None:
+        from notebooklm_chunker import doctor
+
+        with (
+            patch.object(doctor, "is_frozen", return_value=True),
+            patch.object(doctor.shutil, "which", return_value=None),
+        ):
+            report = doctor.run_doctor(start_dir=Path(tempfile.mkdtemp()))
+
+        cli_check = next(check for check in report.checks if check.name == "notebooklm-cli")
+        self.assertEqual(cli_check.status, "ok")

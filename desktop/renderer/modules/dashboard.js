@@ -1,3 +1,4 @@
+import { updateStudioCardSelection } from "./studio-cards.js";
 import { appState, summarizeStudioOutputs } from "./state.js";
 import { escapeHtml, attrArg, applyOfflineIcons } from "./dom.js";
 import { switchView } from "./navigation.js";
@@ -119,6 +120,7 @@ function updateDashboardSelectedCount() {
   if (!counter) return;
   const count = currentSelectedDashboardSources().length;
   counter.textContent = `${count} selected`;
+  updateStudioCardSelection(count);
 }
 
 function renderRemoteNotebookList() {
@@ -186,8 +188,8 @@ function renderDashboardSources() {
   const sources = currentDashboardSources();
   if (summary) {
     summary.textContent = appState.dashboardProjectPath
-      ? `${sources.length} synced source${sources.length === 1 ? "" : "s"} in this notebook workspace.`
-      : "Choose a notebook with synced sources to inspect them here.";
+      ? `${sources.length} synced source${sources.length === 1 ? "" : "s"}`
+      : "No synced sources yet.";
   }
   if (!appState.dashboardProjectPath) {
     list.innerHTML = '<div class="px-5 py-6 text-sm text-slate-400 italic">No synced sources available for this notebook yet.</div>';

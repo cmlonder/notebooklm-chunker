@@ -1879,10 +1879,45 @@ class UploaderTests(TestCase):
         )
 
     def test_run_login_calls_notebooklm_cli(self) -> None:
-        with patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked:
+        with (
+            patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked,
+            patch(
+                "notebooklm_chunker.uploaders.notebooklm_py.resolve_login_browser",
+                return_value="chromium",
+            ),
+        ):
             run_notebooklm_login()
 
         mocked.assert_called_once_with(["notebooklm", "login"], check=True)
+
+    def test_run_login_names_an_installed_browser(self) -> None:
+        with (
+            patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked,
+            patch(
+                "notebooklm_chunker.uploaders.notebooklm_py.resolve_login_browser",
+                return_value="chrome",
+            ) as resolver,
+        ):
+            run_notebooklm_login(profile="work", browser="auto")
+
+        resolver.assert_called_once_with("auto")
+        mocked.assert_called_once_with(
+            ["notebooklm", "--profile", "work", "login", "--browser", "chrome"], check=True
+        )
+
+    def test_run_login_uses_the_bundled_engine_when_frozen(self) -> None:
+        with (
+            patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked,
+            patch(
+                "notebooklm_chunker.uploaders.notebooklm_py.resolve_login_browser",
+                return_value="chromium",
+            ),
+            patch("notebooklm_chunker.login_browser.sys.frozen", True, create=True),
+            patch("notebooklm_chunker.login_browser.sys.executable", "/app/nblm"),
+        ):
+            run_notebooklm_login()
+
+        mocked.assert_called_once_with(["/app/nblm", "-m", "notebooklm", "login"], check=True)
 
     def test_run_login_forwards_profile_and_account(self) -> None:
         with patch("notebooklm_chunker.uploaders.notebooklm_py.subprocess.run") as mocked:

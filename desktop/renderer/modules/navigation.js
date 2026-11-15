@@ -33,7 +33,7 @@ function toggleUserMenu() {
 }
 
 function navigationGuard(targetView) {
-  if (targetView === "setup" || targetView === "auth" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source" || targetView === "nblm-settings") {
+  if (targetView === "setup" || targetView === "history" || targetView === "notebooks" || targetView === "prompts" || targetView === "source" || targetView === "nblm-settings") {
     if (targetView === "notebooks" && !appState.isAuthenticated) {
       return { allowed: false, message: "Sign in to inspect live NotebookLM notebooks and Studios." };
     }
@@ -89,7 +89,7 @@ function applyNavigationState(targetView) {
   const viewEl = document.getElementById(`${targetView}-view`);
   if (viewEl) {
     viewEl.classList.add("active");
-    viewEl.style.display = ["auth", "source", "structure", "sources", "sync"].includes(targetView)
+    viewEl.style.display = ["setup", "source", "structure", "sources", "sync"].includes(targetView)
       ? "flex"
       : "block";
   }
@@ -113,15 +113,8 @@ function applyNavigationState(targetView) {
 }
 
 function switchView(viewName) {
-  if (!desktopAppReady() && viewName !== "auth" && viewName !== "setup") {
+  if (!desktopAppReady() && viewName !== "setup") {
     return;
-  }
-  if (!appState.isAuthenticated && viewName !== "auth" && viewName !== "setup") {
-    if (viewName === "setup") {
-      applyNavigationState("setup");
-      renderSetupView();
-      return;
-    }
   }
   const guard = navigationGuard(viewName);
   if (!guard.allowed) {
@@ -129,7 +122,7 @@ function switchView(viewName) {
     return;
   }
   applyNavigationState(viewName);
-  if (viewName === "history" || viewName === "auth") {
+  if (viewName === "history") {
     hideLoading();
   }
   if (viewName === "setup") {

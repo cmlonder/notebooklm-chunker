@@ -17,9 +17,9 @@ function refreshPromptDropdowns() {
     const selectedValue = select.value || "";
     const items = appState.promptLibrary[studioName] || [];
     select.innerHTML = [
-      '<option value="">(Optional) Select</option>',
+      '<option value="">Default prompt</option>',
       ...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`),
-      '<option value="__new__">New...</option>',
+      '<option value="__new__">Custom prompt…</option>',
     ].join("");
     select.value = items.some((item) => item.id === selectedValue) ? selectedValue : "";
     if (selectedValue === "__new__") {

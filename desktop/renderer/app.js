@@ -1,3 +1,4 @@
+import { renderStudioCards } from "./modules/studio-cards.js";
 import {
   appState,
   loadPromptLibrary,
@@ -115,6 +116,7 @@ import {
 async function init() {
   appState.loginProcessActive = false;
   appState.loginAwaitingEnter = false;
+  renderStudioCards();
   loadPromptLibrary();
   loadStudioSettings();
   applyOfflineIcons();
@@ -127,13 +129,7 @@ async function init() {
     await applyActiveProfile(savedProfile);
   }
   await refreshSetupStatus({ showSpinner: true });
-  if (appState.setupStatus?.readyForLiveRun) {
-    switchView("history");
-  } else if (appState.setupStatus?.readyForApp) {
-    switchView("setup");
-  } else {
-    switchView("setup");
-  }
+  switchView(appState.setupStatus?.readyForLiveRun ? "history" : "setup");
   window.electronAPI.onNBLMOutput((payload) => {
     if (!appState.isRunning) return;
     const text = payload.data || "";
@@ -146,7 +142,7 @@ async function init() {
       updateLoginPromptUI();
       const messageEl = document.getElementById("loading-msg");
       if (messageEl) {
-        messageEl.textContent = "Browser login is ready. Press Enter here to finish.";
+        messageEl.textContent = "Signed in? Press Enter to finish.";
       }
     }
   });

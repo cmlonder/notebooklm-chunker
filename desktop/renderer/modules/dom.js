@@ -172,14 +172,10 @@ function hideLoading() {
 }
 
 function updateLoginPromptUI() {
-  const confirmButton = document.getElementById("confirm-login-btn");
-  const loginButton = document.getElementById("login-btn");
-  const hint = document.getElementById("auth-enter-hint");
+  const loginButton = document.getElementById("setup-login-btn");
   const loadingEnterButton = document.getElementById("loading-enter-btn");
   const shouldShowEnter = appState.loginProcessActive && appState.loginAwaitingEnter;
-  if (confirmButton) confirmButton.classList.toggle("hidden", !shouldShowEnter);
   if (loginButton) loginButton.disabled = appState.loginProcessActive;
-  if (hint) hint.classList.toggle("hidden", !shouldShowEnter);
   if (loadingEnterButton) loadingEnterButton.classList.toggle("hidden", !shouldShowEnter);
 }
 

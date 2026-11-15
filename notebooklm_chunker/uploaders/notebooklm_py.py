@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from notebooklm_chunker.config import StudioConfig, StudiosConfig
+from notebooklm_chunker.login_browser import notebooklm_command, resolve_login_browser
 from notebooklm_chunker.parsers import ChunkerError
 from notebooklm_chunker.run_state import RunStateStore, chunk_content_hash
 
@@ -653,8 +654,9 @@ def run_notebooklm_login(
     profile: str | None = None,
     account: str | None = None,
     all_accounts: bool = False,
+    browser: str | None = None,
 ) -> None:
-    command = ["notebooklm"]
+    command = notebooklm_command()
     if profile:
         command += ["--profile", profile]
     command.append("login")
@@ -662,6 +664,12 @@ def run_notebooklm_login(
         command += ["--account", account]
     if all_accounts:
         command.append("--all-accounts")
+    if not account and not all_accounts:
+        # Chromium is notebooklm-py's own default, so only name the browser
+        # when sign-in should use an installed Chrome or Edge instead.
+        channel = resolve_login_browser(browser)
+        if channel != "chromium":
+            command += ["--browser", channel]
     try:
         subprocess.run(command, check=True)
     except FileNotFoundError as exc:
@@ -676,7 +684,7 @@ def run_notebooklm_profile(args: list[str]) -> None:
     """Pass through to `notebooklm profile ...` for multi-account management."""
 
     try:
-        subprocess.run(["notebooklm", "profile", *args], check=True)
+        subprocess.run([*notebooklm_command(), "profile", *args], check=True)
     except FileNotFoundError as exc:
         raise UploadError(
             "The `notebooklm` CLI was not found. Install `notebooklm-chunker` first."

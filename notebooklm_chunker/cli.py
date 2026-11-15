@@ -13,6 +13,7 @@ from notebooklm_chunker.chunker import analyze_chunk_quality, chunk_document
 from notebooklm_chunker.config import AppConfig, load_config, write_config_template
 from notebooklm_chunker.doctor import format_doctor_report, run_doctor
 from notebooklm_chunker.exporters import export_markdown_chunks
+from notebooklm_chunker.login_browser import LOGIN_BROWSERS
 from notebooklm_chunker.models import ChunkingSettings, ExportResult
 from notebooklm_chunker.parsers import ChunkerError, inspect_pdf_page_selection, parse_document
 from notebooklm_chunker.run_state import RunStateStore
@@ -47,6 +48,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--all-accounts",
         action="store_true",
         help="Extract every signed-in Google account into its own auto-named profile.",
+    )
+    login_parser.add_argument(
+        "--browser",
+        choices=LOGIN_BROWSERS,
+        default="auto",
+        help=(
+            "Browser to sign in with. `auto` (default) uses Playwright's Chromium when it "
+            "is installed, otherwise an installed Chrome or Edge, and downloads Chromium "
+            "only when neither exists."
+        ),
     )
     login_parser.set_defaults(handler=_handle_login)
 
@@ -386,6 +397,7 @@ def _handle_login(args: argparse.Namespace) -> int:
         profile=getattr(args, "profile", None),
         account=getattr(args, "account", None),
         all_accounts=getattr(args, "all_accounts", False),
+        browser=getattr(args, "browser", None),
     )
     print("NotebookLM login completed.")
     return 0

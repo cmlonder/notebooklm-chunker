@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-15
+
+### Added
+- Desktop: release builds now carry their own `nblm` engine, so the app runs
+  with no Python, pip or Playwright setup
+- `nblm login --browser auto|chromium|chrome|msedge`. The default `auto` uses
+  Playwright's Chromium when installed, otherwise an installed Chrome or Edge,
+  and downloads Chromium only when neither exists
+- `scripts/build_icons.sh` rebuilds the app icons from `desktop/build/icon.svg`
+
+### Changed
+- Desktop: one sign-in screen replaces the setup checklist; the checks moved
+  under Details
+- Desktop: Studio Builder shows one compact row per Studio type; "One each"
+  appears only when several sources are selected
+- Desktop: "Recent Chunks" is now "Documents", "NotebookLM Settings" is
+  "Studio defaults", and the sidebar shows the signed-in account
+- Desktop: new app icon, a page cut into chunks, drawn on the macOS icon grid
+- `nblm doctor` no longer warns when Playwright's Chromium is missing; it
+  reports which browser sign-in will use
+
+### Fixed
+- Desktop: packaged builds did not include the bundled engine's files
+- Bundled engine: `nblm login` and `nblm profile` needed a `notebooklm`
+  command on PATH
+
 ## [0.6.1] - 2026-11-15
 
 ### Added
@@ -114,7 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Quota handling and retry logic
 - Per-chunk and whole-notebook Studio modes
 
-[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/cmlonder/notebooklm-chunker/compare/v0.5.0...v0.6.0
 [0.2.1]: https://github.com/cmlonder/notebooklm-chunker/releases/tag/v0.2.1
